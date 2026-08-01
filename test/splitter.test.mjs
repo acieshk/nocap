@@ -6,7 +6,43 @@ import {
   expandRange,
   planeRange,
   leakScore,
+  boxBlur,
+  denoisedLeak,
+  maxAmplitudeFor,
 } from '../src/splitter.js';
+
+/** Digit-like strokes: the feature size that decides legibility. */
+function strokeImage(w, h, stroke) {
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = data[i + 1] = data[i + 2] = 20;
+    data[i + 3] = 255;
+  }
+  const on = (x, y) => {
+    const p = (y * w + x) * 4;
+    data[p] = data[p + 1] = data[p + 2] = 235;
+  };
+  const cell = Math.floor(w / 8);
+  const gap = Math.floor(cell * 0.25);
+  for (let c = 0; c < 8; c++) {
+    const x0 = c * cell + gap;
+    const x1 = (c + 1) * cell - gap;
+    const y0 = Math.floor(h * 0.2);
+    const y1 = Math.floor(h * 0.8);
+    const ym = (y0 + y1) >> 1;
+    const segs = [[x0, y0, x1, y0], [x0, ym, x1, ym], [x0, y1, x1, y1],
+                  [x0, y0, x0, ym], [x1, y0, x1, ym], [x0, ym, x0, y1], [x1, ym, x1, y1]];
+    segs.forEach(([ax, ay, bx, by], i) => {
+      if ((c + i) % 3 === 0) return;
+      for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++)
+        for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++)
+          for (let dy = 0; dy < stroke; dy++)
+            for (let dx = 0; dx < stroke; dx++)
+              if (x + dx < w && y + dy < h) on(x + dx, y + dy);
+    });
+  }
+  return { width: w, height: h, data };
+}
 
 /**
  * A structured image — noise has no structure to leak, so it cannot show the
@@ -228,4 +264,71 @@ test('interleave fill is pulled into the noise headroom', () => {
 
   // At amplitude 0 there is nothing to protect, so black fill survives intact.
   assert.equal(planeRange({ mode: 'interleave', frames: 2, amplitude: 0, fill: 0 }).lo, 0);
+});
+
+/* ---------------------------------------------------------------- colour -- */
+
+test('adaptive mode reproduces authored colours exactly', () => {
+  const src = sceneImage(48, 48);
+  const planes = splitFrames(src, { amplitude: 110, adaptive: true, rng: lcg(31) });
+  // No range compression, so the mean is the source itself, not a remapping.
+  assert.ok(mad(averageFrames(planes), src) < 2, 'adaptive drifted from the source');
+});
+
+test('adaptive caps amplitude to per-pixel headroom rather than clipping', () => {
+  // Solid black and solid white have zero headroom: any noise would clip, and
+  // clipping is what breaks the zero-sum property.
+  const w = 8;
+  const h = 2;
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    const v = i < data.length / 2 ? 0 : 255;
+    data[i] = data[i + 1] = data[i + 2] = v;
+    data[i + 3] = 255;
+  }
+  const src = { width: w, height: h, data };
+  const planes = splitFrames(src, { amplitude: 110, adaptive: true, rng: lcg(32) });
+  assert.ok(mad(averageFrames(planes), src) < 1, 'adaptive clipped at the extremes');
+  // ...and that headroom being zero means those pixels are unmasked. Stated as
+  // a test so the trade-off cannot be forgotten.
+  assert.ok(leakScore(planes[0], src) > 0.9, 'extremes should be fully exposed');
+});
+
+test('maxAmplitudeFor reports the ceiling a palette allows', () => {
+  assert.equal(maxAmplitudeFor(['#000000', '#ffffff']), 0);
+  assert.equal(maxAmplitudeFor(['#808080']), 127);
+  assert.ok(maxAmplitudeFor(['#404a58', '#a8b4c4']) > 30);
+  assert.equal(maxAmplitudeFor([[10, 200, 128]]), 10);
+});
+
+/* ------------------------------------------------------- denoise attack --- */
+
+test('per-pixel noise is removable by a blur; coarser blocks are not', () => {
+  // The finding that sets noiseScale: white noise sits above the frequencies
+  // strokes occupy, so a small blur separates them. Coarse noise shares the
+  // band with the content, where no radius helps.
+  const src = strokeImage(320, 64, 5);
+  const worst = (noiseScale) => {
+    const [p] = splitFrames(src, { amplitude: 110, contrast: 2.2, noiseScale, rng: lcg(33) });
+    return { raw: leakScore(p, src), best: denoisedLeak(p, src, 8) };
+  };
+
+  const fine = worst(1);
+  const coarse = worst(6);
+
+  // Blurring must actually help the attacker against per-pixel noise...
+  assert.ok(fine.best.leak > fine.raw * 1.8, `blur should amplify: ${JSON.stringify(fine)}`);
+  assert.ok(fine.best.radius > 0, 'attacker should prefer a non-zero radius');
+  // ...and must not help at all once the block reaches the stroke width.
+  assert.ok(
+    coarse.best.leak < fine.best.leak * 0.5,
+    `coarse blocks should resist: ${JSON.stringify(coarse)} vs ${JSON.stringify(fine)}`
+  );
+  // Raw leak alone cannot see any of this — the reason denoisedLeak exists.
+  assert.ok(Math.abs(fine.raw - coarse.raw) < 0.12, 'raw leak is blind to block size');
+});
+
+test('boxBlur radius 0 is identity', () => {
+  const src = sceneImage(16, 16);
+  assert.equal(boxBlur(src, 0), src);
 });

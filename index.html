@@ -8,85 +8,108 @@
 <meta property="og:title" content="nocap">
 <meta property="og:description" content="Anti-screenshot, anti-AI display for secrets on screen.">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    --bg: #08080a;
+    --fg: #d8d8e0;
+    --muted: color-mix(in srgb, var(--fg) 52%, var(--bg));
+    --faint: color-mix(in srgb, var(--fg) 34%, var(--bg));
+    --line: color-mix(in srgb, var(--fg) 14%, var(--bg));
+    --panel: color-mix(in srgb, var(--fg) 6%, var(--bg));
+    --panel2: color-mix(in srgb, var(--fg) 11%, var(--bg));
+    --accent: #6b8afd;
+    color-scheme: dark light;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 0 20px 80px;
-    background: #08080a; color: #d8d8e0;
+    background: var(--bg); color: var(--fg);
     font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    transition: background .18s, color .18s;
   }
-  .wrap { max-width: 740px; margin: 0 auto; }
-  header { padding: 60px 0 8px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { padding: 58px 0 8px; }
   h1 { font-size: 40px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.03em; }
-  .tag { font-size: 18px; color: #b0b0be; margin: 0 0 6px; letter-spacing: -.01em; }
-  .lede { color: #82828f; margin: 0; max-width: 60ch; }
+  .tag { font-size: 18px; color: var(--muted); margin: 0 0 6px; letter-spacing: -.01em; }
+  .lede { color: var(--faint); margin: 0; max-width: 60ch; }
   h2 { font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
-       color: #6c6c78; margin: 52px 0 14px; }
-  p { color: #9d9daa; margin: 0 0 14px; }
-  a { color: #8aa4ff; }
+       color: var(--faint); margin: 54px 0 14px; }
+  p { color: var(--muted); margin: 0 0 14px; }
+  a { color: var(--accent); }
+  b, strong { color: var(--fg); }
 
-  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 34px 0 0; }
+  .compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 34px 0 0; }
   .pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .pane .lbl { font-size: 11px; font-weight: 600; letter-spacing: .07em;
-               text-transform: uppercase; color: #6c6c78; }
+  .pane .lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+               text-transform: uppercase; color: var(--faint);
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pane .lbl em { font-style: normal; font-family: ui-monospace, monospace;
+                  letter-spacing: 0; text-transform: none; }
   .pane canvas { width: 100%; height: auto; display: block; border-radius: 8px;
-                 border: 1px solid #22222b; background: #14141a;
-                 image-rendering: pixelated; }
-  .compare-note { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-                  margin: 12px 0 0; font-size: 12.5px; color: #71717e; }
-  .compare-note span { color: #8f8f9c; }
-  button.ghost { margin-left: auto; background: #16161d; color: #b6b6c4;
-                 border: 1px solid #2b2b36; border-radius: 6px; padding: 4px 11px;
+                 border: 1px solid var(--line); image-rendering: pixelated; }
+
+  .knobs { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin: 16px 0 0; }
+  .knobs label { display: grid; gap: 3px; min-width: 140px; flex: 1 1 140px; }
+  .knobs label > span { font-size: 11.5px; color: var(--faint); }
+  .knobs em { font-style: normal; font-family: ui-monospace, monospace; color: var(--fg); }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+  input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line);
+                      border-radius: 5px; background: none; cursor: pointer; }
+  .pair { display: flex; gap: 6px; }
+  button.ghost { flex: none; background: var(--panel2); color: var(--fg);
+                 border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px;
                  font: inherit; font-size: 12.5px; cursor: pointer; }
-  button.ghost:hover { background: #1e1e28; color: #d8d8e0; }
-
-  .hero { margin: 30px 0 0; padding: 26px; border-radius: 12px;
-          background: linear-gradient(180deg, #121218, #0d0d12);
-          border: 1px solid #22222b; }
-  .hero .field { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .hero .field .k { font-size: 12px; color: #6c6c78; letter-spacing: .05em;
-                    text-transform: uppercase; width: 92px; flex: none; }
-  .challenge { margin-top: 20px; padding-top: 18px; border-top: 1px solid #1e1e26;
-               font-size: 13.5px; color: #8f8f9c; }
-  .challenge b { color: #d8d8e0; font-weight: 600; }
-  kbd { font: 600 11.5px ui-monospace, monospace; background: #1c1c24; color: #c3c3d0;
-        border: 1px solid #33333f; border-bottom-width: 2px; border-radius: 4px;
-        padding: 2px 6px; white-space: nowrap; }
-
-  .cta { display: flex; gap: 10px; flex-wrap: wrap; margin: 26px 0 0; }
-  .cta a { display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
-           border-radius: 7px; padding: 10px 16px; font-size: 14px; font-weight: 500;
-           border: 1px solid #2e2e3a; background: #16161d; color: #d8d8e0; }
-  .cta a:hover { background: #1e1e28; border-color: #3d3d4c; }
-  .cta a.primary { background: #2f4bd0; border-color: #4560e0; color: #fff; }
-  .cta a.primary:hover { background: #3b57dc; }
+  button.ghost:hover { filter: brightness(1.25); }
+  .note-inline { margin: 12px 0 0; font-size: 12.5px; color: var(--faint); }
+  .note-inline span { color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 8px; }
   th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .07em;
-       text-transform: uppercase; color: #6c6c78; padding: 0 10px 8px 0;
-       border-bottom: 1px solid #22222b; }
-  td { padding: 8px 10px 8px 0; border-bottom: 1px solid #16161c; vertical-align: top; }
+       text-transform: uppercase; color: var(--faint); padding: 0 10px 8px 0;
+       border-bottom: 1px solid var(--line); }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
   tr:last-child td { border-bottom: 0; }
   td:last-child, th:last-child { text-align: right; white-space: nowrap; }
-  .ok  { color: #7fb37f; font-weight: 600; }
-  .no  { color: #d9885f; font-weight: 600; }
+  .ok { color: #6fa76f; font-weight: 600; }
+  .no { color: #d9885f; font-weight: 600; }
   .num { font-family: ui-monospace, monospace; font-size: 12.5px; }
 
-  pre { background: #101015; border: 1px solid #1f1f27; border-radius: 8px;
-        padding: 15px 17px; overflow-x: auto; font-size: 13px; color: #bcbcc8; margin: 0 0 14px; }
-  code { font-family: ui-monospace, monospace; font-size: .92em; color: #a8b6e8; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        padding: 15px 17px; overflow-x: auto; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  code { font-family: ui-monospace, monospace; font-size: .92em; color: var(--accent); }
   pre code { color: inherit; font-size: 13px; }
+  .note { border-left: 2px solid #7a6134; background: color-mix(in srgb, #7a6134 12%, var(--bg));
+          padding: 12px 16px; color: #b5975f; font-size: 13.5px; margin: 0 0 14px;
+          border-radius: 0 6px 6px 0; }
 
-  .note { border-left: 2px solid #7a6134; background: #16130d; padding: 12px 16px;
-          color: #b5975f; font-size: 13.5px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
-  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid #1a1a20;
-           color: #5a5a66; font-size: 13px; }
-  @media (max-width: 560px) {
+  /* --- blend studio --- */
+  .studio { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .studio .bar { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end;
+                 padding: 16px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .studio .stage { padding: 26px 18px; }
+  .card { max-width: 380px; margin: 0 auto; padding: 20px 22px; border-radius: 10px;
+          background: var(--panel); border: 1px solid var(--line); }
+  .card h3 { margin: 0 0 3px; font-size: 15px; font-weight: 600; color: var(--fg); }
+  .card p { margin: 0 0 16px; font-size: 12.5px; color: var(--faint); }
+  .card .line { display: flex; justify-content: space-between; align-items: center;
+                gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .card .line span { color: var(--faint); }
+  .card .line b { font-family: ui-monospace, monospace; font-weight: 500; color: var(--fg); }
+  .readout { display: flex; gap: 20px; flex-wrap: wrap; padding: 13px 18px;
+             border-top: 1px solid var(--line); background: var(--panel);
+             font-size: 12px; color: var(--faint); }
+  .readout b { font-family: ui-monospace, monospace; color: var(--fg); font-weight: 500; }
+  .presets { display: flex; gap: 6px; }
+  .presets button { font-size: 12px; padding: 4px 10px; }
+  ul.notes { margin: 14px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  ul.notes li { margin-bottom: 6px; }
+
+  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line);
+           color: var(--faint); font-size: 13px; }
+  @media (max-width: 620px) {
     h1 { font-size: 32px; }
-    .hero .field .k { width: auto; }
-    td:last-child, th:last-child { white-space: normal; }
     .compare { grid-template-columns: 1fr; }
+    td:last-child, th:last-child { white-space: normal; }
   }
 </style>
 </head>
@@ -110,36 +133,36 @@
     <canvas id="heroLive"></canvas>
   </div>
   <div class="pane">
-    <span class="lbl">What a screenshot captures</span>
+    <span class="lbl">Screenshot</span>
     <canvas id="heroShot"></canvas>
   </div>
+  <div class="pane">
+    <span class="lbl">+ denoise <em id="leakOut"></em></span>
+    <canvas id="heroDenoise"></canvas>
+  </div>
 </section>
-<p class="compare-note">
-  Both panels show the same account number, right now. The right-hand one is a
-  real capture of the left-hand one, grabbed at an arbitrary moment and refreshed
-  every second or so — not a mock-up.
-  <span id="heroHz"></span>
+
+<div class="knobs">
+  <label>
+    <span>Noise block <em id="blockV">5</em>px</span>
+    <input type="range" id="block" min="1" max="12" step="1" value="5">
+  </label>
+  <label>
+    <span>Amplitude <em id="ampV">110</em></span>
+    <input type="range" id="amp" min="30" max="127" step="1" value="110">
+  </label>
   <button id="heroToggle" class="ghost">Pause</button>
+</div>
+
+<p class="note-inline">
+  Live — the middle panel is a real capture of the left one, re-grabbed each
+  second, and the right panel is that capture run through a box blur, the
+  cheapest attack on this. <b>Drag the block slider to 1</b> and the number
+  reappears on the right: per-pixel noise sits above the frequencies the strokes
+  occupy, so blurring separates them. Blocks at or above the stroke width put
+  noise in the same band, where no radius helps.
+  <span id="heroHz"></span>
 </p>
-
-<div class="hero">
-  <div class="field">
-    <span class="k">In practice</span>
-    <nocap-secret id="demo" hold width="270" height="58"></nocap-secret>
-  </div>
-  <div class="challenge">
-    <b>Try it yourself.</b> Hold the box to reveal the number, and while holding,
-    take a screenshot — <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> or
-    <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd>. You read it fine; the capture is noise.
-    <code>hold</code> keeps the flicker on screen only while you need it.
-  </div>
-</div>
-
-<div class="cta">
-  <a class="primary" href="./demo/secret.html">Secret demo &amp; source proof →</a>
-  <a href="./demo/">Tuning bench</a>
-  <a href="https://github.com/acieshk/nocap">GitHub</a>
-</div>
 
 <h2>What this defeats, and what defeats it</h2>
 <p>The claims are narrow on purpose. Read this before building on it.</p>
@@ -157,19 +180,66 @@
 </table>
 
 <div class="note">
-  The averaging limit is information-theoretic, not an implementation gap:
-  <b>anything your eye can integrate, software can integrate better.</b>
-  One <code>ffmpeg -vf tmix=frames=2</code> recovers a recording. No amount of
-  tuning fixes that, so <code>averageFrames()</code> ships in the library to let
-  you run the attack against your own output.
+  <b>How DevTools defeats it, concretely:</b> one line —
+  <code>CanvasRenderingContext2D.prototype.fillText</code> can be wrapped to log
+  its argument, and the library must call it with the plaintext to draw it.
+  Chrome's inspector also shows private class fields, a breakpoint on the
+  <code>secret</code> setter catches the value, and two consecutive
+  <code>getImageData</code> calls averaged together reconstruct it exactly.
+  This is not fixable: the browser must hold the plaintext to render it. The real
+  line is <b>automated pipeline vs. targeted attacker</b> — nocap defeats the
+  pipeline, never the person who decides to come after it.
 </div>
 
+<h2>Blend it into your design</h2>
 <p>
-  For protection that holds against a determined attacker, the mechanism is the
-  compositor, not the content — <code>WDA_EXCLUDEFROMCAPTURE</code> on Windows,
-  <code>NSWindow.sharingType = .none</code> on macOS, <code>FLAG_SECURE</code> on
-  Android. Layer nocap on top of those, never instead of them.
+  Change the two colours below and the whole page recolours with them. The
+  suggested config is recomputed live, and the card is a real
+  <code>&lt;nocap-secret&gt;</code> using it.
 </p>
+
+<div class="studio">
+  <div class="bar">
+    <label>
+      <span>Page background</span>
+      <div class="pair"><input type="color" id="pageBg" value="#08080a"></div>
+    </label>
+    <label>
+      <span>Page text</span>
+      <div class="pair"><input type="color" id="pageFg" value="#d8d8e0"></div>
+    </label>
+    <label>
+      <span>Masking strength <em id="strengthV">98</em></span>
+      <input type="range" id="strength" min="30" max="127" step="1" value="98">
+    </label>
+    <div class="presets">
+      <button class="ghost" data-bg="#08080a" data-fg="#d8d8e0">Dark</button>
+      <button class="ghost" data-bg="#ffffff" data-fg="#111827">Light</button>
+      <button class="ghost" data-bg="#101a2e" data-fg="#7fb3ff">Brand</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="card">
+      <h3>Billing</h3>
+      <p>Your details are visible only while you hold them.</p>
+      <div class="line"><span>Plan</span><b>Business</b></div>
+      <div class="line"><span>Account</span><nocap-secret id="chip" hold width="168" height="34" placeholder="hold"></nocap-secret></div>
+      <div class="line"><span>Renews</span><b>2026-09-01</b></div>
+    </div>
+  </div>
+
+  <div class="readout">
+    <span>amplitude <b id="rAmp">—</b></span>
+    <span>block <b id="rBlock">—</b></span>
+    <span>perceived contrast <b id="rContrast">—</b></span>
+    <span>brand colour kept <b id="rChroma">—</b></span>
+    <span>band <b id="rBand">—</b></span>
+  </div>
+</div>
+
+<pre><code id="snippet">…</code></pre>
+<ul class="notes" id="notes"></ul>
 
 <h2>Use it</h2>
 <pre><code>npm i nocap</code></pre>
@@ -190,12 +260,8 @@ document.querySelector('nocap-secret').secret = await fetchAccountNumber();</cod
   Text is essentially two-tone, so it survives being crushed into a narrow value
   band that would turn a photograph to mush. That means you can run amplitude
   110+, where a single frame retains no usable signal. The
-  <a href="./demo/">tuning bench</a> is built to show you exactly where this stops
-  working, over public-domain paintings.
-</p>
-<p>
-  Measured single-plane leak — |Pearson r| between one frame's luma and the
-  source's. Reproducible with <code>npm test</code>:
+  <a href="./demo/">tuning bench</a> shows exactly where this stops working, over
+  public-domain paintings.
 </p>
 
 <table>
@@ -228,106 +294,187 @@ document.querySelector('nocap-secret').secret = await fetchAccountNumber();</cod
 </p>
 
 <footer>
-  MIT · <a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a>
+  MIT · <a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a> ·
+  <a href="./demo/">tuning bench</a> ·
+  <a href="./demo/secret.html">source proof</a>
 </footer>
 
 </div>
 
 <script type="module">
 import './src/secret.js';
-import { Flicker, averageFrames } from './src/index.js';
+import { Flicker, averageFrames, boxBlur, leakScore, suggestConfig } from './src/index.js';
 
 // Fetched, not inlined — an inline literal would put this page's own live secret
 // straight into its View Source, which is the exact thing being demonstrated.
 const account = (await (await fetch('./demo/api-mock.json')).json()).account;
+const $ = (id) => document.getElementById(id);
 
-document.getElementById('demo').secret = account;
+/* ------------------------------------------------------------------ hero -- */
+const liveCv = $('heroLive');
+const shotCv = $('heroShot');
+const denoiseCv = $('heroDenoise');
+const shotCtx = shotCv.getContext('2d', { alpha: false, willReadFrequently: true });
+const denoiseCtx = denoiseCv.getContext('2d', { alpha: false });
 
-/* --- hero comparison: running on arrival, no interaction required ---------- */
-const liveCv = document.getElementById('heroLive');
-const shotCv = document.getElementById('heroShot');
-const shotCtx = shotCv.getContext('2d', { alpha: false });
-const toggle = document.getElementById('heroToggle');
-
-const hero = new Flicker(liveCv, { amplitude: 110, contrast: 2.2, frames: 2 });
+// noiseScale 5, not 1. Per-pixel noise is white, so it sits above the spatial
+// frequencies the strokes occupy and a radius-4 blur pulls the number back out:
+// measured leak 0.13 raw against 0.46 denoised. At a block size at or above the
+// stroke width there is no radius that helps.
+const hero = new Flicker(liveCv, { amplitude: 110, contrast: 2.2, frames: 2, noiseScale: 5 });
 const H = 76;
+const ATTACK_RADIUS = 4;
 
 // Autoplaying flicker is exactly what a reduced-motion preference is for. Honour
-// it with a static equivalent — the mean on the left is literally what the eye
-// resolves — and let the visitor opt in.
+// it with a static equivalent — the mean is literally what the eye resolves —
+// and let the visitor opt in.
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 async function layout() {
   // Size the backing store to the pane's real CSS width so the canvas is never
   // rescaled. Any resampling blurs the noise toward its mean, which would make
-  // the "screenshot" panel readable and quietly invert the whole demonstration.
+  // the screenshot panel readable and quietly invert the demonstration.
   const w = Math.round(liveCv.parentElement.getBoundingClientRect().width);
   hero.resize(w, H);
-  shotCv.width = liveCv.width;
-  shotCv.height = liveCv.height;
-  shotCv.style.width = `${w}px`;
-  shotCv.style.height = `${H}px`;
-  shotCtx.imageSmoothingEnabled = false; // resetting width clears context state
-
+  for (const [cv, ctx] of [[shotCv, shotCtx], [denoiseCv, denoiseCtx]]) {
+    cv.width = liveCv.width;
+    cv.height = liveCv.height;
+    cv.style.width = `${w}px`;
+    cv.style.height = `${H}px`;
+    ctx.imageSmoothingEnabled = false; // resetting width clears context state
+  }
   await hero.setText(account, {
-    font: `600 ${Math.round((H * devicePixelRatio) * 0.42)}px ui-monospace, monospace`,
+    font: `600 ${Math.round(H * devicePixelRatio * 0.42)}px ui-monospace, monospace`,
     background: '#14141a',
   });
-
-  if (hero.running) capture();
-  else renderStatic();
+  hero.running ? capture() : renderStatic();
 }
 
-/** A real capture of the live canvas at an arbitrary moment. */
 function capture() {
   shotCtx.drawImage(liveCv, 0, 0);
+  attack(shotCtx.getImageData(0, 0, shotCv.width, shotCv.height));
 }
 
-/** Paused/reduced-motion equivalent: the mean on the left, one plane on the right. */
+/** Blur the capture and score it, so the block slider shows its own cost. */
+function attack(shot) {
+  const blurred = boxBlur(shot, ATTACK_RADIUS);
+  denoiseCtx.putImageData(new ImageData(blurred.data, blurred.width, blurred.height), 0, 0);
+  const planes = hero.planes;
+  if (!planes.length) return;
+  const leak = leakScore(blurred, averageFrames(planes));
+  $('leakOut').textContent = `leak ${leak.toFixed(2)}`;
+  $('leakOut').style.color = leak < 0.2 ? '#6fa76f' : leak < 0.4 ? '#c2a15c' : '#d9885f';
+}
+
+/** Paused equivalent: the mean on the left, one plane on the right. */
 function renderStatic() {
   const planes = hero.planes;
   if (!planes.length) return;
   const mean = averageFrames(planes);
   hero.ctx.putImageData(new ImageData(mean.data, mean.width, mean.height), 0, 0);
-  const p = planes[0];
-  shotCtx.putImageData(new ImageData(p.data, p.width, p.height), 0, 0);
+  shotCtx.putImageData(new ImageData(planes[0].data, planes[0].width, planes[0].height), 0, 0);
+  attack(shotCtx.getImageData(0, 0, shotCv.width, shotCv.height));
 }
 
 let timer = 0;
-function play() {
+const play = () => {
   hero.start();
   capture();
   clearInterval(timer);
-  timer = setInterval(capture, 1100);
-  toggle.textContent = 'Pause';
-}
-function pause() {
+  timer = setInterval(capture, 1000);
+  $('heroToggle').textContent = 'Pause';
+};
+const pause = () => {
   clearInterval(timer);
   hero.stop();
   renderStatic();
-  toggle.textContent = 'Play';
+  $('heroToggle').textContent = 'Play';
+};
+$('heroToggle').onclick = () => (hero.running ? pause() : play());
+
+for (const [id, key] of [['block', 'noiseScale'], ['amp', 'amplitude']]) {
+  $(id).oninput = async () => {
+    $(id + 'V').textContent = $(id).value;
+    await hero.configure({ [key]: +$(id).value });
+    hero.running ? capture() : renderStatic();
+  };
 }
-toggle.onclick = () => (hero.running ? pause() : play());
 
 await layout();
-if (reduce) pause();
-else play();
+reduce ? pause() : play();
 
+let resizeT = 0;
 addEventListener('resize', () => {
-  clearTimeout(layout._t);
-  layout._t = setTimeout(layout, 200);
+  clearTimeout(resizeT);
+  resizeT = setTimeout(layout, 200);
 });
 
-// Below ~120Hz the two-plane cycle runs at 30Hz and visibly shimmers. Say so
-// rather than letting a 60Hz visitor conclude the technique just looks bad.
 setTimeout(() => {
   const hz = hero.stats.refreshHz;
   if (!hz) return;
-  document.getElementById('heroHz').textContent =
+  $('heroHz').textContent =
     hz < 100
       ? `Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ looks far steadier.`
       : `Your display is ~${hz}Hz, comfortably in range for this.`;
 }, 1500);
+
+/* ---------------------------------------------------------- blend studio -- */
+const chip = $('chip');
+chip.secret = account;
+
+function restyle() {
+  const background = $('pageBg').value;
+  const color = $('pageFg').value;
+
+  // Recolour the whole page. Everything else is derived with color-mix, so the
+  // two picks are the only inputs.
+  document.documentElement.style.setProperty('--bg', background);
+  document.documentElement.style.setProperty('--fg', color);
+  document.documentElement.style.setProperty('--accent', color);
+
+  const cfg = suggestConfig({
+    background,
+    color,
+    amplitude: +$('strength').value,
+    fontSize: 34 * devicePixelRatio * 0.46,
+  });
+
+  chip.setAttribute('amplitude', cfg.amplitude);
+  chip.setAttribute('noise-scale', cfg.noiseScale);
+  chip.setAttribute('color', cfg.color);
+  chip.setAttribute('background', cfg.background);
+
+  $('rAmp').textContent = cfg.amplitude;
+  $('rBlock').textContent = `${cfg.noiseScale}px`;
+  $('rContrast').textContent = cfg.contrast;
+  $('rChroma').textContent = `${Math.round(cfg.chromaRetained * 100)}%`;
+  $('rBand').textContent = `[${cfg.band.lo}, ${cfg.band.hi}]`;
+
+  $('snippet').textContent =
+    `<nocap-secret hold auto-hide="6"\n` +
+    `  amplitude="${cfg.amplitude}"\n` +
+    `  noise-scale="${cfg.noiseScale}"\n` +
+    `  color="${cfg.color}"\n` +
+    `  background="${cfg.background}"\n` +
+    `></nocap-secret>`;
+
+  $('notes').innerHTML = cfg.notes.map((n) => `<li>${n}</li>`).join('');
+}
+
+$('pageBg').oninput = restyle;
+$('pageFg').oninput = restyle;
+$('strength').oninput = () => {
+  $('strengthV').textContent = $('strength').value;
+  restyle();
+};
+for (const b of document.querySelectorAll('.presets button')) {
+  b.onclick = () => {
+    $('pageBg').value = b.dataset.bg;
+    $('pageFg').value = b.dataset.fg;
+    restyle();
+  };
+}
+restyle();
 </script>
 </body>
 </html>

@@ -16,7 +16,11 @@ const TEXT_DEFAULTS = {
   contrast: 2.2,
   hardness: 1,
   chroma: 1,
-  noiseScale: 1,
+  // Not 1. Per-pixel noise is white, so it sits above the spatial frequencies
+  // text strokes occupy and a small blur separates them — measured leak 0.13
+  // raw but 0.46 after a radius-4 box blur. A block at or above the stroke
+  // width puts the noise in the same band, where no radius helps.
+  noiseScale: 5,
   bankSize: 6,
 };
 
@@ -43,7 +47,18 @@ const TEXT_DEFAULTS = {
  * on the way there, which defeats the point.
  */
 export class NocapSecret extends HTMLElement {
-  static observedAttributes = ['amplitude', 'frames', 'contrast', 'width', 'height', 'placeholder'];
+  static observedAttributes = [
+    'amplitude',
+    'frames',
+    'contrast',
+    'noise-scale',
+    'color',
+    'background',
+    'adaptive',
+    'width',
+    'height',
+    'placeholder',
+  ];
 
   #secret = '';
   #flicker = null;
@@ -68,7 +83,7 @@ export class NocapSecret extends HTMLElement {
               user-select: none; -webkit-user-select: none; }
       canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
       .cover { position: absolute; inset: 0; display: grid; place-items: center;
-               background: #14141a; border-radius: 4px; cursor: pointer;
+               background: var(--cover, #14141a); border-radius: 4px; cursor: pointer;
                font: 500 13px/1 ui-sans-serif, system-ui, sans-serif; color: #71717f;
                letter-spacing: .04em; }
       .cover[hidden] { display: none; }
@@ -77,6 +92,7 @@ export class NocapSecret extends HTMLElement {
     this.#canvas = document.createElement('canvas');
     this.#cover = document.createElement('div');
     this.#cover.className = 'cover';
+    this.#cover.style.setProperty('--cover', this.#palette.background);
     this.#cover.textContent = this.getAttribute('placeholder') ?? 'hold to reveal';
     root.append(this.#canvas, this.#cover);
 
@@ -137,9 +153,11 @@ export class NocapSecret extends HTMLElement {
     if (!this.#flicker || !this.#secret) return;
     clearTimeout(this.#hideTimer);
 
+    const { color, background } = this.#palette;
     await this.#flicker.setText(this.#secret, {
       font: `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`,
-      background: '#14141a',
+      color,
+      background,
     });
     this.#cover.hidden = true;
     this.#revealed = true;
@@ -156,7 +174,7 @@ export class NocapSecret extends HTMLElement {
     this.#flicker.stop();
     // Overwrite the canvas — a stopped Flicker leaves the last plane on screen.
     const { ctx, canvas } = this.#flicker;
-    ctx.fillStyle = '#14141a';
+    ctx.fillStyle = this.#palette.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.#cover.hidden = false;
     this.#revealed = false;
@@ -188,6 +206,22 @@ export class NocapSecret extends HTMLElement {
       amplitude: num('amplitude', TEXT_DEFAULTS.amplitude),
       frames: num('frames', TEXT_DEFAULTS.frames),
       contrast: num('contrast', TEXT_DEFAULTS.contrast),
+      noiseScale: num('noise-scale', TEXT_DEFAULTS.noiseScale),
+      adaptive: this.hasAttribute('adaptive'),
+    };
+  }
+
+  /**
+   * Authored colours. Under the default (non-adaptive) split these are pulled
+   * into [amplitude, 255-amplitude], so what you see is a hue-preserved, lower
+   * contrast version — tinted rather than grey, but never the literal values.
+   * `adaptive` reproduces them exactly and caps amplitude to their headroom
+   * instead; see maxAmplitudeFor().
+   */
+  get #palette() {
+    return {
+      color: this.getAttribute('color') ?? '#e8e8f0',
+      background: this.getAttribute('background') ?? '#14141a',
     };
   }
 }

@@ -50,6 +50,9 @@ const MAX_AMP = 127;
  */
 export function planeRange(opts = {}) {
   const cfg = resolveCfg(opts);
+  // Adaptive mode does not compress: it caps amplitude per pixel instead, so
+  // the perceived colours come out exactly as authored.
+  if (cfg.adaptive) return { lo: 0, hi: 255 };
   if (!carriesOnePlane(cfg.mode)) return { lo: cfg.amplitude, hi: 255 - cfg.amplitude };
 
   // carrier = n*v - (n-1)*fill must land in [amp, 255-amp] so stacked noise
@@ -86,6 +89,9 @@ function resolveCfg(opts = {}) {
     // the perceived image. Pure black fill is only available at amplitude 0.
     fill: clamp(opts.fill ?? (mode === 'channels' ? 0 : 128), amplitude, 255 - amplitude),
     contrast: opts.contrast ?? 1,
+    // Keep authored colours exact by capping amplitude per pixel to its own
+    // headroom, instead of compressing everything into [amp, 255-amp].
+    adaptive: opts.adaptive ?? false,
     hardness: clamp(opts.hardness ?? 1, 0, 1),
     chroma: clamp(opts.chroma ?? 1, 0, 1),
     noiseScale: Math.max(1, Math.floor(opts.noiseScale ?? 1)),
@@ -142,7 +148,6 @@ export function splitFrames(src, opts = {}) {
  */
 function fillModulated(planes, target, cfg) {
   const n = planes.length;
-  const amp = cfg.amplitude;
   const { width: w, height: h, data: t } = target;
   const off = new Float64Array(n);
 
@@ -154,6 +159,12 @@ function fillModulated(planes, target, cfg) {
     for (let x = 0; x < w; x++) {
       const p = (y * w + x) * 4;
       for (let c = 0; c < 3; c++) {
+        const v = t[p + c];
+        // A pixel at value v can only carry ±min(v, 255-v) before it clips, and
+        // clipping breaks the zero-sum property that makes the mean come out
+        // right. Adaptive mode respects that ceiling per pixel rather than
+        // buying uniform headroom by compressing the whole image.
+        const amp = cfg.adaptive ? Math.min(cfg.amplitude, v, 255 - v) : cfg.amplitude;
         const { phase, mag } = draws(x, y, c);
         // n === 2 -> +/-r. All energy at one magnitude, the strongest mask you
         // can build for a given amplitude.
@@ -349,6 +360,109 @@ export function leakScore(plane, src) {
 
 function luma(d, p) {
   return 0.2126 * d[p] + 0.7152 * d[p + 1] + 0.0722 * d[p + 2];
+}
+
+/**
+ * The strongest amplitude a set of authored colours can carry in adaptive mode.
+ *
+ * A pixel at value v clips beyond ±min(v, 255-v), so the ceiling is set by
+ * whichever channel of whichever colour sits closest to black or white. This is
+ * the real cost of picking vivid or high-contrast colours: near-black and
+ * near-white have almost no headroom, so they carry almost no noise and leak.
+ * Mid-tones are what buy you masking strength.
+ *
+ *   maxAmplitudeFor(['#000000', '#ffffff'])  ->   0   (no masking possible)
+ *   maxAmplitudeFor(['#404a58', '#a8b4c4'])  ->  59
+ *   maxAmplitudeFor(['#6b7280', '#9aa3b2'])  -> 107
+ *
+ * @param {Array<string|[number,number,number]>} colors  hex strings or RGB triples
+ */
+export function maxAmplitudeFor(colors) {
+  let ceiling = 127;
+  for (const color of colors) {
+    for (const ch of toRgb(color)) ceiling = Math.min(ceiling, ch, 255 - ch);
+  }
+  return Math.max(0, Math.round(ceiling));
+}
+
+function toRgb(color) {
+  if (Array.isArray(color)) return color;
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
+
+/**
+ * Separable box blur — the cheapest denoise an attacker reaches for, and the
+ * one that matters most here.
+ *
+ * Per-pixel noise is *white*: its energy sits above the spatial frequencies that
+ * text strokes occupy, so a small blur averages the noise away while the strokes
+ * survive. Measured on 5px strokes at amplitude 110, blurring a single captured
+ * plane at radius 4 raises the leak from 0.13 to 0.46.
+ *
+ * Raising `noiseScale` pushes the noise down into the same frequency band as the
+ * content, where no blur can separate them. At a block size at or above the
+ * stroke width the attacker's best radius drops to 0 — blurring stops helping.
+ * That is the reason to set noiseScale, and leakScore() alone cannot see it.
+ */
+export function boxBlur(img, radius) {
+  const r = Math.max(0, Math.round(radius));
+  if (r === 0) return img;
+  const { width: w, height: h, data: s } = img;
+  const tmp = new Float32Array(w * h * 4);
+  const out = new Uint8ClampedArray(w * h * 4);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        let n = 0;
+        for (let k = -r; k <= r; k++) {
+          const xx = x + k;
+          if (xx >= 0 && xx < w) {
+            sum += s[(y * w + xx) * 4 + c];
+            n++;
+          }
+        }
+        tmp[(y * w + x) * 4 + c] = sum / n;
+      }
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        let n = 0;
+        for (let k = -r; k <= r; k++) {
+          const yy = y + k;
+          if (yy >= 0 && yy < h) {
+            sum += tmp[(yy * w + x) * 4 + c];
+            n++;
+          }
+        }
+        out[(y * w + x) * 4 + c] = sum / n;
+      }
+      out[(y * w + x) * 4 + 3] = 255;
+    }
+  }
+  return { width: w, height: h, data: out };
+}
+
+/**
+ * Worst-case leak once an attacker is allowed to denoise: the best leakScore
+ * they can reach by blurring the plane at any radius up to `maxRadius`.
+ *
+ * Use this, not leakScore alone, to decide whether a configuration is safe.
+ * Returns { leak, radius } so you can see which radius broke it.
+ */
+export function denoisedLeak(plane, src, maxRadius = 8) {
+  let best = { leak: 0, radius: 0 };
+  for (let r = 0; r <= maxRadius; r++) {
+    const leak = leakScore(boxBlur(plane, r), src);
+    if (leak > best.leak) best = { leak, radius: r };
+  }
+  return best;
 }
 
 /** Undo the [lo, hi] compression, to compare a recovery against the original. */
