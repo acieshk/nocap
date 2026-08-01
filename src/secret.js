@@ -124,6 +124,15 @@ export class NocapSecret extends HTMLElement {
     return this.#revealed;
   }
 
+  /**
+   * Measured display refresh, or 0 before the first few frames land. Worth
+   * surfacing: below ~120Hz the two-plane cycle runs at 30Hz and shimmers, and
+   * a viewer should be told that rather than concluding the technique looks bad.
+   */
+  get refreshHz() {
+    return this.#flicker?.stats.refreshHz ?? 0;
+  }
+
   reveal = async () => {
     if (!this.#flicker || !this.#secret) return;
     clearTimeout(this.#hideTimer);

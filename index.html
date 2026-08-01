@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap — anti-screenshot, anti-AI display for secrets</title>
+<meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single screenshot gets noise — and the text never enters the DOM.">
+<meta property="og:title" content="nocap">
+<meta property="og:description" content="Anti-screenshot, anti-AI display for secrets on screen.">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 20px 80px;
+    background: #08080a; color: #d8d8e0;
+    font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 740px; margin: 0 auto; }
+  header { padding: 60px 0 8px; }
+  h1 { font-size: 40px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.03em; }
+  .tag { font-size: 18px; color: #b0b0be; margin: 0 0 6px; letter-spacing: -.01em; }
+  .lede { color: #82828f; margin: 0; max-width: 60ch; }
+  h2 { font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
+       color: #6c6c78; margin: 52px 0 14px; }
+  p { color: #9d9daa; margin: 0 0 14px; }
+  a { color: #8aa4ff; }
+
+  .hero { margin: 34px 0 0; padding: 26px; border-radius: 12px;
+          background: linear-gradient(180deg, #121218, #0d0d12);
+          border: 1px solid #22222b; }
+  .hero .field { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .hero .field .k { font-size: 12px; color: #6c6c78; letter-spacing: .05em;
+                    text-transform: uppercase; width: 92px; flex: none; }
+  .challenge { margin-top: 20px; padding-top: 18px; border-top: 1px solid #1e1e26;
+               font-size: 13.5px; color: #8f8f9c; }
+  .challenge b { color: #d8d8e0; font-weight: 600; }
+  kbd { font: 600 11.5px ui-monospace, monospace; background: #1c1c24; color: #c3c3d0;
+        border: 1px solid #33333f; border-bottom-width: 2px; border-radius: 4px;
+        padding: 2px 6px; white-space: nowrap; }
+
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; margin: 26px 0 0; }
+  .cta a { display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
+           border-radius: 7px; padding: 10px 16px; font-size: 14px; font-weight: 500;
+           border: 1px solid #2e2e3a; background: #16161d; color: #d8d8e0; }
+  .cta a:hover { background: #1e1e28; border-color: #3d3d4c; }
+  .cta a.primary { background: #2f4bd0; border-color: #4560e0; color: #fff; }
+  .cta a.primary:hover { background: #3b57dc; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 8px; }
+  th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .07em;
+       text-transform: uppercase; color: #6c6c78; padding: 0 10px 8px 0;
+       border-bottom: 1px solid #22222b; }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid #16161c; vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td:last-child, th:last-child { text-align: right; white-space: nowrap; }
+  .ok  { color: #7fb37f; font-weight: 600; }
+  .no  { color: #d9885f; font-weight: 600; }
+  .num { font-family: ui-monospace, monospace; font-size: 12.5px; }
+
+  pre { background: #101015; border: 1px solid #1f1f27; border-radius: 8px;
+        padding: 15px 17px; overflow-x: auto; font-size: 13px; color: #bcbcc8; margin: 0 0 14px; }
+  code { font-family: ui-monospace, monospace; font-size: .92em; color: #a8b6e8; }
+  pre code { color: inherit; font-size: 13px; }
+
+  .note { border-left: 2px solid #7a6134; background: #16130d; padding: 12px 16px;
+          color: #b5975f; font-size: 13.5px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid #1a1a20;
+           color: #5a5a66; font-size: 13px; }
+  @media (max-width: 560px) {
+    h1 { font-size: 32px; }
+    .hero .field .k { width: auto; }
+    td:last-child, th:last-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>nocap</h1>
+  <p class="tag">Anti-screenshot, anti-AI display for secrets on screen.</p>
+  <p class="lede">
+    Content is split into frames that alternate at your display's refresh rate.
+    Each frame is noise; their mean is the content. Your visual system does the
+    averaging, so you read it — a single screenshot does not. And the text never
+    enters the DOM, so page-reading AI agents get nothing at all.
+  </p>
+</header>
+
+<div class="hero">
+  <div class="field">
+    <span class="k">Account</span>
+    <nocap-secret id="demo" hold width="270" height="58"></nocap-secret>
+  </div>
+  <div class="challenge">
+    <b>Try it.</b> Hold the box to reveal the number, and while holding, take a
+    screenshot — <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> or
+    <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd>. You read it fine; the capture is noise.
+    <span id="hz"></span>
+  </div>
+</div>
+
+<div class="cta">
+  <a class="primary" href="./demo/secret.html">Secret demo &amp; source proof →</a>
+  <a href="./demo/">Tuning bench</a>
+  <a href="https://github.com/acieshk/nocap">GitHub</a>
+</div>
+
+<h2>What this defeats, and what defeats it</h2>
+<p>The claims are narrow on purpose. Read this before building on it.</p>
+
+<table>
+  <tr><th>Threat</th><th>Result</th></tr>
+  <tr><td>Reflexive Print Screen / Win+Shift+S / ⌘+Shift+4</td><td class="ok">Blocked</td></tr>
+  <tr><td>DOM-reading AI agents, LLM scrapers, accessibility-tree readers</td><td class="ok">Blocked absolutely</td></tr>
+  <tr><td>Single-frame OCR / vision-model ingestion</td><td class="ok">Blocked</td></tr>
+  <tr><td>View Source, <code>curl</code>, Save Page As, Select-All + Copy</td><td class="ok">Blocked</td></tr>
+  <tr><td>Quick phone photo</td><td class="ok">Usually blocked</td></tr>
+  <tr><td>Screen recording + temporal averaging</td><td class="no">Defeated</td></tr>
+  <tr><td>Burst screenshots</td><td class="no">Defeated</td></tr>
+  <tr><td>Anyone with DevTools</td><td class="no">Defeated</td></tr>
+</table>
+
+<div class="note">
+  The averaging limit is information-theoretic, not an implementation gap:
+  <b>anything your eye can integrate, software can integrate better.</b>
+  One <code>ffmpeg -vf tmix=frames=2</code> recovers a recording. No amount of
+  tuning fixes that, so <code>averageFrames()</code> ships in the library to let
+  you run the attack against your own output.
+</div>
+
+<p>
+  For protection that holds against a determined attacker, the mechanism is the
+  compositor, not the content — <code>WDA_EXCLUDEFROMCAPTURE</code> on Windows,
+  <code>NSWindow.sharingType = .none</code> on macOS, <code>FLAG_SECURE</code> on
+  Android. Layer nocap on top of those, never instead of them.
+</p>
+
+<h2>Use it</h2>
+<pre><code>npm i nocap</code></pre>
+<pre><code>import 'nocap';
+
+&lt;nocap-secret hold auto-hide="6"&gt;&lt;/nocap-secret&gt;
+
+document.querySelector('nocap-secret').secret = await fetchAccountNumber();</code></pre>
+<p>
+  Set <code>.secret</code> from JS. Putting the text in markup works — it is read
+  once and erased from the DOM — but it was in the HTML source on the way there,
+  which defeats the point. It auto-hides on tab switch and window blur, which is
+  when a screen share usually starts.
+</p>
+
+<h2>Why text, and not photographs</h2>
+<p>
+  Text is essentially two-tone, so it survives being crushed into a narrow value
+  band that would turn a photograph to mush. That means you can run amplitude
+  110+, where a single frame retains no usable signal. The
+  <a href="./demo/">tuning bench</a> is built to show you exactly where this stops
+  working, over public-domain paintings.
+</p>
+<p>
+  Measured single-plane leak — |Pearson r| between one frame's luma and the
+  source's. Reproducible with <code>npm test</code>:
+</p>
+
+<table>
+  <tr><th>Split</th><th>Leak</th></tr>
+  <tr><td>RGB channel split</td><td class="num no">1.000</td></tr>
+  <tr><td>Decoy image as modulator</td><td class="num no">0.929</td></tr>
+  <tr><td>Pixel interleave ×2</td><td class="num no">0.693</td></tr>
+  <tr><td>Noise amplitude 64</td><td class="num">0.386</td></tr>
+  <tr><td>Noise amplitude 96</td><td class="num">0.137</td></tr>
+  <tr><td>Noise amplitude 127</td><td class="num ok">0.004</td></tr>
+</table>
+
+<p>
+  Two findings worth internalising. <b>Splitting <i>where</i> pixels are does
+  nothing — only randomizing <i>what they say</i> works.</b> Recognition survives
+  losing colour, losing 90% of pixels, blur, and quantization, so channel
+  splitting and pixel interleaving both leak badly. And <b>noise amplitude is the
+  only lever</b>; frame count is not a substitute.
+</p>
+
+<h2>Safety</h2>
+<p>
+  Noise is per-pixel and zero-mean, so every frame carries the same local mean
+  luminance as the source. The alternation is a high-spatial-frequency contrast
+  reversal, not a full-field flash — the mechanism 6-bit panels use for FRC
+  dithering — which keeps it out of the large-area-flash regime WCAG 2.3.1
+  targets. It is still moving high-contrast content: <code>hold</code> is the
+  default pattern because it keeps the flicker on screen only while the pointer
+  is down. Always offer an opt-out.
+</p>
+
+<footer>
+  MIT · <a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a>
+</footer>
+
+</div>
+
+<script type="module">
+import './src/secret.js';
+
+// Fetched, not inlined — an inline literal would put this page's own live secret
+// straight into its View Source, which is the exact thing being demonstrated.
+const el = document.getElementById('demo');
+el.secret = (await (await fetch('./demo/api-mock.json')).json()).account;
+
+// Below ~120Hz the two-plane cycle runs at 30Hz and visibly shimmers. Say so
+// rather than letting a 60Hz visitor conclude the technique looks bad.
+el.addEventListener('reveal', () => {
+  setTimeout(() => {
+    const hz = el.refreshHz;
+    if (!hz) return;
+    document.getElementById('hz').textContent =
+      hz < 100
+        ? ` Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ looks far steadier.`
+        : ` Your display is ~${hz}Hz, which is the comfortable range for this.`;
+  }, 600);
+});
+</script>
+</body>
+</html>
