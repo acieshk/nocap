@@ -1,0 +1,37 @@
+{
+  "name": "nocap",
+  "version": "0.1.0",
+  "description": "Anti-screenshot, anti-AI display for secrets on screen. Frames alternate at refresh rate so your eye reads the content and a single capture gets noise — and the text never enters the DOM.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./secret": "./src/secret.js",
+    "./splitter": "./src/splitter.js"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "npx --yes serve . --listen tcp://127.0.0.1:8787"
+  },
+  "keywords": [
+    "screenshot",
+    "anti-screenshot",
+    "screen-capture",
+    "secret",
+    "privacy",
+    "security",
+    "flicker",
+    "persistence-of-vision",
+    "canvas",
+    "web-component"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acieshk/nocap.git"
+  },
+  "bugs": { "url": "https://github.com/acieshk/nocap/issues" },
+  "homepage": "https://github.com/acieshk/nocap#readme",
+  "author": "acieshk",
+  "license": "MIT"
+}

@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flicker split — tuning bench</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 24px 60px;
+    background: #0a0a0c; color: #d6d6dd;
+    font: 13px/1.55 ui-sans-serif, system-ui, sans-serif;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
+  .sub { color: #74747f; margin: 0 0 18px; max-width: 78ch; }
+  .layout { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+
+  .panels { display: grid; grid-template-columns: repeat(2, max-content); gap: 16px; }
+  .panel { display: flex; flex-direction: column; gap: 6px; }
+  .cap { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .cap b { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #9a9aa6; }
+  .cap span { font-size: 11px; color: #62626d; }
+  canvas { background: #000; border: 1px solid #232329; image-rendering: pixelated; display: block; }
+
+  .side { width: 290px; display: grid; gap: 15px; }
+  .grp { display: grid; gap: 9px; padding-bottom: 14px; border-bottom: 1px solid #1c1c22; }
+  .grp:last-child { border-bottom: 0; }
+  .ttl { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #74747f; }
+
+  .row { display: grid; gap: 3px; }
+  .row .top { display: flex; justify-content: space-between; font-size: 12px; color: #a0a0ab; }
+  .row .top em { font-style: normal; font-family: ui-monospace, monospace; color: #d6d6dd; }
+  .row .hint { font-size: 11px; color: #5c5c66; }
+  input[type=range] { width: 100%; accent-color: #6b8afd; margin: 2px 0; }
+  select, input[type=text] {
+    background: #141418; color: #d6d6dd; border: 1px solid #2a2a33;
+    border-radius: 5px; padding: 6px 8px; font: inherit; width: 100%;
+  }
+  .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .thumbs button { padding: 0; height: 46px; overflow: hidden; border-radius: 4px; }
+  .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  button {
+    background: #17171c; color: #d6d6dd; border: 1px solid #2f2f39;
+    border-radius: 5px; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #20202a; border-color: #3d3d49; }
+  button[aria-pressed=true] { border-color: #6b8afd; box-shadow: 0 0 0 1px #6b8afd inset; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .stats { font-family: ui-monospace, monospace; font-size: 11px; color: #62626d; }
+  .bad { color: #d9885f; }
+  .leak { font-family: ui-monospace, monospace; font-size: 11px; display: flex;
+          align-items: center; gap: 7px; margin-top: -2px; }
+  .leak .bar { flex: 1; height: 3px; background: #232329; border-radius: 2px; overflow: hidden; }
+  .leak .bar i { display: block; height: 100%; }
+  .leak.ok    { color: #6fa76f; } .leak.ok    .bar i { background: #6fa76f; }
+  .leak.mid   { color: #c2a15c; } .leak.mid   .bar i { background: #c2a15c; }
+  .leak.leaky { color: #d9885f; } .leak.leaky .bar i { background: #d9885f; }
+  .note { border-left: 2px solid #7a6134; background: #16130d; padding: 8px 12px; color: #b39463; font-size: 12px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Flicker split — tuning bench</h1>
+<p class="sub">
+  <b>Live</b> alternates the planes, one per vsync. <b>Single plane</b> is what one
+  screenshot lands on. <b>Perceived</b> is the ideal mean — the best your eye can
+  do. <b>Recovered</b> averages K frames read back off the live canvas, which is
+  what a screen recorder gets.
+</p>
+
+<div class="layout">
+  <div class="panels">
+    <div class="panel">
+      <div class="cap"><b>Live</b><span id="stats">measuring…</span></div>
+      <canvas id="live"></canvas>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Single plane</b><span id="planeLbl">0</span></div>
+      <div class="leak" id="leak"></div>
+      <canvas id="plane"></canvas>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Perceived (ideal mean)</b><span></span></div>
+      <canvas id="ideal"></canvas>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Recovered</b><span id="attackLbl">—</span></div>
+      <canvas id="attack"></canvas>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="grp">
+      <div class="ttl">Sample</div>
+      <div class="thumbs" id="thumbs"></div>
+      <input type="text" id="text" value="ACCT 4471-0092">
+      <div class="btns">
+        <button id="applyText">Use text</button>
+        <button id="pick">Upload…</button>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ttl">Split mode</div>
+      <select id="mode">
+        <option value="amplitude" selected>amplitude — zero-sum noise per pixel</option>
+        <option value="interleave">interleave — pixels split across planes</option>
+        <option value="channels">channels — R / G / B split across planes</option>
+        <option value="decoy">decoy — modulate with a second painting</option>
+      </select>
+      <div class="hint" id="modeHint"></div>
+
+      <div class="row hidden" id="decoyRow">
+        <div class="top"><span>Decoy image</span></div>
+        <select id="decoySel"></select>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ttl">Split</div>
+
+      <div class="row">
+        <div class="top"><span>Planes per cycle</span><em id="framesV">2</em></div>
+        <input type="range" id="frames" min="2" max="4" step="1" value="2">
+        <div class="hint">More planes divides your refresh rate further.</div>
+      </div>
+
+      <div class="row">
+        <div class="top"><span>Noise amplitude</span><em id="amplitudeV">96</em></div>
+        <input type="range" id="amplitude" min="0" max="127" step="1" value="96">
+        <div class="hint" id="ampHint"></div>
+      </div>
+
+      <div class="row" id="fillRow">
+        <div class="top"><span>Fill value</span><em id="fillV">128</em></div>
+        <input type="range" id="fill" min="0" max="255" step="1" value="128">
+        <div class="hint">What the non-carrying planes show. Clamped into the noise headroom.</div>
+      </div>
+
+      <div class="row">
+        <div class="top"><span>Cell size (px)</span><em id="noiseScaleV">1</em></div>
+        <input type="range" id="noiseScale" min="1" max="10" step="1" value="1">
+        <div class="hint">1 = per pixel. Larger is far more visible.</div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ttl">Appearance</div>
+
+      <div class="row">
+        <div class="top"><span>Contrast pre-boost</span><em id="contrastV">1.0</em></div>
+        <input type="range" id="contrast" min="1" max="3" step="0.05" value="1">
+        <div class="hint" id="contrastHint"></div>
+      </div>
+
+      <div class="row" id="hardnessRow">
+        <div class="top"><span>Noise hardness</span><em id="hardnessV">1.00</em></div>
+        <input type="range" id="hardness" min="0" max="1" step="0.01" value="1">
+        <div class="hint">1 = all energy at full amplitude (best mask). 0 = uniform.</div>
+      </div>
+
+      <div class="row" id="chromaRow">
+        <div class="top"><span>Chroma independence</span><em id="chromaV">1.00</em></div>
+        <input type="range" id="chroma" min="0" max="1" step="0.01" value="1">
+        <div class="hint">1 = per-channel noise (colour confetti). 0 = shared (grey).</div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ttl">Playback &amp; attack</div>
+
+      <div class="row">
+        <div class="top"><span>Hold per plane (vsync)</span><em id="planeHoldV">1</em></div>
+        <input type="range" id="planeHold" min="1" max="4" step="1" value="1">
+        <div class="hint">Raise to simulate a slower display. Makes shimmer worse.</div>
+      </div>
+
+      <div class="row">
+        <div class="top"><span>Recorder frames K</span><em id="capV">8</em></div>
+        <input type="range" id="cap" min="2" max="120" step="1" value="8">
+      </div>
+
+      <div class="btns">
+        <button id="attackBtn">Run recovery</button>
+        <button id="nextPlane">Next plane</button>
+        <button id="toggle">Pause</button>
+      </div>
+    </div>
+
+    <p class="note">
+      Every plane carries the same local mean luminance, so this reads as shimmer
+      rather than a strobe. It is still moving high-contrast content — ship it
+      with an opt-out.
+    </p>
+  </div>
+</div>
+
+<script type="module">
+import { Flicker, averageFrames, leakScore } from '../src/index.js';
+
+const PAINTINGS = [
+  { id: 'starry-night',  name: 'Starry Night' },
+  { id: 'pearl-earring', name: 'Girl with a Pearl Earring' },
+  { id: 'great-wave',    name: 'The Great Wave' },
+  { id: 'mona-lisa',     name: 'Mona Lisa' },
+];
+
+const MODE_HINTS = {
+  amplitude:  'Every plane holds every pixel, offset by zero-sum noise. The only split that actually removes the signal — but you need amplitude 96+, not 64.',
+  interleave: 'Each pixel is carried by exactly one plane. 1/N of the true pixels survive at true value, and subsampling does not destroy legibility. Only the stacked noise rescues it.',
+  channels:   'Plane 0 carries R, plane 1 G, plane 2 B — field-sequential colour, as in DLP projectors. A plane keeps full spatial resolution, so it is a legible monochrome version of the picture. Leak is 1.00 by construction.',
+  decoy:      'A second painting drives the offsets instead of noise. Each plane looks like a real picture, but the target ghosts through both.',
+};
+
+const W = 330, H = 260;
+const $ = (id) => document.getElementById(id);
+const dpr = window.devicePixelRatio || 1;
+
+const statics = ['plane', 'ideal', 'attack'].map((id) => {
+  const cv = $(id);
+  cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px';
+  cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  return ctx;
+});
+const [planeCtx, idealCtx, attackCtx] = statics;
+
+// willReadFrequently so the recovery attack can read the live canvas back.
+const flicker = new Flicker($('live'), { willReadFrequently: true }).resize(W, H);
+
+const bitmaps = new Map();
+async function loadPainting(id) {
+  if (!bitmaps.has(id)) {
+    const res = await fetch(`./assets/${id}.jpg`);
+    bitmaps.set(id, await createImageBitmap(await res.blob()));
+  }
+  return bitmaps.get(id);
+}
+
+/* --- sample picker -------------------------------------------------------- */
+let currentId = PAINTINGS[0].id;
+
+$('thumbs').innerHTML = PAINTINGS.map(
+  (p) => `<button data-id="${p.id}" title="${p.name}"><img src="./assets/${p.id}.jpg" alt="${p.name}"></button>`
+).join('');
+
+$('thumbs').onclick = async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  currentId = btn.dataset.id;
+  markThumbs();
+  await flicker.setSource(await loadPainting(currentId));
+  refresh();
+};
+function markThumbs() {
+  for (const b of $('thumbs').children) b.setAttribute('aria-pressed', b.dataset.id === currentId);
+}
+
+$('applyText').onclick = async () => {
+  currentId = null;
+  markThumbs();
+  await flicker.setText($('text').value, {
+    font: `bold ${Math.round(flicker.canvas.height / 8)}px ui-monospace, monospace`,
+  });
+  refresh();
+};
+$('pick').onclick = () => $('file').click();
+$('file').onchange = async () => {
+  const f = $('file').files[0];
+  if (!f) return;
+  currentId = null;
+  markThumbs();
+  await flicker.setSource(await createImageBitmap(f));
+  refresh();
+};
+
+/* --- decoy selector ------------------------------------------------------- */
+$('decoySel').innerHTML = PAINTINGS.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+$('decoySel').value = PAINTINGS[2].id;
+$('decoySel').onchange = async () => {
+  await flicker.setDecoy(await loadPainting($('decoySel').value));
+  refresh();
+};
+
+/* --- static panels -------------------------------------------------------- */
+let planeIdx = 0;
+
+function put(ctx, img) {
+  ctx.putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+}
+
+function refresh() {
+  const planes = flicker.planes;
+  if (!planes.length) return;
+  planeIdx = Math.min(planeIdx, planes.length - 1);
+  const ideal = averageFrames(planes);
+  put(planeCtx, planes[planeIdx]);
+  put(idealCtx, ideal);
+  $('planeLbl').textContent = `${planeIdx + 1} of ${planes.length}`;
+
+  // Worst plane vs. the perceived image: how much of the picture one screenshot
+  // still correlates with. A legibility proxy, not a security guarantee.
+  const leak = Math.max(...planes.map((p) => leakScore(p, ideal)));
+  const el = $('leak');
+  el.className = 'leak ' + (leak < 0.15 ? 'ok' : leak < 0.45 ? 'mid' : 'leaky');
+  el.innerHTML =
+    `leak ${leak.toFixed(2)}<span class="bar"><i style="width:${Math.round(leak * 100)}%"></i></span>` +
+    (leak < 0.15 ? 'masked' : leak < 0.45 ? 'partial' : 'legible');
+}
+
+$('nextPlane').onclick = () => {
+  planeIdx = (planeIdx + 1) % flicker.planes.length;
+  refresh();
+};
+
+/* --- recovery attack: read K consecutive presented frames and average ------ */
+$('attackBtn').onclick = () => {
+  const k = +$('cap').value;
+  if (!flicker.running) flicker.start();
+  $('attackLbl').textContent = `capturing ${k}…`;
+  const caps = [];
+  const grab = () => {
+    caps.push(flicker.ctx.getImageData(0, 0, flicker.canvas.width, flicker.canvas.height));
+    if (caps.length < k) return requestAnimationFrame(grab);
+    put(attackCtx, averageFrames(caps));
+    $('attackLbl').textContent = `${k} frames averaged`;
+  };
+  requestAnimationFrame(grab);
+};
+
+/* --- sliders -------------------------------------------------------------- */
+const SLIDERS = {
+  frames: (v) => v,
+  amplitude: (v) => v,
+  fill: (v) => v,
+  noiseScale: (v) => v,
+  contrast: (v) => v.toFixed(2),
+  hardness: (v) => v.toFixed(2),
+  chroma: (v) => v.toFixed(2),
+  planeHold: (v) => v,
+};
+
+for (const [key, fmt] of Object.entries(SLIDERS)) {
+  const el = $(key);
+  el.oninput = async () => {
+    const v = +el.value;
+    $(key + 'V').textContent = fmt(v);
+    if (key === 'planeHold') flicker.opts.planeHold = v;
+    else await flicker.configure({ [key]: v });
+    updateHints();
+    refresh();
+  };
+}
+$('cap').oninput = () => ($('capV').textContent = $('cap').value);
+
+$('mode').onchange = async () => {
+  const mode = $('mode').value;
+  if (mode === 'decoy') await flicker.setDecoy(await loadPainting($('decoySel').value));
+  await flicker.configure({ mode });
+  updateHints();
+  refresh();
+};
+
+function updateHints() {
+  const mode = $('mode').value;
+  $('modeHint').textContent = MODE_HINTS[mode];
+  $('decoyRow').classList.toggle('hidden', mode !== 'decoy');
+  $('fillRow').classList.toggle('hidden', mode !== 'interleave');
+  $('hardnessRow').classList.toggle('hidden', mode === 'decoy');
+  $('chromaRow').classList.toggle('hidden', mode === 'decoy');
+
+  const { lo, hi } = flicker.range;
+  const span = (hi - lo) / 255;
+  $('ampHint').textContent =
+    `Source compressed to [${Math.round(lo)}, ${Math.round(hi)}] — ` +
+    `${Math.round(span * 100)}% of full contrast.`;
+  $('contrastHint').textContent =
+    `${(1 / span).toFixed(2)} fully compensates the washout, at the cost of clipping.`;
+}
+
+$('toggle').onclick = () => {
+  if (flicker.running) { flicker.stop(); $('toggle').textContent = 'Resume'; }
+  else { flicker.start(); $('toggle').textContent = 'Pause'; }
+};
+
+setInterval(() => {
+  const s = flicker.stats;
+  const slow = s.cycleHz > 0 && s.cycleHz < 60;
+  $('stats').innerHTML =
+    `${s.refreshHz}Hz display · cycle <span class="${slow ? 'bad' : ''}">${s.cycleHz}Hz</span> · ${s.dropped} dropped`;
+}, 500);
+
+/* --- boot ----------------------------------------------------------------- */
+markThumbs();
+await flicker.setSource(await loadPainting(currentId));
+updateHints();
+refresh();
+flicker.start();
+</script>
+</body>
+</html>
