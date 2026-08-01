@@ -2,6 +2,8 @@
 
 **Anti-screenshot, anti-AI display for secrets on screen.**
 
+**[▶ Live demo](https://acieshk.github.io/nocap/)** · [Tuning bench](https://acieshk.github.io/nocap/demo/) · [Secret demo & source proof](https://acieshk.github.io/nocap/demo/secret.html)
+
 Splits content into frames that alternate at your display's refresh rate. Each
 frame is noise; their *mean* is the content. Your visual system does the
 averaging, so you read it — a single screenshot does not.
@@ -16,7 +18,7 @@ import 'nocap';
 <nocap-secret hold auto-hide="6"></nocap-secret>
 ```
 ```js
-document.querySelector('nocap-secret').secret = '4471-0092-8834';
+document.querySelector('nocap-secret').secret = await fetchAccountNumber();
 ```
 
 ---
@@ -137,13 +139,17 @@ becomes readable in a *single* frame — a silent, total failure.
 
 ## Demo
 
+Live: **<https://acieshk.github.io/nocap/>**
+
+Or locally:
+
 ```
-npm run demo     # then open /demo/ and /demo/secret
+npm run demo     # then open http://127.0.0.1:8787/
 ```
 
 `/demo/` is the tuning bench: four synchronised panels (live, single plane, ideal
 mean, recovered-by-averaging) with a live leak meter, over public-domain paintings.
-`/demo/secret` is the account-number reveal, plus live checks that search the
+`/demo/secret.html` is the account-number reveal, plus live checks that search the
 served HTML, the DOM, `innerText`, Select-All + Copy, and the accessibility tree
 for the secret on screen.
 
