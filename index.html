@@ -144,12 +144,12 @@
 
 <div class="knobs">
   <label>
-    <span>Noise block <em id="blockV">5</em>px</span>
-    <input type="range" id="block" min="1" max="12" step="1" value="5">
+    <span>Noise block <em id="blockV">3</em>px</span>
+    <input type="range" id="block" min="1" max="12" step="1" value="3">
   </label>
   <label>
-    <span>Amplitude <em id="ampV">110</em></span>
-    <input type="range" id="amp" min="30" max="127" step="1" value="110">
+    <span>Amplitude <em id="ampV">96</em></span>
+    <input type="range" id="amp" min="30" max="127" step="1" value="96">
   </label>
   <button id="heroToggle" class="ghost">Pause</button>
 </div>
@@ -321,7 +321,7 @@ const denoiseCtx = denoiseCv.getContext('2d', { alpha: false });
 // frequencies the strokes occupy and a radius-4 blur pulls the number back out:
 // measured leak 0.13 raw against 0.46 denoised. At a block size at or above the
 // stroke width there is no radius that helps.
-const hero = new Flicker(liveCv, { amplitude: 110, contrast: 2.2, frames: 2, noiseScale: 5 });
+const hero = new Flicker(liveCv, { amplitude: 96, contrast: 2.6, frames: 2, noiseScale: 3 });
 const H = 76;
 const ATTACK_RADIUS = 4;
 

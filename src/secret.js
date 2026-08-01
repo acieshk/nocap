@@ -12,15 +12,28 @@ import { leakScore } from './splitter.js';
 const TEXT_DEFAULTS = {
   mode: 'amplitude',
   frames: 2,
-  amplitude: 110,
-  contrast: 2.2,
+  // 96, not 110. At 110 the band is [110, 145] and the perceived image has only
+  // 35 levels of contrast — legible in a still, but far too washed out to read
+  // through a live 30Hz alternation. 96 gives 63 levels for a modest leak cost.
+  amplitude: 96,
+  contrast: 2.6,
   hardness: 1,
   chroma: 1,
-  // Not 1. Per-pixel noise is white, so it sits above the spatial frequencies
-  // text strokes occupy and a small blur separates them — measured leak 0.13
-  // raw but 0.46 after a radius-4 box blur. A block at or above the stroke
-  // width puts the noise in the same band, where no radius helps.
-  noiseScale: 5,
+  // Deliberately small, and this is a real trade-off rather than an oversight.
+  //
+  // Coarse noise resists a blur attack far better: per-pixel noise is white, so
+  // it sits above the frequencies strokes occupy and a radius-4 blur lifts the
+  // leak from 0.13 to 0.46, while a block at the stroke width leaves no radius
+  // that helps. Purely on masking, block >= stroke width wins.
+  //
+  // But coarse noise is low spatial frequency, and that is exactly where the
+  // eye's temporal contrast sensitivity peaks. At 30Hz — any 60Hz display, two
+  // planes — big blocks strobe instead of fusing and the text is unreadable.
+  // Fine noise sits near the eye's spatial limit and fuses.
+  //
+  // Legibility wins by default; raise noise-scale toward the stroke width only
+  // if you know the display runs at 120Hz+.
+  noiseScale: 3,
   bankSize: 6,
 };
 
@@ -55,12 +68,15 @@ export class NocapSecret extends HTMLElement {
     'color',
     'background',
     'adaptive',
+    'scramble',
     'width',
     'height',
     'placeholder',
   ];
 
   #secret = '';
+  #chars = null;   // scramble mode: glyphs in shuffled order
+  #slots = null;   // where each of #chars belongs on screen
   #flicker = null;
   #canvas = null;
   #cover = null;
@@ -132,7 +148,22 @@ export class NocapSecret extends HTMLElement {
 
   /** Write-only by design: reading it back would put the secret in reach again. */
   set secret(value) {
-    this.#secret = String(value ?? '');
+    const str = String(value ?? '');
+    if (this.hasAttribute('scramble')) {
+      // Keep the glyphs, drop the arrangement. Nothing in this object is ever
+      // the plaintext in order, so a heap snapshot search for it finds nothing.
+      const pairs = [...str].map((ch, i) => [ch, i]);
+      for (let i = pairs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+      }
+      this.#chars = pairs.map((p) => p[0]);
+      this.#slots = pairs.map((p) => p[1]);
+      this.#secret = '';
+    } else {
+      this.#secret = str;
+      this.#chars = this.#slots = null;
+    }
     if (this.#revealed) this.reveal();
   }
 
@@ -150,15 +181,13 @@ export class NocapSecret extends HTMLElement {
   }
 
   reveal = async () => {
-    if (!this.#flicker || !this.#secret) return;
+    if (!this.#flicker || !(this.#secret || this.#chars?.length)) return;
     clearTimeout(this.#hideTimer);
 
     const { color, background } = this.#palette;
-    await this.#flicker.setText(this.#secret, {
-      font: `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`,
-      color,
-      background,
-    });
+    const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
+    if (this.#chars) await this.#drawScrambled(font, color, background);
+    else await this.#flicker.setText(this.#secret, { font, color, background });
     this.#cover.hidden = true;
     this.#revealed = true;
     this.#flicker.start();
@@ -187,6 +216,54 @@ export class NocapSecret extends HTMLElement {
     if (!planes.length) return null;
     const mean = planes[0];
     return Math.max(...planes.map((p) => leakScore(p, mean)));
+  }
+
+  /**
+   * Draw scrambled glyphs back into their real positions.
+   *
+   * Each character is rendered alone into a scratch canvas at a fixed point and
+   * then blitted to its slot. That split matters: a hook on
+   * `CanvasRenderingContext2D.prototype.fillText` — the one-liner that otherwise
+   * defeats this component outright — sees single characters, in shuffled order,
+   * every one drawn at the same coordinates. It recovers the multiset of
+   * characters and the length, not the arrangement. Position lives in the
+   * drawImage calls instead, so an attacker now has to hook two APIs and
+   * correlate them rather than dump one log.
+   *
+   * Be clear about the level: this is obfuscation, not encryption. #chars and
+   * #slots are both live fields on the element, so anyone who reads both
+   * reconstructs the value immediately. It raises the cost of a casual console
+   * poke; it does not withstand someone who has decided to extract the value.
+   */
+  async #drawScrambled(font, color, background) {
+    const { width: w, height: h } = this.#flicker.canvas;
+    const scratch = makeCanvas(w, h);
+    const ctx = scratch.getContext('2d', { alpha: false });
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, w, h);
+    ctx.font = font;
+
+    // Monospace, so one advance width covers every glyph.
+    const advance = ctx.measureText('0').width;
+    const originX = (w - advance * this.#chars.length) / 2;
+
+    const cell = makeCanvas(Math.ceil(advance) + 4, h);
+    const cellCtx = cell.getContext('2d', { alpha: false });
+
+    for (let i = 0; i < this.#chars.length; i++) {
+      cellCtx.fillStyle = background;
+      cellCtx.fillRect(0, 0, cell.width, cell.height);
+      cellCtx.font = font;
+      cellCtx.fillStyle = color;
+      cellCtx.textAlign = 'center';
+      cellCtx.textBaseline = 'middle';
+      cellCtx.fillText(this.#chars[i], cell.width / 2, h / 2);
+      ctx.drawImage(cell, originX + this.#slots[i] * advance - cell.width / 2 + advance / 2, 0);
+    }
+
+    // scratch is exactly the target size, so setSource's contain-fit is identity
+    // and the noise is never resampled.
+    await this.#flicker.setSource(scratch, { background });
   }
 
   #onHold = (e) => {
@@ -228,4 +305,10 @@ export class NocapSecret extends HTMLElement {
 
 if (typeof customElements !== 'undefined' && !customElements.get('nocap-secret')) {
   customElements.define('nocap-secret', NocapSecret);
+}
+
+function makeCanvas(w, h) {
+  return typeof OffscreenCanvas === 'function'
+    ? new OffscreenCanvas(w, h)
+    : Object.assign(document.createElement('canvas'), { width: w, height: h });
 }
