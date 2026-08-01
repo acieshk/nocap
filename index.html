@@ -26,7 +26,22 @@
   p { color: #9d9daa; margin: 0 0 14px; }
   a { color: #8aa4ff; }
 
-  .hero { margin: 34px 0 0; padding: 26px; border-radius: 12px;
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 34px 0 0; }
+  .pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pane .lbl { font-size: 11px; font-weight: 600; letter-spacing: .07em;
+               text-transform: uppercase; color: #6c6c78; }
+  .pane canvas { width: 100%; height: auto; display: block; border-radius: 8px;
+                 border: 1px solid #22222b; background: #14141a;
+                 image-rendering: pixelated; }
+  .compare-note { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+                  margin: 12px 0 0; font-size: 12.5px; color: #71717e; }
+  .compare-note span { color: #8f8f9c; }
+  button.ghost { margin-left: auto; background: #16161d; color: #b6b6c4;
+                 border: 1px solid #2b2b36; border-radius: 6px; padding: 4px 11px;
+                 font: inherit; font-size: 12.5px; cursor: pointer; }
+  button.ghost:hover { background: #1e1e28; color: #d8d8e0; }
+
+  .hero { margin: 30px 0 0; padding: 26px; border-radius: 12px;
           background: linear-gradient(180deg, #121218, #0d0d12);
           border: 1px solid #22222b; }
   .hero .field { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
@@ -71,6 +86,7 @@
     h1 { font-size: 32px; }
     .hero .field .k { width: auto; }
     td:last-child, th:last-child { white-space: normal; }
+    .compare { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -88,16 +104,34 @@
   </p>
 </header>
 
+<section class="compare">
+  <div class="pane">
+    <span class="lbl">What you see</span>
+    <canvas id="heroLive"></canvas>
+  </div>
+  <div class="pane">
+    <span class="lbl">What a screenshot captures</span>
+    <canvas id="heroShot"></canvas>
+  </div>
+</section>
+<p class="compare-note">
+  Both panels show the same account number, right now. The right-hand one is a
+  real capture of the left-hand one, grabbed at an arbitrary moment and refreshed
+  every second or so — not a mock-up.
+  <span id="heroHz"></span>
+  <button id="heroToggle" class="ghost">Pause</button>
+</p>
+
 <div class="hero">
   <div class="field">
-    <span class="k">Account</span>
+    <span class="k">In practice</span>
     <nocap-secret id="demo" hold width="270" height="58"></nocap-secret>
   </div>
   <div class="challenge">
-    <b>Try it.</b> Hold the box to reveal the number, and while holding, take a
-    screenshot — <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> or
+    <b>Try it yourself.</b> Hold the box to reveal the number, and while holding,
+    take a screenshot — <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> or
     <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd>. You read it fine; the capture is noise.
-    <span id="hz"></span>
+    <code>hold</code> keeps the flicker on screen only while you need it.
   </div>
 </div>
 
@@ -201,24 +235,99 @@ document.querySelector('nocap-secret').secret = await fetchAccountNumber();</cod
 
 <script type="module">
 import './src/secret.js';
+import { Flicker, averageFrames } from './src/index.js';
 
 // Fetched, not inlined — an inline literal would put this page's own live secret
 // straight into its View Source, which is the exact thing being demonstrated.
-const el = document.getElementById('demo');
-el.secret = (await (await fetch('./demo/api-mock.json')).json()).account;
+const account = (await (await fetch('./demo/api-mock.json')).json()).account;
+
+document.getElementById('demo').secret = account;
+
+/* --- hero comparison: running on arrival, no interaction required ---------- */
+const liveCv = document.getElementById('heroLive');
+const shotCv = document.getElementById('heroShot');
+const shotCtx = shotCv.getContext('2d', { alpha: false });
+const toggle = document.getElementById('heroToggle');
+
+const hero = new Flicker(liveCv, { amplitude: 110, contrast: 2.2, frames: 2 });
+const H = 76;
+
+// Autoplaying flicker is exactly what a reduced-motion preference is for. Honour
+// it with a static equivalent — the mean on the left is literally what the eye
+// resolves — and let the visitor opt in.
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+async function layout() {
+  // Size the backing store to the pane's real CSS width so the canvas is never
+  // rescaled. Any resampling blurs the noise toward its mean, which would make
+  // the "screenshot" panel readable and quietly invert the whole demonstration.
+  const w = Math.round(liveCv.parentElement.getBoundingClientRect().width);
+  hero.resize(w, H);
+  shotCv.width = liveCv.width;
+  shotCv.height = liveCv.height;
+  shotCv.style.width = `${w}px`;
+  shotCv.style.height = `${H}px`;
+  shotCtx.imageSmoothingEnabled = false; // resetting width clears context state
+
+  await hero.setText(account, {
+    font: `600 ${Math.round((H * devicePixelRatio) * 0.42)}px ui-monospace, monospace`,
+    background: '#14141a',
+  });
+
+  if (hero.running) capture();
+  else renderStatic();
+}
+
+/** A real capture of the live canvas at an arbitrary moment. */
+function capture() {
+  shotCtx.drawImage(liveCv, 0, 0);
+}
+
+/** Paused/reduced-motion equivalent: the mean on the left, one plane on the right. */
+function renderStatic() {
+  const planes = hero.planes;
+  if (!planes.length) return;
+  const mean = averageFrames(planes);
+  hero.ctx.putImageData(new ImageData(mean.data, mean.width, mean.height), 0, 0);
+  const p = planes[0];
+  shotCtx.putImageData(new ImageData(p.data, p.width, p.height), 0, 0);
+}
+
+let timer = 0;
+function play() {
+  hero.start();
+  capture();
+  clearInterval(timer);
+  timer = setInterval(capture, 1100);
+  toggle.textContent = 'Pause';
+}
+function pause() {
+  clearInterval(timer);
+  hero.stop();
+  renderStatic();
+  toggle.textContent = 'Play';
+}
+toggle.onclick = () => (hero.running ? pause() : play());
+
+await layout();
+if (reduce) pause();
+else play();
+
+addEventListener('resize', () => {
+  clearTimeout(layout._t);
+  layout._t = setTimeout(layout, 200);
+});
 
 // Below ~120Hz the two-plane cycle runs at 30Hz and visibly shimmers. Say so
-// rather than letting a 60Hz visitor conclude the technique looks bad.
-el.addEventListener('reveal', () => {
-  setTimeout(() => {
-    const hz = el.refreshHz;
-    if (!hz) return;
-    document.getElementById('hz').textContent =
-      hz < 100
-        ? ` Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ looks far steadier.`
-        : ` Your display is ~${hz}Hz, which is the comfortable range for this.`;
-  }, 600);
-});
+// rather than letting a 60Hz visitor conclude the technique just looks bad.
+setTimeout(() => {
+  const hz = hero.stats.refreshHz;
+  if (!hz) return;
+  document.getElementById('heroHz').textContent =
+    hz < 100
+      ? `Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ looks far steadier.`
+      : `Your display is ~${hz}Hz, comfortably in range for this.`;
+}, 1500);
 </script>
 </body>
 </html>
