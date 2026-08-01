@@ -179,16 +179,54 @@
   <tr><td>Anyone with DevTools</td><td class="no">Defeated</td></tr>
 </table>
 
+<h2>How DevTools defeats it</h2>
+<p>
+  Listing a defeat without saying how invites the assumption it is theoretical,
+  so here is the whole picture. <code>scramble</code> — an optional mode that
+  stores glyphs shuffled and paints them back into place — moves several of these
+  and is shown in the last column. It does not move the one that matters.
+</p>
+
+<table>
+  <tr><th>Attack</th><th>Default</th><th>With scramble</th></tr>
+  <tr>
+    <td><b>Average a run of frames off the canvas</b><br>
+        <code>getImageData</code> once per rAF</td>
+    <td class="no">plaintext</td><td class="no">plaintext</td>
+  </tr>
+  <tr>
+    <td>Breakpoint on the <code>secret</code> setter</td>
+    <td class="no">plaintext</td><td class="no">plaintext</td>
+  </tr>
+  <tr>
+    <td>Read the element's private fields in the inspector</td>
+    <td class="no">plaintext</td><td class="no">reconstructable</td>
+  </tr>
+  <tr>
+    <td>Hook <code>fillText</code> on both 2D prototypes</td>
+    <td class="no">whole secret, one call</td>
+    <td class="ok">glyphs, no order</td>
+  </tr>
+  <tr>
+    <td>Heap snapshot, search for the string</td>
+    <td class="no">found</td><td class="ok">not found</td>
+  </tr>
+</table>
+
 <div class="note">
-  <b>How DevTools defeats it, concretely:</b> one line —
-  <code>CanvasRenderingContext2D.prototype.fillText</code> can be wrapped to log
-  its argument, and the library must call it with the plaintext to draw it.
-  Chrome's inspector also shows private class fields, a breakpoint on the
-  <code>secret</code> setter catches the value, and two consecutive
-  <code>getImageData</code> calls averaged together reconstruct it exactly.
-  This is not fixable: the browser must hold the plaintext to render it. The real
-  line is <b>automated pipeline vs. targeted attacker</b> — nocap defeats the
-  pipeline, never the person who decides to come after it.
+  The first row is the one that settles it, and no mode changes it: <b>the canvas
+  must hold the correctly-arranged image, or you could not read it either.</b>
+  A short run of frames averaged together is the plaintext — the demo recovers it
+  identically with and without <code>scramble</code>. Scrambling protects how the
+  value sits in JS memory — worth having, and it does blunt the one-line
+  <code>fillText</code> dump — but it is obfuscation, not encryption. The
+  shuffled glyphs and their position map are both live fields on the element, and
+  the setter still receives the plaintext before any of it happens.
+  <br><br>
+  The real line is <b>automated pipeline vs. targeted attacker</b>. nocap defeats
+  the pipeline — screenshots, scrapers, DOM-reading agents, OCR — and never the
+  person who has decided to come after the value.
+  <a href="./demo/secret.html">Both attacks run live in the demo.</a>
 </div>
 
 <h2>Blend it into your design</h2>
