@@ -176,7 +176,16 @@
   <tr><td>Quick phone photo</td><td class="ok">Usually blocked</td></tr>
   <tr><td>Screen recording + temporal averaging</td><td class="no">Defeated</td></tr>
   <tr><td>Burst screenshots</td><td class="no">Defeated</td></tr>
-  <tr><td>Anyone with DevTools</td><td class="no">Defeated</td></tr>
+  <tr>
+    <td>Casual DevTools poke — heap search, one-line <code>fillText</code> hook</td>
+    <td style="color:#c2a15c;font-weight:600">Slowed</td>
+  </tr>
+  <tr>
+    <td><b>Anyone with DevTools and intent</b><br>
+        <span style="color:var(--faint);font-size:12.5px">the canvas must hold the
+        arranged image, so averaging a run of frames recovers it</span></td>
+    <td class="no">Defeated</td>
+  </tr>
 </table>
 
 <h2>How DevTools defeats it</h2>

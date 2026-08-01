@@ -37,7 +37,8 @@ The claims are narrow on purpose. Read this before building on it.
 | **Screenshot + a box blur** | **Weakened.** Denoising recovers a lot; see the block-size table |
 | **Screen recording + temporal averaging** | **Defeated.** `ffmpeg -i cap.mp4 -vf tmix=frames=2 out.mp4` |
 | **Burst screenshots** | **Defeated.** Average them, or keep the readable one |
-| **Anyone with DevTools** | **Defeated.** Worth understanding exactly how — see below |
+| Casual DevTools poke — heap search, one-line `fillText` hook | **Slowed** by `scramble` — yields the glyphs without their order |
+| **Anyone with DevTools and intent** | **Defeated.** The canvas must hold the arranged image, so averaging a run of frames recovers it |
 
 The averaging limit is information-theoretic, not an implementation gap:
 **anything your eye can integrate, software can integrate better.** No tuning
