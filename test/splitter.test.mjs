@@ -480,3 +480,34 @@ test('the shipped default palette is one checkPalette accepts', async () => {
   // And the pair the README used to document is genuinely unusable.
   assert.equal(checkPalette({ color: '#e8e8f0', background: '#14141a' }).grade, 'weak');
 });
+
+test('auditPage finds a secret in every surface it claims to check', async () => {
+  // No browser here, so a minimal document stands in. This asserts the search
+  // logic, not the DOM integration — the browser path is exercised in the demo.
+  const { auditPage } = await import('../src/audit.js');
+  const needle = '4471-0092-8834';
+  const make = (over = {}) => ({
+    documentElement: { outerHTML: over.dom ?? '<html></html>' },
+    body: { innerText: over.innerText ?? '' },
+    defaultView: null,
+    createRange: () => ({ selectNodeContents() {} }),
+    querySelectorAll: (sel) =>
+      sel.includes('input') ? over.inputs ?? [] : over.all ?? [],
+  });
+
+  const clean = await auditPage(needle, { document: make(), fetchSource: false });
+  assert.equal(clean.clean, true, `should be clean: ${clean.found}`);
+  // Canvas is a statement, not a search: it must never be reported as clean.
+  assert.equal(clean.surfaces.canvas, 'recoverable');
+
+  const inInput = await auditPage(needle, {
+    document: make({ inputs: [{ value: needle }] }), fetchSource: false });
+  assert.deepEqual(inInput.found, ['formValues'], 'form values are invisible to every other check');
+
+  const inLabel = await auditPage(needle, {
+    document: make({ all: [{ getAttribute: (a) => (a === 'aria-label' ? needle : null) }] }),
+    fetchSource: false });
+  assert.deepEqual(inLabel.found, ['a11yTree'], 'an aria-label leaks to every screen reader and agent');
+
+  await assert.rejects(() => auditPage('', { document: make() }), /nothing to search/);
+});

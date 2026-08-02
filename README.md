@@ -68,6 +68,46 @@ on Windows, `NSWindow.sharingType = .none` on macOS, `FLAG_SECURE` on Android.
 Layer nocap on top of those, never instead. For documents, per-user forensic
 watermarking changes behaviour more than any technical speed bump.
 
+## Check your own page
+
+nocap keeps the value out of the DOM. Your integration can still put it back —
+an `<input>` you kept for editing, an `aria-label` added for accessibility, a
+`title`, a debug line in `localStorage`. Every one of those is read instantly by
+the scrapers and DOM-reading agents the canvas defeats, and none of them appear
+in View Source, so they are easy to miss.
+
+```js
+import { auditPage } from 'nocap';
+
+const { clean, found, report } = await auditPage(accountNumber);
+console.log(report);
+```
+
+```
+nocap audit: LEAKED in 1 surface — formValues
+  ✓ HTML source (View Source, curl, scrapers)  not found
+  ✓ Live DOM (DevTools, most agents)           not found
+  ✓ Rendered text (Reader mode, innerText)     not found
+  ✓ Select All + Copy                          not found
+  ✗ Form control values                        CONTAINS IT
+  ✓ Accessible name (aria-label, title, alt)   not found
+  ✓ Open shadow roots                          not found
+  ✓ localStorage / sessionStorage              not found
+  ! Canvas pixels (average a run of frames)    recoverable with DevTools — inherent
+```
+
+Same idea as shipping `averageFrames()` and `denoisedLeak()`: those attack the
+pixels, this attacks the page around them. Put it in a test so a leak fails CI
+rather than being noticed later.
+
+The last row never reports clean. The canvas has to hold the arranged image or
+nobody could read it, so a run of frames averaged together is the plaintext, and
+no mode changes that.
+
+⚠️ It takes the plaintext, because it has to search for it — so the value exists
+in one more place while the call runs. Development and tests, not a production
+render path.
+
 ## How DevTools defeats it
 
 `scramble` is an optional mode that stores glyphs shuffled with a separate slot

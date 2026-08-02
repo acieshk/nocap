@@ -258,7 +258,7 @@ Element.prototype.attachShadow = function (init) {
 <script type="module">
 import './src/secret.js';
 import { Flicker, averageFrames, boxBlur, leakScore, denoisedLeak,
-         checkPalette, detectFormat, splitFrames } from './src/index.js';
+         checkPalette, detectFormat, splitFrames, auditPage } from './src/index.js';
 
 const $ = (id) => document.getElementById(id);
 // Fetched, not inlined — an inline literal would put this page's own secret
@@ -416,37 +416,30 @@ $('runChecks').onclick = async () => {
   $('attackOut').innerHTML = '';
   await new Promise((r) => requestAnimationFrame(r));
 
-  const served = await (await fetch(location.href, { cache: 'reload' })).text();
-  const sel = getSelection(); sel.removeAllRanges();
-  const rng = document.createRange(); rng.selectNodeContents(document.body);
-  sel.addRange(rng); const copied = sel.toString(); sel.removeAllRanges();
-
-  const needle = $('txt').value;
-  const surfaces = [
-    ['HTML source (View Source, curl, scrapers)', served],
-    ['Live DOM (DevTools inspector)', document.documentElement.outerHTML],
-    ['Rendered text (Reader mode, innerText)', document.body.innerText],
-    ['Select All + Copy', copied],
-    ['Element markup', chip.outerHTML],
-    // Form control values appear in none of the surfaces above, and this demo
-    // puts the secret in an input. Any agent doing querySelectorAll('input')
-    // reads it instantly, so a clean sweep here would be misleading.
-    ['Form control values (this demo’s own input)',
-      [...document.querySelectorAll('input, textarea')].map((el) => el.value).join(' ')],
-  ];
-  const rows = surfaces.map(([label, hay]) => {
-    const found = String(hay).includes(needle);
-    return `<tr class="${found ? 'leak' : 'safe'}"><td>${found ? '✗' : '✓'}</td>` +
-      `<td>${label}</td><td>${found ? 'contains it' : 'not found'}</td></tr>`;
-  });
-  // The one place it genuinely does live, stated rather than hidden.
-  rows.push('<tr class="leak"><td>✗</td><td>JS memory / <code>canvas.toDataURL()</code></td>' +
-    '<td>recoverable with DevTools</td></tr>');
-  $('checks').innerHTML = rows.join('');
-  const hits = surfaces.filter(([, h]) => String(h).includes(needle)).length;
+  // Same auditPage() the library exports — this panel is not a special case.
+  const { surfaces, found } = await auditPage($('txt').value);
+  const LABEL = {
+    htmlSource: 'HTML source (View Source, curl, scrapers)',
+    dom: 'Live DOM (DevTools inspector)',
+    innerText: 'Rendered text (Reader mode, innerText)',
+    selection: 'Select All + Copy',
+    formValues: 'Form control values (this demo’s own input)',
+    a11yTree: 'Accessible name (aria-label, title, alt)',
+    shadowDom: 'Open shadow roots',
+    storage: 'localStorage / sessionStorage',
+    canvas: 'Canvas pixels (average a run of frames)',
+  };
+  $('checks').innerHTML = Object.entries(surfaces).map(([key, hit]) => {
+    const bad = hit === true || hit === 'recoverable';
+    const note = hit === true ? 'contains it'
+      : hit === 'recoverable' ? 'recoverable with DevTools'
+      : hit === 'unavailable' ? 'could not check' : 'not found';
+    return `<tr class="${bad ? 'leak' : 'safe'}"><td>${bad ? '✗' : '✓'}</td>` +
+      `<td>${LABEL[key] ?? key}</td><td>${note}</td></tr>`;
+  }).join('');
   $('checksOut').textContent =
-    `"${needle}" found in ${hits} of ${surfaces.length} page surfaces` +
-    (hits ? ' — the demo’s own input, not the component' : '');
+    `"${$('txt').value}" found in ${found.length} of ${Object.keys(surfaces).length - 1} DOM surfaces` +
+    (found.length ? ' — the demo’s own input, not the component' : '');
 };
 
 /* -------------------------------------------------------------- attacks -- */

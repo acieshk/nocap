@@ -138,6 +138,28 @@ export function fakeLike(
 ): string;
 export function passesLuhn(text: string): boolean;
 
+/* ---------------------------------------------------------------- audit -- */
+
+export interface PageAudit {
+  clean: boolean;
+  /** Surface names that contained the secret. */
+  found: string[];
+  surfaces: Record<string, boolean | 'recoverable' | 'unavailable'>;
+  /** Preformatted for console.log. */
+  report: string;
+}
+
+/**
+ * Search the page for a secret that should not be findable.
+ *
+ * Takes the plaintext because it has to search for it, so the value exists in
+ * one more place while the call runs. Development and tests, not production.
+ */
+export function auditPage(
+  secret: string,
+  opts?: { document?: Document; fetchSource?: boolean }
+): Promise<PageAudit>;
+
 /* -------------------------------------------------------------- runtime -- */
 
 export interface FlickerOptions extends SplitOptions {
