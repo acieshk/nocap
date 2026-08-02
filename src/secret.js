@@ -12,12 +12,31 @@ import { splitFrames } from './splitter.js';
  * while a painting would turn to mush. Measured single-plane leak at these
  * settings is near zero, where amplitude 64 leaves ~0.39.
  */
+/**
+ * Named strengths, so nobody has to discover good numbers by experiment.
+ *
+ * `medium` is the default and matches the tuning the demo calls "Balanced".
+ * Each is a tested point on the same curve: more masking costs visual calm and
+ * needs a faster display, less masking is easier to read at 60Hz. Setting any
+ * individual attribute overrides that part of the preset.
+ */
+export const STRENGTHS = {
+  // Easiest to read, and the only one that fuses comfortably on a slow 60Hz
+  // panel. A single frame still leaks noticeably more.
+  weak: { amplitude: 80, noiseScale: 2, hardness: 0.5 },
+  medium: { amplitude: 110, noiseScale: 3, hardness: 1 },
+  // Coarser noise resists a blur best but sits at a low spatial frequency,
+  // where the eye's temporal sensitivity peaks — wants 120Hz+ to fuse.
+  strong: { amplitude: 127, noiseScale: 5, hardness: 1 },
+};
+
 const TEXT_DEFAULTS = {
   mode: 'amplitude',
   frames: 2,
-  // 96, not 110. At 110 the band is [110, 145] and the perceived image has only
-  // 35 levels of contrast — legible in a still, but far too washed out to read
-  // through a live 30Hz alternation. 96 gives 63 levels for a modest leak cost.
+  // Matches STRENGTHS.medium and the demo's "Balanced" preset. It used to be
+  // 96, on reasoning about a [96, 159] compression band that linear light
+  // removed — there is no band now, so the contrast argument for the lower
+  // value no longer applies and 96 was simply weaker than every preset.
   amplitude: 110,
   // Split in light, not in code values. This is what makes `color` and
   // `background` mean what they say: the planes are offset in linear light, so
@@ -27,10 +46,15 @@ const TEXT_DEFAULTS = {
   gamma: 2.4,
   // No band compression under linearLight, so no pre-emphasis to claw back.
   contrast: 1,
-  // Noise magnitude spread. 1 slams every pixel to +/-amplitude, which is the
-  // strongest mask but reads as harsh confetti. 0.5 clusters deviations near the
-  // background — same measured leak as chroma:1/hardness:1 used to give, about a
-  // quarter less visually loud.
+  // 1 puts every pixel at full amplitude. This was 0.5, on a claim that it gave
+  // the same leak for less visual noise — which does not reproduce. Measured on
+  // the default palette at amplitude 110, stroke 5, worst plane over 6 seeds:
+  //
+  //   hardness 0.5   raw 0.278   after a blur 0.398
+  //   hardness 1     raw 0.232   after a blur 0.339
+  //
+  // About 20% less leak both ways, so 1 is right and the old comment argued for
+  // the worse value.
   hardness: 1,
   // Grey noise, not per-channel. This is a free win rather than a compromise:
   // sharing one sign across R/G/B puts the whole noise budget into luminance,
@@ -92,6 +116,7 @@ export class NocapSecret extends ElementBase {
     'amplitude',
     'frames',
     'contrast',
+    'strength',
     'noise-scale',
     'chroma',
     'hardness',
@@ -482,7 +507,11 @@ export class NocapSecret extends ElementBase {
       const hz = this.#flicker?.stats.refreshHz ?? 0;
       if (this.#adapted || !hz || hz < 100 || !this.#revealed) return;
       this.#adapted = true;
-      this.#flicker.configure({ noiseScale: 5 }).then(() => {
+      // Scaled the same way #defaultBlock is, so this is always an increase.
+      // Hardcoding 5 meant that on a 2x display — which is most high-refresh
+      // hardware — the default was already 6 and this LOWERED it, running the
+      // logic backwards on exactly the machines the branch exists for.
+      this.#flicker.configure({ noiseScale: Math.round(this.#defaultBlock() * 5 / 3) }).then(() => {
         if (this.#revealed) this.render();
       });
     }, 800);
@@ -517,17 +546,21 @@ export class NocapSecret extends ElementBase {
     );
   }
 
-  #defaultBlock() {
+  #defaultBlock(base = TEXT_DEFAULTS.noiseScale) {
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    return Math.max(TEXT_DEFAULTS.noiseScale, Math.round(TEXT_DEFAULTS.noiseScale * dpr));
+    return Math.max(base, Math.round(base * dpr));
   }
 
   #options() {
     const num = (name, fallback) =>
       this.hasAttribute(name) ? +this.getAttribute(name) : fallback;
+    const preset = STRENGTHS[this.getAttribute('strength')] ?? {};
+    const base = { ...TEXT_DEFAULTS, ...preset };
+    // A preset's block is authored at dpr 1; scale it like the default.
+    if (preset.noiseScale) base.noiseScale = this.#defaultBlock(preset.noiseScale);
     return {
-      ...TEXT_DEFAULTS,
-      amplitude: num('amplitude', TEXT_DEFAULTS.amplitude),
+      ...base,
+      amplitude: num('amplitude', base.amplitude),
       frames: num('frames', TEXT_DEFAULTS.frames),
       contrast: num('contrast', TEXT_DEFAULTS.contrast),
       noiseScale: num('noise-scale', this.#defaultBlock()),

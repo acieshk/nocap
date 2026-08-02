@@ -511,3 +511,31 @@ test('auditPage finds a secret in every surface it claims to check', async () =>
 
   await assert.rejects(() => auditPage('', { document: make() }), /nothing to search/);
 });
+
+test('strength presets are ordered and complete', async () => {
+  const { STRENGTHS } = await import('../src/secret.js');
+  const order = ['weak', 'medium', 'strong'];
+  for (const name of order) {
+    for (const key of ['amplitude', 'noiseScale', 'hardness']) {
+      assert.ok(STRENGTHS[name][key] > 0, `${name}.${key} missing`);
+    }
+  }
+  // The names have to mean something: each step must actually mask harder.
+  for (let i = 1; i < order.length; i++) {
+    const lo = STRENGTHS[order[i - 1]];
+    const hi = STRENGTHS[order[i]];
+    assert.ok(hi.amplitude > lo.amplitude, `${order[i]} must exceed ${order[i - 1]}`);
+    assert.ok(hi.noiseScale >= lo.noiseScale, `${order[i]} block must not drop`);
+  }
+});
+
+test('stronger presets leak less', async () => {
+  const { STRENGTHS } = await import('../src/secret.js');
+  const src = strokeImage(320, 64, 5);
+  const leak = (s) => {
+    const planes = splitFrames(src, {
+      frames: 2, chroma: 0, linearLight: true, rng: lcg(17), ...STRENGTHS[s] });
+    return Math.max(...planes.map((p) => leakScore(p, averageFrames(planes))));
+  };
+  assert.ok(leak('strong') < leak('weak'), 'strong must beat weak');
+});

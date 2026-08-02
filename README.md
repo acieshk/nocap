@@ -19,19 +19,52 @@ the demo yourself.
 
 **[Live demo & playground](https://acieshk.github.io/nocap/)**
 
+## Quick start
+
 ```
 npm i nocap
 ```
 
 ```js
-import 'nocap';
+import 'nocap';   // registers <nocap-secret>
 ```
+
 ```html
-<nocap-secret></nocap-secret>
+<nocap-secret id="acct" strength="medium" width="300" height="62"></nocap-secret>
 ```
+
 ```js
-document.querySelector('nocap-secret').secret = await fetchAccountNumber();
+// Set it from JS. Putting the value in markup would place it in your HTML
+// source, which is the one thing this is for avoiding.
+document.getElementById('acct').secret = await fetchAccountNumber();
 ```
+
+That is the whole API for most uses. It renders as soon as it has a value.
+
+**Pick a strength instead of tuning numbers:**
+
+| `strength` | Reads well at | Trade |
+| --- | --- | --- |
+| `weak` | 60Hz, comfortably | Easiest to read; a captured frame leaks noticeably more |
+| `medium` *(default)* | 60Hz | The balanced point. Start here. |
+| `strong` | 120Hz+ | Best against a blur; visibly strobes on a 60Hz panel |
+
+Everything below is for when you need more control. You can ignore it.
+
+### Three things to know before you ship
+
+1. **Check your colours.** A secret is only maskable if its two colours can carry
+   noise — `checkPalette({ color, background })` tells you, and the wrong pair
+   leaves the value plainly readable in a screenshot. See
+   [Choosing colours](#choosing-colours).
+2. **Check your page.** `await auditPage(secret)` finds the value if your app
+   leaked it into an input, an `aria-label`, or `localStorage`.
+3. **Read [what this defeats](#what-this-defeats-and-what-defeats-it).** A screen
+   recording beats it. That is inherent, not a bug.
+
+---
+
+## How it works
 
 Content is split into frames that alternate at your display's refresh rate. Each
 frame is noise; their *mean* is the content. Your visual system does the
@@ -56,6 +89,15 @@ The claims are narrow on purpose. Read this before building on it.
 | **Burst screenshots** | **Defeated.** Average them, or keep the readable one |
 | Casual DevTools poke — heap search, one-line `fillText` hook | **Slowed** by `scramble` — yields the glyphs without their order |
 | **Anyone with DevTools and intent** | **Defeated.** The canvas must hold the arranged image, so averaging a run of frames recovers it |
+
+The re-encode row is the one with no attacker in it. Per-pixel noise is the most
+expensive thing in a frame to encode, so an encoder under a bitrate budget throws
+it away and keeps the strokes — the denoise attack, performed for free, by
+software nobody asked. Measured on real x264 at screen-share bitrates, worst
+decoded frame moved 0.181 → 0.268 against the mean. Weakened, not defeated: 0.27
+is still not readable. Treat the exact figure as one run of a noisy statistic,
+and probably a lower bound, since a real share starves a small chip of bits far
+harder than a test frame that is nothing but noise.
 
 The averaging limit is information-theoretic, not an implementation gap:
 **anything your eye can integrate, software can integrate better.** No tuning
@@ -279,6 +321,7 @@ copies still land on exactly the same pixels and cancel.
 | --- | --- | --- |
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
 | `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
+| `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together. |
 | `amplitude` | `110` | Fraction of the headroom the colours allow. |
 | `noise-scale` | `3 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz. |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |

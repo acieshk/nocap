@@ -207,6 +207,15 @@ export class Flicker {
  * deliberately absent. The value is also unreadable to assistive technology by
  * construction, so provide an accessible route to it yourself.
  */
+export type Strength = 'weak' | 'medium' | 'strong';
+
+/** Tested points on the masking/legibility curve. `medium` is the default. */
+export const STRENGTHS: Record<Strength, {
+  amplitude: number;
+  noiseScale: number;
+  hardness: number;
+}>;
+
 export class NocapSecret extends HTMLElement {
   /** Write-only: reading it back would put the secret in reach again. */
   set secret(value: string);
