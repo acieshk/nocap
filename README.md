@@ -2,7 +2,7 @@
 
 **Anti-screenshot, anti-AI display for secrets on screen.**
 
-**[Live demo](https://acieshk.github.io/nocap/)** · [Tuning bench](https://acieshk.github.io/nocap/demo/) · [Secret demo & attacks](https://acieshk.github.io/nocap/demo/secret.html)
+**[Live demo & playground](https://acieshk.github.io/nocap/)**
 
 Splits content into frames that alternate at your display's refresh rate. Each
 frame is noise; their *mean* is the content. Your visual system does the
@@ -15,7 +15,7 @@ nothing at all.
 import 'nocap';
 ```
 ```html
-<nocap-secret hold auto-hide="6"></nocap-secret>
+<nocap-secret></nocap-secret>
 ```
 ```js
 document.querySelector('nocap-secret').secret = await fetchAccountNumber();
@@ -147,7 +147,7 @@ Noise tells an attacker the capture failed, so they take another. A value in the
 right shape does not.
 
 ```html
-<nocap-secret hold fake="auto"></nocap-secret>
+<nocap-secret fake="auto"></nocap-secret>
 ```
 
 `detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
@@ -179,8 +179,6 @@ Two limits, both visible in [the demo](https://acieshk.github.io/nocap/demo/secr
 
 | Attribute | Default | Meaning |
 | --- | --- | --- |
-| `hold` | off | Reveal only while the pointer is held. Recommended. |
-| `auto-hide` | `0` | Hide after N seconds. |
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
 | `fake` | off | `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
 | `amplitude` | `96` | Fraction of the headroom the colours allow. |
@@ -193,11 +191,14 @@ Two limits, both visible in [the demo](https://acieshk.github.io/nocap/demo/secr
 | `color` / `background` | `#e8e8f0` / `#14141a` | Authored palette. |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom. |
 | `width` / `height` | `260` / `56` | CSS pixels. |
-| `placeholder` | `hold to reveal` | Cover text. |
 
-Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.reveal()`,
-`.hide()`, `.measureLeak()`. Events: `reveal`, `hide`. It auto-hides on tab
-switch and window blur — the moment a screen share usually starts.
+Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.render()`,
+`.stop()`, `.measureLeak()`. Events: `render`, `stop`.
+
+**It renders as soon as it has a value.** Hold-to-reveal, click-to-toggle,
+auto-hide on blur — those are product decisions, not part of the effect, so they
+are deliberately absent. Wire them up around the element with `render()` and
+`stop()`.
 
 **Set `.secret` from JS.** Putting the text in markup works — it is read once and
 erased from the DOM — but it was in the HTML source on the way there, which
@@ -261,15 +262,9 @@ and the demos honour `prefers-reduced-motion`.
 Live: **<https://acieshk.github.io/nocap/>** — or `npm run demo`, then
 <http://127.0.0.1:8787/>.
 
-- `/` — before/after comparison with live sliders, and the blend studio.
-- `/demo/` — tuning bench over public-domain paintings: live, single plane, ideal
-  mean, and recovered-by-averaging, with a leak meter.
-- `/demo/secret.html` — the account-number reveal, live checks that search every
-  page surface for the secret, both DevTools attacks running for real, the
-  and fake values with both captured frames shown.
-- `/demo/colors.html` — try a palette: live against a static reference, measured
-  leak, per-colour swing, and a perceived-colour null check.
-- `/demo/calibrate.html` — measure your display's gamma by nulling a patch.
+One page: the live/screenshot/denoise comparison, a playground with presets and
+every parameter, checks that search each page surface for the secret on screen,
+and both DevTools attacks running for real.
 
 ## Test
 

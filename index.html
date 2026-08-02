@@ -4,113 +4,73 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nocap — anti-screenshot, anti-AI display for secrets</title>
-<meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single screenshot gets noise — and the text never enters the DOM.">
-<meta property="og:title" content="nocap">
-<meta property="og:description" content="Anti-screenshot, anti-AI display for secrets on screen.">
+<meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single capture gets noise — and the text never enters the DOM.">
 <style>
-  :root {
-    --bg: #08080a;
-    --fg: #d8d8e0;
-    --muted: color-mix(in srgb, var(--fg) 52%, var(--bg));
-    --faint: color-mix(in srgb, var(--fg) 34%, var(--bg));
-    --line: color-mix(in srgb, var(--fg) 14%, var(--bg));
-    --panel: color-mix(in srgb, var(--fg) 6%, var(--bg));
-    --panel2: color-mix(in srgb, var(--fg) 11%, var(--bg));
-    --accent: #6b8afd;
-    color-scheme: dark light;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 0 20px 80px;
-    background: var(--bg); color: var(--fg);
-    font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    transition: background .18s, color .18s;
-  }
-  .wrap { max-width: 760px; margin: 0 auto; }
-  header { padding: 58px 0 8px; }
-  h1 { font-size: 40px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.03em; }
-  .tag { font-size: 18px; color: var(--muted); margin: 0 0 6px; letter-spacing: -.01em; }
-  .lede { color: var(--faint); margin: 0; max-width: 60ch; }
-  h2 { font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
-       color: var(--faint); margin: 54px 0 14px; }
-  p { color: var(--muted); margin: 0 0 14px; }
-  a { color: var(--accent); }
-  b, strong { color: var(--fg); }
+  :root { --bg:#0a0a0d; --fg:#d8d8e0; --muted:#9a9aa6; --faint:#6d6d78; --line:#22222b;
+          --panel:#141419; --panel2:#1c1c23; --accent:#6b8afd; color-scheme: dark; }
+  * { box-sizing:border-box }
+  body { margin:0; padding:0 20px 90px; background:var(--bg); color:var(--fg);
+         font:15px/1.65 ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
+  .wrap { max-width:820px; margin:0 auto }
+  header { padding:56px 0 6px }
+  h1 { font:700 44px/1 ui-sans-serif,system-ui; letter-spacing:-.035em; margin:0 0 12px }
+  .tag { font-size:18px; color:var(--muted); margin:0 0 8px }
+  .lede { color:var(--faint); margin:0; max-width:62ch }
+  h2 { font:600 11px/1 ui-sans-serif,system-ui; letter-spacing:.09em; text-transform:uppercase;
+       color:var(--faint); margin:54px 0 14px }
+  p { color:var(--muted); margin:0 0 14px }
+  a { color:var(--accent) }
+  code { font-family:ui-monospace,monospace; font-size:.92em; color:var(--accent) }
 
-  .compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 34px 0 0; }
-  .pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .pane .lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
-               text-transform: uppercase; color: var(--faint);
-               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pane .lbl em { font-style: normal; font-family: ui-monospace, monospace;
-                  letter-spacing: 0; text-transform: none; }
-  .pane canvas { width: 100%; height: auto; display: block; border-radius: 8px;
-                 border: 1px solid var(--line); image-rendering: pixelated; }
+  .compare { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:32px 0 0 }
+  .pane { display:flex; flex-direction:column; gap:8px; min-width:0 }
+  .pane .lbl { font:600 10.5px/1 ui-sans-serif; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .pane .lbl em { font-style:normal; font-family:ui-monospace,monospace; text-transform:none; letter-spacing:0 }
+  canvas { display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line);
+           image-rendering:pixelated }
 
-  .knobs { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin: 16px 0 0; }
-  .knobs label { display: grid; gap: 3px; min-width: 140px; flex: 1 1 140px; }
-  .knobs label > span { font-size: 11.5px; color: var(--faint); }
-  .knobs em { font-style: normal; font-family: ui-monospace, monospace; color: var(--fg); }
-  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
-  input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line);
-                      border-radius: 5px; background: none; cursor: pointer; }
-  .pair { display: flex; gap: 6px; }
-  button.ghost { flex: none; background: var(--panel2); color: var(--fg);
-                 border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px;
-                 font: inherit; font-size: 12.5px; cursor: pointer; }
-  button.ghost:hover { filter: brightness(1.25); }
-  .note-inline { margin: 12px 0 0; font-size: 12.5px; color: var(--faint); }
-  .note-inline span { color: var(--muted); }
+  .rig { border:1px solid var(--line); border-radius:12px; overflow:hidden }
+  .rig .bar { padding:13px 16px; background:var(--panel); border-bottom:1px solid var(--line);
+              display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+  .rig .bar.btm { border-bottom:0; border-top:1px solid var(--line) }
+  .rig .body { padding:28px 16px; display:grid; place-items:center; gap:12px }
+  .knobs { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px 20px;
+           padding:16px; border-top:1px solid var(--line); background:var(--panel) }
+  label.f { display:grid; gap:3px }
+  label.f > span { font-size:11.5px; color:var(--faint) }
+  em { font-style:normal; font-family:ui-monospace,monospace; color:var(--fg) }
+  input[type=range] { width:100%; accent-color:var(--accent); margin:0 }
+  input[type=color] { width:100%; height:28px; padding:0; border:1px solid var(--line);
+                      border-radius:6px; background:none; cursor:pointer }
+  input[type=text], select { background:#0e0e12; color:var(--fg); border:1px solid var(--line);
+                             border-radius:6px; padding:6px 8px; font:inherit; font-size:13px; width:100% }
+  button { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px;
+           padding:6px 12px; font:inherit; font-size:13px; cursor:pointer }
+  button:hover { filter:brightness(1.35) }
+  button.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset }
+  .readout { display:flex; gap:20px; flex-wrap:wrap; padding:12px 16px; border-top:1px solid var(--line);
+             background:var(--panel); font-size:12px; color:var(--faint) }
+  .readout b { font-family:ui-monospace,monospace; color:var(--fg); font-weight:500 }
+  .ok{color:#6fa76f!important} .warn{color:#c2a15c!important} .bad{color:#d9885f!important}
 
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 8px; }
-  th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .07em;
-       text-transform: uppercase; color: var(--faint); padding: 0 10px 8px 0;
-       border-bottom: 1px solid var(--line); }
-  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  tr:last-child td { border-bottom: 0; }
-  td:last-child, th:last-child { text-align: right; white-space: nowrap; }
-  .ok { color: #6fa76f; font-weight: 600; }
-  .no { color: #d9885f; font-weight: 600; }
-  .num { font-family: ui-monospace, monospace; font-size: 12.5px; }
-
-  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-        padding: 15px 17px; overflow-x: auto; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
-  code { font-family: ui-monospace, monospace; font-size: .92em; color: var(--accent); }
-  pre code { color: inherit; font-size: 13px; }
-  .note { border-left: 2px solid #7a6134; background: color-mix(in srgb, #7a6134 12%, var(--bg));
-          padding: 12px 16px; color: #b5975f; font-size: 13.5px; margin: 0 0 14px;
-          border-radius: 0 6px 6px 0; }
-
-  /* --- blend studio --- */
-  .studio { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .studio .bar { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end;
-                 padding: 16px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .studio .stage { padding: 26px 18px; }
-  .card { max-width: 380px; margin: 0 auto; padding: 20px 22px; border-radius: 10px;
-          background: var(--panel); border: 1px solid var(--line); }
-  .card h3 { margin: 0 0 3px; font-size: 15px; font-weight: 600; color: var(--fg); }
-  .card p { margin: 0 0 16px; font-size: 12.5px; color: var(--faint); }
-  .card .line { display: flex; justify-content: space-between; align-items: center;
-                gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
-  .card .line span { color: var(--faint); }
-  .card .line b { font-family: ui-monospace, monospace; font-weight: 500; color: var(--fg); }
-  .readout { display: flex; gap: 20px; flex-wrap: wrap; padding: 13px 18px;
-             border-top: 1px solid var(--line); background: var(--panel);
-             font-size: 12px; color: var(--faint); }
-  .readout b { font-family: ui-monospace, monospace; color: var(--fg); font-weight: 500; }
-  .presets { display: flex; gap: 6px; }
-  .presets button { font-size: 12px; padding: 4px 10px; }
-  ul.notes { margin: 14px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
-  ul.notes li { margin-bottom: 6px; }
-
-  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line);
-           color: var(--faint); font-size: 13px; }
-  @media (max-width: 620px) {
-    h1 { font-size: 32px; }
-    .compare { grid-template-columns: 1fr; }
-    td:last-child, th:last-child { white-space: normal; }
-  }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin:0 0 8px }
+  th { text-align:left; font:600 11px/1 ui-sans-serif; letter-spacing:.07em; text-transform:uppercase;
+       color:var(--faint); padding:0 10px 8px 0; border-bottom:1px solid var(--line) }
+  td { padding:8px 10px 8px 0; border-bottom:1px solid var(--line); vertical-align:top }
+  td:last-child, th:last-child { text-align:right; white-space:nowrap }
+  .checks { padding:4px 16px }
+  .checks td:first-child { width:18px; font-weight:700 }
+  .checks .safe{color:#86ad86} .checks .leak{color:#c98a63} .checks .muted{color:#4e4e58}
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px;
+        overflow-x:auto; font-size:12.5px; color:var(--muted); margin:14px 0 0 }
+  .note { border-left:2px solid #7a6134; background:#16130d; padding:11px 15px; color:#b5975f;
+          font-size:13.5px; margin:14px 0 0; border-radius:0 6px 6px 0 }
+  ul { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:13.5px }
+  li { margin-bottom:6px }
+  footer { margin-top:64px; padding-top:22px; border-top:1px solid var(--line); color:var(--faint); font-size:13px }
+  @media (max-width:620px){ h1{font-size:34px} .compare{grid-template-columns:1fr}
+    td:last-child,th:last-child{white-space:normal} }
 </style>
 </head>
 <body>
@@ -128,440 +88,376 @@
 </header>
 
 <section class="compare">
-  <div class="pane">
-    <span class="lbl">What you see</span>
-    <canvas id="heroLive"></canvas>
-  </div>
-  <div class="pane">
-    <span class="lbl">Screenshot</span>
-    <canvas id="heroShot"></canvas>
-  </div>
-  <div class="pane">
-    <span class="lbl">+ denoise <em id="leakOut"></em></span>
-    <canvas id="heroDenoise"></canvas>
-  </div>
+  <div class="pane"><span class="lbl">What you see</span><canvas id="live"></canvas></div>
+  <div class="pane"><span class="lbl">Screenshot</span><canvas id="shot"></canvas></div>
+  <div class="pane"><span class="lbl">+ denoise <em id="leakOut"></em></span><canvas id="den"></canvas></div>
 </section>
-
-<div class="knobs">
-  <label>
-    <span>Noise block <em id="blockV">3</em>px</span>
-    <input type="range" id="block" min="1" max="12" step="1" value="3">
-  </label>
-  <label>
-    <span>Amplitude <em id="ampV">96</em></span>
-    <input type="range" id="amp" min="30" max="127" step="1" value="96">
-  </label>
-  <button id="heroToggle" class="ghost">Pause</button>
-</div>
-
-<p class="note-inline">
-  Live — the middle panel is a real capture of the left one, re-grabbed each
-  second, and the right panel is that capture run through a box blur, the
-  cheapest attack on this. <b>Drag the block slider to 1</b> and the number
-  reappears on the right: per-pixel noise sits above the frequencies the strokes
-  occupy, so blurring separates them. Blocks at or above the stroke width put
-  noise in the same band, where no radius helps.
-  <span id="heroHz"></span>
+<p style="font-size:12.5px;color:var(--faint);margin-top:12px">
+  Live. The middle panel is a real capture of the left one, re-grabbed each
+  second; the right is that capture through a box blur, the cheapest attack on
+  this. <span id="hz"></span>
 </p>
 
-<h2>What this defeats, and what defeats it</h2>
-<p>The claims are narrow on purpose. Read this before building on it.</p>
+<h2>Playground</h2>
+<p>
+  The element below is a real <code>&lt;nocap-secret&gt;</code>. It renders as
+  soon as it has a value — revealing on hover or hold is your product's job, not
+  the library's.
+</p>
 
+<div class="rig">
+  <div class="bar" id="presets">
+    <button data-p="balanced" class="on">Balanced</button>
+    <button data-p="strong">Max masking</button>
+    <button data-p="readable">Most readable</button>
+    <button data-p="decoy">Fake value</button>
+    <button data-p="broken">Unmaskable</button>
+  </div>
+
+  <div class="body" id="stage"><nocap-secret id="chip" width="300" height="62"></nocap-secret></div>
+
+  <div class="knobs">
+    <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
+    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#9ea6b4"></label>
+    <label class="f"><span>Background</span><input type="color" id="bg" value="#6b7280"></label>
+    <label class="f"><span>Amplitude <em id="ampV">110</em></span>
+      <input type="range" id="amp" min="30" max="127" value="110"></label>
+    <label class="f"><span>Noise block <em id="blkV">3</em>px</span>
+      <input type="range" id="blk" min="1" max="10" value="3"></label>
+    <label class="f"><span>Hardness <em id="hardV">1.00</em></span>
+      <input type="range" id="hard" min="0.1" max="1" step="0.05" value="1"></label>
+    <label class="f"><span>Chroma <em id="chrV">0.00</em></span>
+      <input type="range" id="chr" min="0" max="1" step="0.05" value="0"></label>
+    <label class="f"><span>Gamma <em id="gamV">2.40</em></span>
+      <input type="range" id="gam" min="1.8" max="3.0" step="0.01" value="2.4"></label>
+    <label class="f"><span>Fake value</span>
+      <select id="fake"><option value="">off</option><option value="auto">auto — match the format</option>
+        <option value="number">number</option><option value="text">text</option>
+        <option value="random">random</option></select></label>
+    <label class="f"><span>Fake placement</span>
+      <select id="place"><option value="gaps">gaps — stays readable</option>
+        <option value="overlay">overlay — replaces glyphs</option></select></label>
+    <label class="f"><span>Scramble in memory</span>
+      <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
+  </div>
+
+  <div class="readout">
+    <span>masking <b id="rMask">—</b></span>
+    <span>single frame <b id="rLeak">—</b></span>
+    <span>after blur <b id="rBlur">—</b></span>
+    <span>detected <b id="rFmt">—</b></span>
+    <span>display <b id="rHz">—</b></span>
+  </div>
+</div>
+
+<ul id="advice"></ul>
+<pre id="snippet">…</pre>
+
+<h2>It is not in the page</h2>
+<p>
+  These search each surface for the secret currently on screen. Run them
+  <b>before</b> the attacks below — those print the recovered value into the page
+  on purpose, and it would show up here as a leak the demo created itself.
+</p>
+<div class="rig">
+  <table class="checks" id="checks"><tr><td colspan="3" class="muted">press Run</td></tr></table>
+  <div class="bar btm"><button id="runChecks">Run checks</button>
+    <span id="checksOut" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span></div>
+</div>
+
+<h2>How DevTools defeats it</h2>
+<p>Listing a defeat without showing it invites the assumption it is theoretical. Both attacks run for real.</p>
+<div class="rig">
+  <div class="bar"><button id="hookBtn">Hook fillText</button>
+    <button id="avgBtn">Average a run of frames</button></div>
+  <div class="body" id="attackOut" style="min-height:44px"></div>
+</div>
+<div class="note">
+  The canvas must hold the correctly-arranged image or you could not read it
+  either, so averaging a run of frames <i>is</i> the plaintext, and no mode
+  changes that. <code>scramble</code> blunts the one-line <code>fillText</code>
+  dump and keeps the value out of a heap search, but it is obfuscation, not
+  encryption. The real line is <b>automated pipeline vs. targeted attacker</b>:
+  nocap defeats the pipeline, never the person who decides to come after the value.
+</div>
+
+<h2>What this defeats, and what defeats it</h2>
 <table>
   <tr><th>Threat</th><th>Result</th></tr>
   <tr><td>Reflexive Print Screen / Win+Shift+S / ⌘+Shift+4</td><td class="ok">Blocked</td></tr>
   <tr><td>DOM-reading AI agents, LLM scrapers, accessibility-tree readers</td><td class="ok">Blocked absolutely</td></tr>
   <tr><td>Single-frame OCR / vision-model ingestion</td><td class="ok">Blocked</td></tr>
   <tr><td>View Source, <code>curl</code>, Save Page As, Select-All + Copy</td><td class="ok">Blocked</td></tr>
-  <tr><td>Quick phone photo</td><td class="ok">Usually blocked</td></tr>
-  <tr><td>Screen recording + temporal averaging</td><td class="no">Defeated</td></tr>
-  <tr><td>Burst screenshots</td><td class="no">Defeated</td></tr>
-  <tr>
-    <td>Casual DevTools poke — heap search, one-line <code>fillText</code> hook</td>
-    <td style="color:#c2a15c;font-weight:600">Slowed</td>
-  </tr>
-  <tr>
-    <td><b>Anyone with DevTools and intent</b><br>
-        <span style="color:var(--faint);font-size:12.5px">the canvas must hold the
-        arranged image, so averaging a run of frames recovers it</span></td>
-    <td class="no">Defeated</td>
-  </tr>
+  <tr><td>Screenshot + a box blur</td><td class="warn">Weakened</td></tr>
+  <tr><td>Screen recording + temporal averaging</td><td class="bad">Defeated</td></tr>
+  <tr><td>Anyone with DevTools and intent</td><td class="bad">Defeated</td></tr>
 </table>
-
-<h2>How DevTools defeats it</h2>
-<p>
-  Listing a defeat without saying how invites the assumption it is theoretical,
-  so here is the whole picture. <code>scramble</code> — an optional mode that
-  stores glyphs shuffled and paints them back into place — moves several of these
-  and is shown in the last column. It does not move the one that matters.
+<p style="font-size:13px">
+  The averaging limit is information-theoretic, not an implementation gap:
+  <b>anything your eye can integrate, software can integrate better.</b>
+  <code>averageFrames()</code> and <code>denoisedLeak()</code> ship so you can run
+  both attacks against your own settings.
 </p>
 
+<h2>Choosing colours</h2>
+<p>
+  <code>color</code> and <code>background</code> <b>are</b> the perceived colours —
+  the split runs in linear light, so what you author is what you see. What you
+  cannot escape is that a colour can only carry so much noise. Try the
+  <b>Unmaskable</b> preset: exact colours, and a screenshot reads it outright.
+</p>
 <table>
-  <tr><th>Attack</th><th>Default</th><th>With scramble</th></tr>
-  <tr>
-    <td><b>Average a run of frames off the canvas</b><br>
-        <code>getImageData</code> once per rAF</td>
-    <td class="no">plaintext</td><td class="no">plaintext</td>
-  </tr>
-  <tr>
-    <td>Breakpoint on the <code>secret</code> setter</td>
-    <td class="no">plaintext</td><td class="no">plaintext</td>
-  </tr>
-  <tr>
-    <td>Read the element's private fields in the inspector</td>
-    <td class="no">plaintext</td><td class="no">reconstructable</td>
-  </tr>
-  <tr>
-    <td>Hook <code>fillText</code> on both 2D prototypes</td>
-    <td class="no">whole secret, one call</td>
-    <td class="ok">glyphs, no order</td>
-  </tr>
-  <tr>
-    <td>Heap snapshot, search for the string</td>
-    <td class="no">found</td><td class="ok">not found</td>
-  </tr>
+  <tr><th>Masking ratio</th><th>Leak</th><th>Verdict</th></tr>
+  <tr><td>≥ 1.0</td><td>0.08 – 0.22</td><td class="ok">good</td></tr>
+  <tr><td>0.5 – 1.0</td><td>~0.3</td><td class="warn">fair</td></tr>
+  <tr><td>&lt; 0.5</td><td>0.47 – 0.95</td><td class="bad">do not ship</td></tr>
 </table>
+<p style="font-size:13px">
+  A channel at 0 or 255 has zero swing, so fully saturated colours cannot be
+  masked at any lightness. The usable region is roughly channels in
+  <code>[40, 214]</code>, both colours mid-tone, separation under ~90. Put the
+  secret on a mid-tone panel: it matches its surroundings exactly <i>and</i> has
+  room to be protected.
+</p>
 
-<div class="note">
-  The first row is the one that settles it, and no mode changes it: <b>the canvas
-  must hold the correctly-arranged image, or you could not read it either.</b>
-  A short run of frames averaged together is the plaintext — the demo recovers it
-  identically with and without <code>scramble</code>. Scrambling protects how the
-  value sits in JS memory — worth having, and it does blunt the one-line
-  <code>fillText</code> dump — but it is obfuscation, not encryption. The
-  shuffled glyphs and their position map are both live fields on the element, and
-  the setter still receives the plaintext before any of it happens.
-  <br><br>
-  The real line is <b>automated pipeline vs. targeted attacker</b>. nocap defeats
-  the pipeline — screenshots, scrapers, DOM-reading agents, OCR — and never the
-  person who has decided to come after the value.
-  <a href="./demo/secret.html">Both attacks run live in the demo.</a>
+<footer>MIT · <a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a></footer>
 </div>
 
-<h2>Blend it into your design</h2>
-<p>
-  Change the two colours below and the whole page recolours with them. The
-  suggested config is recomputed live, and the card is a real
-  <code>&lt;nocap-secret&gt;</code> using it.
-</p>
-
-<div class="studio">
-  <div class="bar">
-    <label>
-      <span>Page background</span>
-      <div class="pair"><input type="color" id="pageBg" value="#08080a"></div>
-    </label>
-    <label>
-      <span>Page text</span>
-      <div class="pair"><input type="color" id="pageFg" value="#d8d8e0"></div>
-    </label>
-    <label>
-      <span>Masking strength <em id="strengthV">98</em></span>
-      <input type="range" id="strength" min="30" max="127" step="1" value="98">
-    </label>
-    <label>
-      <span>Noise colour <em id="chromaV">grey</em></span>
-      <input type="range" id="chroma" min="0" max="1" step="0.05" value="0">
-    </label>
-    <label>
-      <span>Noise hardness <em id="hardV">0.50</em></span>
-      <input type="range" id="hard" min="0.1" max="1" step="0.05" value="0.5">
-    </label>
-    <div class="presets">
-      <button class="ghost" data-bg="#08080a" data-fg="#d8d8e0">Dark</button>
-      <button class="ghost" data-bg="#ffffff" data-fg="#111827">Light</button>
-      <button class="ghost" data-bg="#101a2e" data-fg="#7fb3ff">Brand</button>
-    </div>
-  </div>
-
-  <div class="stage">
-    <div class="card">
-      <h3>Billing</h3>
-      <p>Your details are visible only while you hold them.</p>
-      <div class="line"><span>Plan</span><b>Business</b></div>
-      <div class="line"><span>Account</span><nocap-secret id="chip" hold width="168" height="34" placeholder="hold"></nocap-secret></div>
-      <div class="line"><span>Renews</span><b>2026-09-01</b></div>
-    </div>
-  </div>
-
-  <div class="readout">
-    <span>amplitude <b id="rAmp">—</b></span>
-    <span>block <b id="rBlock">—</b></span>
-    <span>perceived contrast <b id="rContrast">—</b></span>
-    <span>masking <b id="rMask">—</b></span>
-    <span>brand colour kept <b id="rChroma">—</b></span>
-    <span>perceived
-      <b id="rSwatch" style="display:inline-flex;gap:3px;vertical-align:-2px">
-        <i style="width:13px;height:13px;border-radius:3px;display:inline-block"></i>
-        <i style="width:13px;height:13px;border-radius:3px;display:inline-block"></i>
-      </b></span>
-    <span>band <b id="rBand">—</b></span>
-  </div>
-</div>
-
-<pre><code id="snippet">…</code></pre>
-<ul class="notes" id="notes"></ul>
-
-<h2>Use it</h2>
-<pre><code>npm i nocap</code></pre>
-<pre><code>import 'nocap';
-
-&lt;nocap-secret hold auto-hide="6"&gt;&lt;/nocap-secret&gt;
-
-document.querySelector('nocap-secret').secret = await fetchAccountNumber();</code></pre>
-<p>
-  Set <code>.secret</code> from JS. Putting the text in markup works — it is read
-  once and erased from the DOM — but it was in the HTML source on the way there,
-  which defeats the point. It auto-hides on tab switch and window blur, which is
-  when a screen share usually starts.
-</p>
-
-<h2>Why text, and not photographs</h2>
-<p>
-  Text is essentially two-tone, so it survives being crushed into a narrow value
-  band that would turn a photograph to mush. That means you can run amplitude
-  110+, where a single frame retains no usable signal. The
-  <a href="./demo/">tuning bench</a> shows exactly where this stops working, over
-  public-domain paintings.
-</p>
-
-<table>
-  <tr><th>Split</th><th>Leak</th></tr>
-  <tr><td>RGB channel split</td><td class="num no">1.000</td></tr>
-  <tr><td>Decoy image as modulator</td><td class="num no">0.929</td></tr>
-  <tr><td>Pixel interleave ×2</td><td class="num no">0.693</td></tr>
-  <tr><td>Noise amplitude 64</td><td class="num">0.386</td></tr>
-  <tr><td>Noise amplitude 96</td><td class="num">0.137</td></tr>
-  <tr><td>Noise amplitude 127</td><td class="num ok">0.004</td></tr>
-</table>
-
-<p>
-  Two findings worth internalising. <b>Splitting <i>where</i> pixels are does
-  nothing — only randomizing <i>what they say</i> works.</b> Recognition survives
-  losing colour, losing 90% of pixels, blur, and quantization, so channel
-  splitting and pixel interleaving both leak badly. And <b>noise amplitude is the
-  only lever</b>; frame count is not a substitute.
-</p>
-
-<h2>Safety</h2>
-<p>
-  Noise is per-pixel and zero-mean, so every frame carries the same local mean
-  luminance as the source. The alternation is a high-spatial-frequency contrast
-  reversal, not a full-field flash — the mechanism 6-bit panels use for FRC
-  dithering — which keeps it out of the large-area-flash regime WCAG 2.3.1
-  targets. It is still moving high-contrast content: <code>hold</code> is the
-  default pattern because it keeps the flicker on screen only while the pointer
-  is down. Always offer an opt-out.
-</p>
-
-<footer>
-  MIT · <a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a> ·
-  <a href="./demo/">tuning bench</a> ·
-  <a href="./demo/secret.html">source proof</a>
-</footer>
-
-</div>
-
+<script>
+// THE ATTACK, not the library: a closed shadow root is closed to page script but
+// not to anyone who patches attachShadow first, which is what an extension does.
+window.__roots = new Map();
+const __attach = Element.prototype.attachShadow;
+Element.prototype.attachShadow = function (init) {
+  const r = __attach.call(this, init);
+  window.__roots.set(this, r);
+  return r;
+};
+</script>
 <script type="module">
 import './src/secret.js';
-import { Flicker, averageFrames, boxBlur, leakScore, suggestConfig } from './src/index.js';
+import { Flicker, averageFrames, boxBlur, leakScore, denoisedLeak,
+         checkPalette, detectFormat, splitFrames } from './src/index.js';
 
-// Fetched, not inlined — an inline literal would put this page's own live secret
-// straight into its View Source, which is the exact thing being demonstrated.
-const account = (await (await fetch('./demo/api-mock.json')).json()).account;
 const $ = (id) => document.getElementById(id);
+// Fetched, not inlined — an inline literal would put this page's own secret
+// straight into its View Source, which is the thing being demonstrated.
+$('txt').value = (await (await fetch('./demo/api-mock.json')).json()).account;
 
 /* ------------------------------------------------------------------ hero -- */
-const liveCv = $('heroLive');
-const shotCv = $('heroShot');
-const denoiseCv = $('heroDenoise');
-const shotCtx = shotCv.getContext('2d', { alpha: false, willReadFrequently: true });
-const denoiseCtx = denoiseCv.getContext('2d', { alpha: false });
-
-// noiseScale 5, not 1. Per-pixel noise is white, so it sits above the spatial
-// frequencies the strokes occupy and a radius-4 blur pulls the number back out:
-// measured leak 0.13 raw against 0.46 denoised. At a block size at or above the
-// stroke width there is no radius that helps.
-const hero = new Flicker(liveCv,
-  { amplitude: 96, contrast: 2.6, frames: 2, noiseScale: 3, chroma: 0, hardness: 0.5 });
-const H = 76;
-const ATTACK_RADIUS = 4;
-
-// Autoplaying flicker is exactly what a reduced-motion preference is for. Honour
-// it with a static equivalent — the mean is literally what the eye resolves —
-// and let the visitor opt in.
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const shotCtx = $('shot').getContext('2d', { alpha: false, willReadFrequently: true });
+const denCtx = $('den').getContext('2d', { alpha: false });
+const hero = new Flicker($('live'), { frames: 2, chroma: 0, hardness: 1, noiseScale: 3,
+  amplitude: 110, linearLight: true, willReadFrequently: true });
+const H = 74, ATTACK_R = 4;
 
 async function layout() {
-  // Size the backing store to the pane's real CSS width so the canvas is never
-  // rescaled. Any resampling blurs the noise toward its mean, which would make
-  // the screenshot panel readable and quietly invert the demonstration.
-  const w = Math.round(liveCv.parentElement.getBoundingClientRect().width);
+  // Size to the pane's real CSS width. Letting CSS rescale would resample the
+  // noise toward its mean and make the screenshot panel readable.
+  const w = Math.round($('live').parentElement.getBoundingClientRect().width);
   hero.resize(w, H);
-  for (const [cv, ctx] of [[shotCv, shotCtx], [denoiseCv, denoiseCtx]]) {
-    cv.width = liveCv.width;
-    cv.height = liveCv.height;
-    cv.style.width = `${w}px`;
-    cv.style.height = `${H}px`;
-    ctx.imageSmoothingEnabled = false; // resetting width clears context state
+  for (const [cv, ctx] of [[$('shot'), shotCtx], [$('den'), denCtx]]) {
+    cv.width = $('live').width; cv.height = $('live').height;
+    cv.style.width = w + 'px'; cv.style.height = H + 'px';
+    ctx.imageSmoothingEnabled = false;
   }
-  await hero.setText(account, {
+  await hero.setText($('txt').value, {
     font: `600 ${Math.round(H * devicePixelRatio * 0.42)}px ui-monospace, monospace`,
-    background: '#14141a',
-  });
-  hero.running ? capture() : renderStatic();
+    color: $('fg').value, background: $('bg').value });
+  hero.running ? capture() : still();
 }
-
 function capture() {
-  shotCtx.drawImage(liveCv, 0, 0);
-  attack(shotCtx.getImageData(0, 0, shotCv.width, shotCv.height));
+  shotCtx.drawImage($('live'), 0, 0);
+  const blur = boxBlur(shotCtx.getImageData(0, 0, $('shot').width, $('shot').height), ATTACK_R);
+  denCtx.putImageData(new ImageData(blur.data, blur.width, blur.height), 0, 0);
+  if (!hero.planes.length) return;
+  const l = leakScore(blur, averageFrames(hero.planes));
+  $('leakOut').textContent = `leak ${l.toFixed(2)}`;
+  $('leakOut').style.color = l < 0.2 ? '#6fa76f' : l < 0.45 ? '#c2a15c' : '#d9885f';
 }
-
-/** Blur the capture and score it, so the block slider shows its own cost. */
-function attack(shot) {
-  const blurred = boxBlur(shot, ATTACK_RADIUS);
-  denoiseCtx.putImageData(new ImageData(blurred.data, blurred.width, blurred.height), 0, 0);
-  const planes = hero.planes;
-  if (!planes.length) return;
-  const leak = leakScore(blurred, averageFrames(planes));
-  $('leakOut').textContent = `leak ${leak.toFixed(2)}`;
-  $('leakOut').style.color = leak < 0.2 ? '#6fa76f' : leak < 0.4 ? '#c2a15c' : '#d9885f';
-}
-
-/** Paused equivalent: the mean on the left, one plane on the right. */
-function renderStatic() {
-  const planes = hero.planes;
-  if (!planes.length) return;
-  const mean = averageFrames(planes);
-  hero.ctx.putImageData(new ImageData(mean.data, mean.width, mean.height), 0, 0);
-  shotCtx.putImageData(new ImageData(planes[0].data, planes[0].width, planes[0].height), 0, 0);
-  attack(shotCtx.getImageData(0, 0, shotCv.width, shotCv.height));
-}
-
-let timer = 0;
-const play = () => {
-  hero.start();
+function still() {
+  if (!hero.planes.length) return;
+  const m = averageFrames(hero.planes);
+  hero.ctx.putImageData(new ImageData(m.data, m.width, m.height), 0, 0);
+  shotCtx.putImageData(new ImageData(hero.planes[0].data, m.width, m.height), 0, 0);
   capture();
-  clearInterval(timer);
-  timer = setInterval(capture, 1000);
-  $('heroToggle').textContent = 'Pause';
-};
-const pause = () => {
-  clearInterval(timer);
-  hero.stop();
-  renderStatic();
-  $('heroToggle').textContent = 'Play';
-};
-$('heroToggle').onclick = () => (hero.running ? pause() : play());
+}
+// Autoplaying flicker is what a reduced-motion preference exists for: show the
+// mean statically instead, which is literally what the eye resolves.
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let timer = 0;
+const play = () => { hero.start(); capture(); clearInterval(timer); timer = setInterval(capture, 1000); };
 
-for (const [id, key] of [['block', 'noiseScale'], ['amp', 'amplitude']]) {
-  $(id).oninput = async () => {
-    $(id + 'V').textContent = $(id).value;
-    await hero.configure({ [key]: +$(id).value });
-    hero.running ? capture() : renderStatic();
-  };
+/* ------------------------------------------------------------ playground -- */
+const chip = $('chip');
+const PRESETS = {
+  balanced: { amp:110, blk:3, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'',     scr:'' },
+  strong:   { amp:127, blk:5, hard:1,   chr:0, fg:'#a4a4a4', bg:'#8a8a8a', fake:'',     scr:'1' },
+  readable: { amp:80,  blk:2, hard:0.5, chr:0, fg:'#b4bcc8', bg:'#6b7280', fake:'',     scr:'' },
+  decoy:    { amp:110, blk:3, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'auto', scr:'' },
+  // Deliberately bad: exact colours, and a screenshot reads it outright.
+  broken:   { amp:110, blk:3, hard:1,   chr:0, fg:'#e8e8f0', bg:'#14141a', fake:'',     scr:'' },
+};
+
+let pending = 0;
+const schedule = () => { clearTimeout(pending); pending = setTimeout(apply, 70); };
+
+function apply() {
+  const v = { amp:+$('amp').value, blk:+$('blk').value, hard:+$('hard').value, chr:+$('chr').value,
+    gam:+$('gam').value, fg:$('fg').value, bg:$('bg').value, fake:$('fake').value,
+    place:$('place').value, scr:$('scr').value, txt:$('txt').value };
+  $('ampV').textContent = v.amp; $('blkV').textContent = v.blk;
+  $('hardV').textContent = v.hard.toFixed(2); $('chrV').textContent = v.chr.toFixed(2);
+  $('gamV').textContent = v.gam.toFixed(2);
+
+  for (const [a, val] of [['amplitude',v.amp],['noise-scale',v.blk],['hardness',v.hard],
+    ['chroma',v.chr],['gamma',v.gam],['color',v.fg],['background',v.bg],['fake-placement',v.place]])
+    chip.setAttribute(a, val);
+  v.fake ? chip.setAttribute('fake', v.fake) : chip.removeAttribute('fake');
+  v.scr ? chip.setAttribute('scramble', '') : chip.removeAttribute('scramble');
+  chip.secret = v.txt;
+  $('stage').style.background = v.bg;
+
+  // Measure off-screen: leak scoring runs on every input.
+  const c = document.createElement('canvas'); c.width = 280; c.height = 54;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = v.bg; x.fillRect(0, 0, c.width, c.height);
+  x.font = '600 27px ui-monospace, monospace'; x.fillStyle = v.fg;
+  x.textBaseline = 'middle'; x.fillText(v.txt, 8, c.height / 2);
+  const planes = splitFrames(x.getImageData(0, 0, c.width, c.height), { frames:2, chroma:v.chr,
+    hardness:v.hard, noiseScale:v.blk, amplitude:v.amp, gamma:v.gam, linearLight:true });
+  const target = averageFrames(planes);
+  const raw = leakScore(planes[0], target);
+  const blur = denoisedLeak(planes[0], target, 5);
+  const pal = checkPalette({ color: v.fg, background: v.bg });
+  const grade = (n) => (n < 0.2 ? 'ok' : n < 0.45 ? 'warn' : 'bad');
+
+  $('rMask').textContent = `${pal.ratio.toFixed(2)} ${pal.grade}`;
+  $('rMask').className = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
+  $('rLeak').textContent = raw.toFixed(2); $('rLeak').className = grade(raw);
+  $('rBlur').textContent = `${blur.leak.toFixed(2)} (r=${blur.radius})`;
+  $('rBlur').className = grade(blur.leak);
+  $('rFmt').textContent = detectFormat(v.txt).describe;
+
+  const tips = [...pal.warnings];
+  if (v.fake && pal.ratio < 1)
+    tips.push('Fake mode needs a masking ratio of 1.0+, or the real value ghosts through both frames.');
+  if (!tips.length) tips.push('These settings mask well and should fuse cleanly.');
+  $('advice').innerHTML = tips.map((t) => `<li>${t}</li>`).join('');
+
+  $('snippet').textContent =
+    `<nocap-secret\n  color="${v.fg}" background="${v.bg}"\n` +
+    `  amplitude="${v.amp}" noise-scale="${v.blk}"\n` +
+    `  chroma="${v.chr}" hardness="${v.hard}"` +
+    (v.fake ? `\n  fake="${v.fake}" fake-placement="${v.place}"` : '') +
+    (v.scr ? `\n  scramble` : '') +
+    (v.gam !== 2.4 ? `\n  gamma="${v.gam.toFixed(2)}"` : '') +
+    `\n></nocap-secret>\n\nel.secret = await fetchAccountNumber();`;
+
+  layout();
 }
 
-await layout();
-reduce ? pause() : play();
+for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','fake','place','scr'])
+  $(id).oninput = $(id).onchange = schedule;
 
-let resizeT = 0;
-addEventListener('resize', () => {
-  clearTimeout(resizeT);
-  resizeT = setTimeout(layout, 200);
-});
+$('presets').onclick = (e) => {
+  const b = e.target.closest('button[data-p]');
+  if (!b) return;
+  for (const el of $('presets').querySelectorAll('button[data-p]')) el.classList.toggle('on', el === b);
+  for (const [k, val] of Object.entries(PRESETS[b.dataset.p])) if ($(k)) $(k).value = val;
+  apply();
+};
 
+/* ---------------------------------------------------------- source proof -- */
+$('runChecks').onclick = async () => {
+  // The attack panel prints the recovered value into the page on purpose, so
+  // leaving it up would report a leak this demo created itself.
+  $('attackOut').innerHTML = '';
+  await new Promise((r) => requestAnimationFrame(r));
+
+  const served = await (await fetch(location.href, { cache: 'reload' })).text();
+  const sel = getSelection(); sel.removeAllRanges();
+  const rng = document.createRange(); rng.selectNodeContents(document.body);
+  sel.addRange(rng); const copied = sel.toString(); sel.removeAllRanges();
+
+  const needle = $('txt').value;
+  const surfaces = [
+    ['HTML source (View Source, curl, scrapers)', served],
+    ['Live DOM (DevTools inspector)', document.documentElement.outerHTML],
+    ['Rendered text (Reader mode, innerText)', document.body.innerText],
+    ['Select All + Copy', copied],
+    ['Element markup', chip.outerHTML],
+  ];
+  const rows = surfaces.map(([label, hay]) => {
+    const found = String(hay).includes(needle);
+    return `<tr class="${found ? 'leak' : 'safe'}"><td>${found ? '✗' : '✓'}</td>` +
+      `<td>${label}</td><td>${found ? 'contains it' : 'not found'}</td></tr>`;
+  });
+  // The one place it genuinely does live, stated rather than hidden.
+  rows.push('<tr class="leak"><td>✗</td><td>JS memory / <code>canvas.toDataURL()</code></td>' +
+    '<td>recoverable with DevTools</td></tr>');
+  $('checks').innerHTML = rows.join('');
+  const clean = surfaces.filter(([, h]) => String(h).includes(needle)).length;
+  $('checksOut').textContent = `"${needle}" found in ${clean} of ${surfaces.length} page surfaces`;
+};
+
+/* -------------------------------------------------------------- attacks -- */
+$('hookBtn').onclick = async () => {
+  // Both prototypes: text is rasterised through an OffscreenCanvas, so hooking
+  // only CanvasRenderingContext2D catches nothing and looks like a pass.
+  const protos = [CanvasRenderingContext2D.prototype];
+  if (typeof OffscreenCanvasRenderingContext2D === 'function')
+    protos.push(OffscreenCanvasRenderingContext2D.prototype);
+  const orig = protos.map((p) => p.fillText);
+  const seen = [];
+  protos.forEach((p, i) => {
+    p.fillText = function (t, ...r) { seen.push(String(t)); return orig[i].call(this, t, ...r); };
+  });
+  await chip.render();
+  protos.forEach((p, i) => { p.fillText = orig[i]; });
+  $('attackOut').innerHTML =
+    `<div style="font-family:ui-monospace,monospace;font-size:13px;color:#c98a63">` +
+    `fillText saw: ${seen.join(' ') || '(nothing)'}</div>` +
+    `<div style="font-size:12px;color:var(--faint)">` +
+    `${chip.hasAttribute('scramble')
+      ? 'scrambled — the glyphs, without their order'
+      : 'the whole secret, in a single call'}</div>`;
+};
+
+$('avgBtn').onclick = async () => {
+  const cv = window.__roots.get(chip)?.querySelector('canvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  // A run of frames, not two: the player cycles a bank of noise sets, so an
+  // arbitrary pair can straddle two sets and fail to cancel.
+  const caps = [];
+  for (let i = 0; i < 8; i++) {
+    caps.push(ctx.getImageData(0, 0, cv.width, cv.height));
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  const m = averageFrames(caps);
+  const out = document.createElement('canvas');
+  out.width = m.width; out.height = m.height;
+  out.style.cssText = 'width:290px;border-radius:6px;border:1px solid var(--line)';
+  out.getContext('2d').putImageData(new ImageData(m.data, m.width, m.height), 0, 0);
+  $('attackOut').innerHTML =
+    '<div style="font-size:12px;color:#c98a63;margin-bottom:6px">recovered from 8 frames — no mode prevents this</div>';
+  $('attackOut').appendChild(out);
+};
+
+/* ----------------------------------------------------------------- boot -- */
+apply();
+reduce ? still() : play();
+let rt = 0;
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(layout, 200); });
 setTimeout(() => {
   const hz = hero.stats.refreshHz;
   if (!hz) return;
-  $('heroHz').textContent =
-    hz < 100
-      ? `Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ looks far steadier.`
-      : `Your display is ~${hz}Hz, comfortably in range for this.`;
+  $('rHz').textContent = `${hz}Hz`;
+  $('hz').textContent = hz < 100
+    ? `Your display is ~${hz}Hz, so the cycle runs at ${Math.round(hz / 2)}Hz and shimmers — 120Hz+ is far steadier.`
+    : `Your display is ~${hz}Hz, comfortably in range.`;
 }, 1500);
-
-/* ---------------------------------------------------------- blend studio -- */
-const chip = $('chip');
-chip.secret = account;
-
-function restyle() {
-  const background = $('pageBg').value;
-  const color = $('pageFg').value;
-
-  // Recolour the whole page. Everything else is derived with color-mix, so the
-  // two picks are the only inputs.
-  document.documentElement.style.setProperty('--bg', background);
-  document.documentElement.style.setProperty('--fg', color);
-  document.documentElement.style.setProperty('--accent', color);
-
-  const cfg = suggestConfig({
-    background,
-    color,
-    amplitude: +$('strength').value,
-    chroma: +$('chroma').value,
-    hardness: +$('hard').value,
-    fontSize: 34 * devicePixelRatio * 0.46,
-  });
-
-  chip.setAttribute('amplitude', cfg.amplitude);
-  chip.setAttribute('noise-scale', cfg.noiseScale);
-  chip.setAttribute('chroma', cfg.chroma);
-  chip.setAttribute('hardness', cfg.hardness);
-  chip.setAttribute('color', cfg.color);
-  chip.setAttribute('background', cfg.background);
-
-  $('rAmp').textContent = cfg.amplitude;
-  $('rBlock').textContent = `${cfg.noiseScale}px`;
-  $('rContrast').textContent = cfg.contrast;
-  $('rChroma').textContent = `${Math.round(cfg.chromaRetained * 100)}%`;
-  // Ratio of carryable noise to text/background separation. Below 0.5 a single
-  // captured frame stays legible, so this is the number that decides whether
-  // the suggestion is worth shipping.
-  const m = cfg.masking;
-  $('rMask').textContent = `${m.ratio.toFixed(2)} ${m.grade}`;
-  $('rMask').style.color =
-    m.grade === 'good' ? '#6fa76f' : m.grade === 'fair' ? '#c2a15c' : '#d9885f';
-  $('rBand').textContent = `[${cfg.band.lo}, ${cfg.band.hi}]`;
-  // The authored colours go on the element; these are what they become.
-  const sw = $('rSwatch').children;
-  sw[0].style.background = cfg.perceivedColor;
-  sw[1].style.background = cfg.perceivedBackground;
-  $('rSwatch').title = `${cfg.perceivedColor} on ${cfg.perceivedBackground}`;
-
-  $('snippet').textContent =
-    `<nocap-secret hold auto-hide="6"\n` +
-    `  amplitude="${cfg.amplitude}"\n` +
-    `  noise-scale="${cfg.noiseScale}"\n` +
-    `  color="${cfg.color}"\n` +
-    `  background="${cfg.background}"\n` +
-    `></nocap-secret>`;
-
-  $('notes').innerHTML = cfg.notes.map((n) => `<li>${n}</li>`).join('');
-}
-
-$('pageBg').oninput = restyle;
-$('pageFg').oninput = restyle;
-$('strength').oninput = () => {
-  $('strengthV').textContent = $('strength').value;
-  restyle();
-};
-$('chroma').oninput = () => {
-  const v = +$('chroma').value;
-  $('chromaV').textContent = v === 0 ? 'grey' : v === 1 ? 'per-channel' : v.toFixed(2);
-  restyle();
-};
-$('hard').oninput = () => {
-  $('hardV').textContent = (+$('hard').value).toFixed(2);
-  restyle();
-};
-for (const b of document.querySelectorAll('.presets button')) {
-  b.onclick = () => {
-    $('pageBg').value = b.dataset.bg;
-    $('pageFg').value = b.dataset.fg;
-    restyle();
-  };
-}
-restyle();
 </script>
 </body>
 </html>

@@ -103,7 +103,6 @@ export class NocapSecret extends ElementBase {
     'fake-placement',
     'width',
     'height',
-    'placeholder',
   ];
 
   #secret = '';
@@ -111,8 +110,6 @@ export class NocapSecret extends ElementBase {
   #slots = null;   // where each of #chars belongs on screen
   #flicker = null;
   #canvas = null;
-  #cover = null;
-  #hideTimer = 0;
   #revealed = false;
   #paletteWarned = false;
   #lastDecoy = null;
@@ -135,43 +132,19 @@ export class NocapSecret extends ElementBase {
       :host { display: inline-block; position: relative; line-height: 0;
               user-select: none; -webkit-user-select: none; }
       canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
-      .cover { position: absolute; inset: 0; display: grid; place-items: center;
-               background: var(--cover, #14141a); border-radius: 4px; cursor: pointer;
-               font: 500 13px/1 ui-sans-serif, system-ui, sans-serif; color: #71717f;
-               letter-spacing: .04em; }
-      .cover[hidden] { display: none; }
     </style>`;
 
     this.#canvas = document.createElement('canvas');
-    this.#cover = document.createElement('div');
-    this.#cover.className = 'cover';
-    this.#cover.style.setProperty('--cover', this.#perceived(this.#palette.background));
-    this.#cover.textContent = this.getAttribute('placeholder') ?? 'hold to reveal';
-    root.append(this.#canvas, this.#cover);
+    root.append(this.#canvas);
 
     this.#flicker = new Flicker(this.#canvas, this.#options()).resize(
       +(this.getAttribute('width') ?? 260),
       +(this.getAttribute('height') ?? 56)
     );
 
-    if (this.hasAttribute('hold')) {
-      this.addEventListener('pointerdown', this.#onHold);
-      this.addEventListener('pointerup', this.hide);
-      this.addEventListener('pointerleave', this.hide);
-      this.addEventListener('pointercancel', this.hide);
-    } else {
-      this.addEventListener('click', this.reveal);
-    }
-
-    // A tab switch or a window blur is the moment a screen share usually starts.
-    document.addEventListener('visibilitychange', this.#onVisibility);
-    window.addEventListener('blur', this.hide);
   }
 
   disconnectedCallback() {
-    document.removeEventListener('visibilitychange', this.#onVisibility);
-    window.removeEventListener('blur', this.hide);
-    clearTimeout(this.#hideTimer);
     this.#flicker?.destroy();
     this.#flicker = null;
     this.#canvas = null;
@@ -180,7 +153,7 @@ export class NocapSecret extends ElementBase {
   attributeChangedCallback() {
     if (!this.#flicker) return;
     this.#flicker.configure(this.#options());
-    if (this.#revealed) this.reveal();
+    if (this.#revealed) this.render();
   }
 
   /** Write-only by design: reading it back would put the secret in reach again. */
@@ -201,7 +174,7 @@ export class NocapSecret extends ElementBase {
       this.#secret = str;
       this.#chars = this.#slots = null;
     }
-    if (this.#revealed) this.reveal();
+    this.render();
   }
 
   get revealed() {
@@ -217,9 +190,8 @@ export class NocapSecret extends ElementBase {
     return this.#flicker?.stats.refreshHz ?? 0;
   }
 
-  reveal = async () => {
+  render = async () => {
     if (!this.#flicker || !(this.#secret || this.#chars?.length)) return;
-    clearTimeout(this.#hideTimer);
 
     const { color, background } = this.#palette;
     const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
@@ -232,27 +204,23 @@ export class NocapSecret extends ElementBase {
       await this.#flicker.setText(this.#secret, { font, color, background });
     }
     this.#warnPalette();
-    this.#cover.hidden = true;
     this.#revealed = true;
     this.#flicker.start();
-
     this.#adaptBlock();
-    const seconds = +(this.getAttribute('auto-hide') ?? 0);
-    if (seconds > 0) this.#hideTimer = setTimeout(this.hide, seconds * 1000);
-    this.dispatchEvent(new CustomEvent('reveal'));
+    this.dispatchEvent(new CustomEvent('render'));
   };
 
-  hide = () => {
+  /** Stop the alternation and clear the canvas. Call render() to resume. */
+  stop = () => {
     if (!this.#flicker || !this.#revealed) return;
-    clearTimeout(this.#hideTimer);
     this.#flicker.stop();
-    // Overwrite the canvas — a stopped Flicker leaves the last plane on screen.
+    // Overwrite: a stopped Flicker leaves its last plane on screen, and one
+    // plane is exactly what a screenshot should not be able to sit and read.
     const { ctx, canvas } = this.#flicker;
     ctx.fillStyle = this.#perceived(this.#palette.background);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    this.#cover.hidden = false;
     this.#revealed = false;
-    this.dispatchEvent(new CustomEvent('hide'));
+    this.dispatchEvent(new CustomEvent('stop'));
   };
 
   /** Measured single-plane leak for the current settings, for tuning. */
@@ -465,19 +433,10 @@ export class NocapSecret extends ElementBase {
       if (this.#adapted || !hz || hz < 100 || !this.#revealed) return;
       this.#adapted = true;
       this.#flicker.configure({ noiseScale: 5 }).then(() => {
-        if (this.#revealed) this.reveal();
+        if (this.#revealed) this.render();
       });
     }, 800);
   }
-
-  #onHold = (e) => {
-    e.preventDefault();
-    this.reveal();
-  };
-
-  #onVisibility = () => {
-    if (document.visibilityState !== 'visible') this.hide();
-  };
 
   #options() {
     const num = (name, fallback) =>
