@@ -1,11 +1,14 @@
 {
   "name": "nocap",
   "version": "0.1.0",
-  "description": "Anti-screenshot, anti-AI display effect for secrets on screen. Frames alternate at refresh rate so your eye reads the content and a single capture gets noise \u2014 and the text never enters the DOM.",
+  "description": "Prevent screenshots of text on the web. Anti-screenshot, anti-AI-scraper display: frames alternate at refresh rate so your eye reads the secret and a single screen capture gets noise \u2014 and the text never enters the DOM.",
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
     "./secret": "./src/secret.js",
     "./splitter": "./src/splitter.js",
     "./palette": "./src/palette.js",
@@ -21,16 +24,24 @@
     "demo": "npx --yes serve . --listen tcp://127.0.0.1:8787"
   },
   "keywords": [
-    "screenshot",
+    "prevent-screenshot",
     "anti-screenshot",
+    "screenshot-protection",
+    "screenshot-proof",
     "screen-capture",
+    "prevent-screen-capture",
+    "anti-scraping",
+    "anti-ai-scraper",
+    "hide-text-from-ai",
     "secret",
     "privacy",
     "security",
+    "watermark",
     "flicker",
     "persistence-of-vision",
     "canvas",
-    "web-component"
+    "web-component",
+    "typescript"
   ],
   "repository": {
     "type": "git",
@@ -41,5 +52,6 @@
   },
   "homepage": "https://github.com/acieshk/nocap#readme",
   "author": "acieshk",
-  "license": "MIT"
+  "license": "MIT",
+  "types": "src/index.d.ts"
 }

@@ -1,15 +1,27 @@
 # nocap
 
-**Anti-screenshot, anti-AI display for secrets on screen.**
+**Prevent screenshots of text on the web.** A display layer that shows a secret
+to a human but not to a screen capture, an OCR pass, or a page-reading AI agent
+— and that ships the attacks against itself so you can check the claim.
+
+[![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
+[![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+| What a screenshot captures | What you see |
+| --- | --- |
+| ![one captured frame](docs/screenshot.png) | ![the perceived mean](docs/perceived.png) |
+
+Both are the same element at the same moment. The left is one plane straight out
+of the live pipeline; the right is the mean of that plane and its partner, which
+is what your visual system resolves. Neither is retouched — regenerate them from
+the demo yourself.
 
 **[Live demo & playground](https://acieshk.github.io/nocap/)**
 
-Splits content into frames that alternate at your display's refresh rate. Each
-frame is noise; their *mean* is the content. Your visual system does the
-averaging, so you read it — a single screenshot does not.
-
-The text never enters the DOM, so page-reading AI agents and scrapers get
-nothing at all.
+```
+npm i nocap
+```
 
 ```js
 import 'nocap';
@@ -20,6 +32,11 @@ import 'nocap';
 ```js
 document.querySelector('nocap-secret').secret = await fetchAccountNumber();
 ```
+
+Content is split into frames that alternate at your display's refresh rate. Each
+frame is noise; their *mean* is the content. Your visual system does the
+averaging, so you read it — a single screenshot does not. The text never enters
+the DOM, so scrapers and DOM-reading AI agents get nothing at all.
 
 ---
 

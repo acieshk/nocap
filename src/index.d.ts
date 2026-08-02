@@ -1,0 +1,206 @@
+/**
+ * nocap — anti-screenshot, anti-AI display for secrets on screen.
+ *
+ * Hand-written rather than generated: the library is plain JS, and the whole
+ * surface is a handful of functions over one struct.
+ */
+
+/** Structurally an ImageData, so browser ImageData is assignable. */
+export interface Pixels {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
+export type SplitMode = 'amplitude' | 'interleave' | 'channels' | 'decoy';
+
+export interface SplitOptions {
+  /** `amplitude` is the only one that masks; the others exist to show why. */
+  mode?: SplitMode;
+  /** Planes per cycle. 2 is almost always right. */
+  frames?: number;
+  /** 0–127. Fraction of the headroom the colours allow. */
+  amplitude?: number;
+  /** Pre-emphasis. Not needed under `linearLight`, which does not compress. */
+  contrast?: number;
+  /** 1 = all noise at full amplitude (best mask). 0 = uniform magnitude. */
+  hardness?: number;
+  /** 0 = one draw shared across RGB (grey, masks better). 1 = per channel. */
+  chroma?: number;
+  /** Noise block in px. Higher resists a blur, strobes below 120Hz. */
+  noiseScale?: number;
+  /** `interleave` / `channels`: value shown by the non-carrying planes. */
+  fill?: number;
+  /** `decoy`: the second image, same size. */
+  decoy?: Pixels | null;
+  /** Average in light, not in code values, so authored colours are exact. */
+  linearLight?: boolean;
+  /** Display EOTF. 2.4 selects the real sRGB curve; else a pure power. */
+  gamma?: number;
+  rng?: () => number;
+}
+
+export function splitFrames(src: Pixels, opts?: SplitOptions): Pixels[];
+export function averageFrames(caps: Pixels[]): Pixels;
+export function expandRange(img: Pixels, range: { lo: number; hi: number }): Pixels;
+export function planeRange(opts?: SplitOptions): { lo: number; hi: number };
+
+/** |Pearson r| between plane luma and source luma. A legibility proxy. */
+export function leakScore(plane: Pixels, src: Pixels): number;
+/** Throws on a size mismatch. */
+export function boxBlur(img: Pixels, radius: number): Pixels;
+/** Worst leak an attacker reaches by blurring at any radius up to maxRadius. */
+export function denoisedLeak(
+  plane: Pixels,
+  src: Pixels,
+  maxRadius?: number
+): { leak: number; radius: number };
+export function maxAmplitudeFor(colors: Array<string | [number, number, number]>): number;
+
+/* ------------------------------------------------------------- palette -- */
+
+export type Grade = 'good' | 'fair' | 'weak';
+
+export interface PaletteCheck {
+  /** min(codeSwing(text), codeSwing(background)) / |text - background|. */
+  ratio: number;
+  /** `good` means "the best this technique achieves", not "safe". */
+  grade: Grade;
+  textSwing: number;
+  backgroundSwing: number;
+  separation: number;
+  warnings: string[];
+}
+
+export function checkPalette(design: {
+  color: string;
+  background: string;
+  gamma?: number;
+}): PaletteCheck;
+
+export function codeSwing(color: string, gamma?: number): number;
+export function toLight(v: number, gamma?: number): number;
+export function toCode(x: number, gamma?: number): number;
+export function luma(rgb: number[]): number;
+export function toRgb(color: string | number[]): number[];
+export function toHex(rgb: number[]): string;
+export function placeInBand(
+  color: string,
+  targetLuma: number,
+  bounds: { lo: number; hi: number }
+): number[];
+
+export interface SuggestedConfig {
+  amplitude: number;
+  noiseScale: number;
+  chroma: number;
+  hardness: number;
+  linearLight: boolean;
+  /** What to author. Under linear light these are also what you see. */
+  color: string;
+  background: string;
+  perceivedColor: string;
+  perceivedBackground: string;
+  band: { lo: number; hi: number };
+  contrast: number;
+  chromaRetained: number;
+  adaptiveCeiling: number;
+  masking: PaletteCheck;
+  notes: string[];
+}
+
+export function suggestConfig(design: {
+  background: string;
+  color: string;
+  amplitude?: number;
+  chroma?: number;
+  hardness?: number;
+  fontSize?: number;
+  minContrast?: number;
+  linearLight?: boolean;
+}): SuggestedConfig;
+
+/* ---------------------------------------------------------------- fake -- */
+
+export type FakeMode = 'auto' | 'number' | 'text' | 'random';
+
+export function detectFormat(text: string): {
+  kind: string;
+  mask: string;
+  digits: number;
+  letters: number;
+  separators: string[];
+  describe: string;
+};
+export function fakeLike(
+  text: string,
+  opts?: { mode?: FakeMode; rng?: () => number }
+): string;
+export function passesLuhn(text: string): boolean;
+
+/* -------------------------------------------------------------- runtime -- */
+
+export interface FlickerOptions extends SplitOptions {
+  /** Vsyncs each plane is held for. 1 is what you want. */
+  planeHold?: number;
+  bankSize?: number;
+  warnBelowHz?: number;
+  /** Only if you intend to getImageData off the live canvas. */
+  willReadFrequently?: boolean;
+}
+
+export class Flicker {
+  constructor(canvas: HTMLCanvasElement, options?: FlickerOptions);
+  readonly canvas: HTMLCanvasElement;
+  readonly ctx: CanvasRenderingContext2D;
+  readonly opts: Required<FlickerOptions>;
+  readonly stats: { presented: number; dropped: number; refreshHz: number; cycleHz: number };
+  /** Plane k is exactly what a single screenshot lands on. */
+  readonly planes: Pixels[];
+  readonly range: { lo: number; hi: number };
+  readonly running: boolean;
+
+  resize(cssWidth: number, cssHeight: number, dpr?: number): this;
+  setSource(drawable: CanvasImageSource, opts?: { background?: string }): Promise<this>;
+  setDecoy(drawable: CanvasImageSource | null, opts?: { background?: string }): Promise<this>;
+  setText(
+    text: string,
+    opts?: { font?: string; color?: string; background?: string; lineHeight?: number }
+  ): Promise<this>;
+  /** Present planes built elsewhere, bypassing splitFrames. */
+  setPlanes(planes: Pixels[]): Promise<this>;
+  /** Present a whole bank of prebuilt cycles. */
+  setBank(sets: Pixels[][]): Promise<this>;
+  configure(patch: Partial<FlickerOptions>): Promise<this>;
+  start(): this;
+  stop(): this;
+  showPlane(k?: number): this;
+  destroy(): void;
+}
+
+/**
+ * `<nocap-secret>` — renders as soon as it has a value.
+ *
+ * Hold-to-reveal, auto-hide and click-to-toggle are product decisions and are
+ * deliberately absent. The value is also unreadable to assistive technology by
+ * construction, so provide an accessible route to it yourself.
+ */
+export class NocapSecret extends HTMLElement {
+  /** Write-only: reading it back would put the secret in reach again. */
+  set secret(value: string);
+  readonly revealed: boolean;
+  readonly refreshHz: number;
+  readonly planes: Pixels[];
+  readonly decoys: string[];
+  readonly lastDecoy: string | null;
+  render(): Promise<void>;
+  stop(): void;
+  /** Worst plane against the mean. null before anything is rendered. */
+  measureLeak(): number | null;
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'nocap-secret': NocapSecret;
+  }
+}
