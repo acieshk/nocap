@@ -100,6 +100,44 @@
 
 <ul id="advice"></ul>
 
+
+<h2>Perceived colour check</h2>
+<p>
+  <code>color</code> and <code>background</code> <b>are</b> the perceived colours —
+  that is what the linear-light split buys. Here is the proof rather than the
+  claim: a flickering patch sitting inside a static swatch of the same value. If
+  they match, the inner border disappears. Compare the numbers too; the measured
+  column is the mean of the planes in light, converted back.
+</p>
+
+<div class="controls" style="margin-bottom:16px">
+  <label class="f"><span>Perceived colour</span><input type="color" id="pc" value="#999999"></label>
+  <label class="f"><span>Hex</span><input type="text" id="pcHex" value="#999999" style="width:110px"></label>
+  <label class="f">
+    <span>Masking strength <em id="pAmpV">110</em></span>
+    <input type="range" id="pAmp" min="30" max="127" step="1" value="110">
+  </label>
+  <button id="pcMid">Use a mid-tone</button>
+</div>
+
+<div class="row2">
+  <div class="panel">
+    <div class="cap">Flicker inside a static swatch — the border should vanish</div>
+    <div class="body" id="nullBody"><canvas id="nullC"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="cap">Static only — the reference</div>
+    <div class="body" id="flatBody"><div id="flat" style="width:170px;height:120px;border-radius:5px"></div></div>
+  </div>
+</div>
+
+<div class="stats">
+  <span>authored <b id="pAuth">—</b></span>
+  <span>measured <b id="pMeas">—</b></span>
+  <span>difference <b id="pDelta">—</b></span>
+  <span>noise it can carry <b id="pSwing">—</b></span>
+</div>
+
 <h2>Config</h2>
 <pre id="snippet">…</pre>
 
@@ -241,10 +279,80 @@ function measure(fg, bg, amplitude, gamma) {
     `\n></nocap-secret>`;
 }
 
+/* --- perceived colour check ------------------------------------------------ */
+const nullFlick = new Flicker($('nullC'), {
+  frames: 2, chroma: 0, hardness: 1, noiseScale: 3, contrast: 1,
+  linearLight: true, willReadFrequently: true,
+});
+nullFlick.resize(170, 120);
+
+const toCode = (x) => {
+  const v = Math.max(0, Math.min(1, x));
+  return 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+};
+const hex2 = (a) => '#' + a.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+let pPending = 0;
+async function checkColour() {
+  const hex = $('pc').value;
+  const amplitude = +$('pAmp').value;
+  $('pcHex').value = hex;
+  $('pAmpV').textContent = amplitude;
+  $('nullBody').style.background = hex;
+  $('flatBody').style.background = hex;
+  $('flat').style.background = hex;
+
+  await nullFlick.configure({ amplitude });
+  // background:hex so the contain-fit letterbox is the same colour as the
+  // patch. Without it the canvas corners are the default black fill, and
+  // sampling pixel 0 measures the fill rather than the colour under test.
+  await nullFlick.setSource(solidPatch(hex), { background: hex });
+  nullFlick.start();
+
+  // Average the planes in LIGHT, which is what the eye integrates, then convert
+  // back. Averaging the code values instead would report the old, wrong answer.
+  const planes = nullFlick.planes;
+  // Sample the centre, not the corner.
+  const mid = ((($('nullC').height / 2) | 0) * $('nullC').width + (($('nullC').width / 2) | 0)) * 4;
+  const measured = [0, 1, 2].map((c) => {
+    let lit = 0;
+    for (const pl of planes) lit += toLight(pl.data[mid + c]);
+    return toCode(lit / planes.length);
+  });
+  const authored = toRgb(hex);
+  const delta = Math.max(...measured.map((v, i) => Math.abs(v - authored[i])));
+
+  $('pAuth').textContent = hex;
+  $('pMeas').textContent = hex2(measured);
+  $('pDelta').textContent = `${delta.toFixed(1)} levels`;
+  $('pDelta').className = delta < 2 ? 'ok' : delta < 8 ? 'warn' : 'bad';
+  const s = swingOf(hex);
+  $('pSwing').textContent = `${Math.round(s * 200)}%`;
+  $('pSwing').className = s < 0.08 ? 'bad' : s < 0.2 ? 'warn' : 'ok';
+}
+
+function solidPatch(hex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  x.fillStyle = hex;
+  x.fillRect(0, 0, 32, 32);
+  return c;
+}
+
+const scheduleColour = () => { clearTimeout(pPending); pPending = setTimeout(checkColour, 60); };
+$('pc').oninput = scheduleColour;
+$('pAmp').oninput = scheduleColour;
+$('pcHex').oninput = () => {
+  if (/^#[0-9a-fA-F]{6}$/.test($('pcHex').value)) { $('pc').value = $('pcHex').value; scheduleColour(); }
+};
+$('pcMid').onclick = () => { $('pc').value = '#999999'; scheduleColour(); };
+
 for (const id of ['fg', 'bg', 'txt', 'amp', 'g']) $(id).oninput = schedule;
 $('reset').onclick = () => { $('g').value = 2.4; schedule(); };
 
 await render();
+await checkColour();
 setTimeout(() => ($('sHz').textContent = `${live.stats.refreshHz}Hz`), 1200);
 </script>
 </body>
