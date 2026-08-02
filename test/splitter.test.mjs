@@ -605,3 +605,35 @@ test('the viewer-facing mean is taken in light, not in code', async () => {
     }
   }
 });
+
+test('isoluminantPartner moves chrominance without moving luma', async () => {
+  const { isoluminantPartner, toRgb, luma } = await import('../src/palette.js');
+  for (const base of ['#6b7280', '#9ea6b4', '#404a58', '#b4a89e']) {
+    for (const swing of [20, 60, 90, -60]) {
+      const got = isoluminantPartner(base, swing);
+      // Rounding to 8 bits is the only error allowed. Anything larger means the
+      // compensation is wrong, or a channel clipped and took the luma with it.
+      assert.ok(Math.abs(got.deltaLuma) < 1,
+        `${base} @ ${swing}: luma moved ${got.deltaLuma.toFixed(2)}`);
+      // Blue is the channel that should have done the moving.
+      const before = toRgb(base);
+      const after = toRgb(got.color);
+      assert.ok(Math.abs(after[2] - before[2]) >= Math.abs(after[1] - before[1]),
+        'blue should carry the swing');
+    }
+  }
+});
+
+test('isoluminantPartner reduces the swing rather than clipping a channel', async () => {
+  const { isoluminantPartner, toRgb } = await import('../src/palette.js');
+  // Near the blue rail there is no room to go further up, so the swing has to
+  // come down. Clipping instead would silently break isoluminance.
+  const tight = isoluminantPartner('#6b70f0', 90);
+  assert.ok(Math.abs(tight.swing) < 90, `swing should reduce, got ${tight.swing}`);
+  assert.ok(Math.abs(tight.deltaLuma) < 1, 'still isoluminant after reducing');
+  for (const v of toRgb(tight.color)) {
+    assert.ok(v >= 0 && v <= 255, 'stays in gamut');
+  }
+  // A colour with room keeps what it asked for.
+  assert.equal(isoluminantPartner('#6b7280', 40).swing, 40);
+});

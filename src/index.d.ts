@@ -210,6 +210,15 @@ export class Flicker {
 export type Strength = 'weak' | 'medium' | 'strong';
 
 /** Tested points on the masking/legibility curve. `medium` is the default. */
+/**
+ * A colour differing from `base` in chrominance only, along blue-yellow.
+ * The swing is reduced near the gamut edge rather than clipped.
+ */
+export function isoluminantPartner(
+  base: string | [number, number, number],
+  swing?: number
+): { color: string; swing: number; deltaLuma: number };
+
 export const STRENGTHS: Record<Strength, {
   amplitude: number;
   noiseScale: number;

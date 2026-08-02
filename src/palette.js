@@ -296,3 +296,53 @@ export function checkPalette({ color, background, gamma = 2.4 }) {
   }
   return { ratio, grade, textSwing, backgroundSwing, separation, warnings };
 }
+
+/**
+ * A colour that differs from `base` in chrominance only, along blue-yellow.
+ *
+ * The eye resolves chrominance far more coarsely than luminance, and worst of
+ * all on the blue-yellow axis, where the S-cones are sparse and absent from the
+ * foveal centre. Every video codec exploits this when it subsamples chroma. A
+ * mark painted in this colour carries almost no luminance signal, so it is weak
+ * to look at and strong in the pixel data.
+ *
+ * Blue is the cheap channel: it contributes 0.0722 of luma against green's
+ * 0.7152. Red and green are pushed the other way by exactly the amount that
+ * cancels the luma change, so isoluminance is a construction rather than a hope.
+ *
+ * The swing is REDUCED, never clipped. Clipping a channel breaks the one
+ * property this function exists to provide, and breaks it silently, which is
+ * the same failure the decoy push had before it was bounded by what each pixel
+ * could actually reach.
+ *
+ * `swing` may be negative to move toward yellow, which is what a background
+ * that is already blue-heavy needs.
+ *
+ * @returns {{color: string, swing: number, deltaLuma: number}} the achieved
+ *   swing, which is smaller than requested near the edge of the gamut
+ */
+export function isoluminantPartner(base, swing = 60) {
+  const rgb = toRgb(base);
+  const [r, g, b] = rgb;
+  const compensation = (s) => -(LUMA[2] * s) / (LUMA[0] + LUMA[1]);
+  const fits = (s) => {
+    const k = compensation(s);
+    return b + s >= 0 && b + s <= 255
+      && r + k >= 0 && r + k <= 255
+      && g + k >= 0 && g + k <= 255;
+  };
+
+  const step = swing < 0 ? 1 : -1;
+  let s = swing;
+  while (s !== 0 && !fits(s)) s += step;
+
+  const k = compensation(s);
+  const out = [r + k, g + k, b + s];
+  return {
+    color: toHex(out),
+    swing: s,
+    // Rounding to 8 bits leaves a fraction of a code level. Reported rather
+    // than assumed, so a caller can check instead of trusting the name.
+    deltaLuma: luma(toRgb(toHex(out))) - luma(rgb),
+  };
+}

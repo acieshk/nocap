@@ -1,6 +1,6 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange, averageFrames, perceivedMean } from './splitter.js';
-import { checkPalette, toLight, toCode } from './palette.js';
+import { checkPalette, toLight, toCode, isoluminantPartner } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
 
@@ -181,6 +181,8 @@ export class NocapSecret extends ElementBase {
     'frames',
     'contrast',
     'strength',
+    'chroma-decoy',
+    'chroma-swing',
     'noise-scale',
     'chroma',
     'hardness',
@@ -206,6 +208,8 @@ export class NocapSecret extends ElementBase {
   #fakeWarned = false;
   #adapted = false;
   #motionWarned = false;
+  #chromaWarned = false;
+  #chromaDecoys = null;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -306,7 +310,10 @@ export class NocapSecret extends ElementBase {
     // meant enabling both silently dropped the decoy. The mode looked on and
     // did nothing.
     const plain = this.#secret || this.#reassemble();
-    if (fakeMode && fakeMode !== 'off' && plain) {
+    const chromaMode = this.getAttribute('chroma-decoy');
+    if (chromaMode && chromaMode !== 'off' && plain && !this.#chars) {
+      await this.#drawChromaDecoys(font, color, background, chromaMode, plain);
+    } else if (fakeMode && fakeMode !== 'off' && plain) {
       await this.#drawFake(font, color, background, fakeMode, plain);
     } else if (this.#chars) {
       await this.#drawScrambled(font, color, background);
@@ -361,6 +368,95 @@ export class NocapSecret extends ElementBase {
    * reconstructs the value immediately. It raises the cost of a casual console
    * poke. It does not withstand someone who has decided to extract the value.
    */
+  /**
+   * Decoy lines that survive frame averaging, carried in chrominance.
+   *
+   * EXPERIMENTAL, and narrower than it looks. Read the whole of this before
+   * enabling it.
+   *
+   * Every other decoy in this library cancels between the two planes, so the
+   * viewer never resolves one and averaging a run of frames removes them. That
+   * is the point there, and it is also the limit: an attacker who averages ends
+   * up with the clean real value.
+   *
+   * These do not cancel. They are composited into the source BEFORE the split,
+   * so they are part of what the pair averages to and they are still there
+   * after any number of frames. What keeps them off the viewer is not time, it
+   * is colour: they are isoluminant with the background, and the eye resolves
+   * chrominance far more coarsely than luminance.
+   *
+   * What this does NOT do, and cannot:
+   *
+   *   The real value lives in luminance, because that is what a person reads.
+   *   One greyscale conversion therefore strips every decoy and leaves the real
+   *   value untouched. Measured: decoy correlation 0.996 in colour, 0.020 after
+   *   `-vf format=gray`. There is no version of this that survives that, and
+   *   claiming otherwise would be a lie.
+   *
+   * So the honest description is: an attacker who does not think to drop colour
+   * comes away with a plausible wrong value. That covers automated capture,
+   * paste-into-chat, and anything fed to a model as an image. It does not cover
+   * anyone who has read this comment.
+   *
+   * Two more things measured rather than assumed: the decoys survive H.264 at
+   * 4:2:0 (0.917 at screen-share bitrates, so a recording keeps them), and they
+   * do not raise the real value's single-plane leak (0.132 either way).
+   *
+   * Isoluminant is not invisible. Equiluminant text is a well-known case of
+   * something visible but hard to localise and hard to focus. Expect to see a
+   * faint tint and decide whether it is tolerable on your own content.
+   */
+  async #drawChromaDecoys(font, color, background, mode, plain) {
+    if (!this.#chromaWarned) {
+      this.#chromaWarned = true;
+      console.warn(
+        '[nocap-secret] chroma-decoy is EXPERIMENTAL. The decoys survive frame ' +
+          'averaging but a single greyscale conversion removes all of them and ' +
+          'leaves the real value intact. It raises the cost of an automated ' +
+          'capture. It does not protect the value.'
+      );
+    }
+
+    const { width: w, height: h } = this.#flicker.canvas;
+    const swing = this.hasAttribute('chroma-swing')
+      ? +this.getAttribute('chroma-swing')
+      : 60;
+    // Pick the direction with room in it, so a blue-heavy background moves
+    // toward yellow instead of quietly getting a reduced swing.
+    const up = isoluminantPartner(background, swing);
+    const down = isoluminantPartner(background, -swing);
+    const pick = Math.abs(up.swing) >= Math.abs(down.swing) ? up : down;
+
+    const scratch = makeCanvas(w, h);
+    const ctx = scratch.getContext('2d', { alpha: false });
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Decoys first, so the real glyphs win any overlap. They sit in the space
+    // above and below the value, which is empty in the normal layout.
+    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.42)}px`);
+    ctx.font = small;
+    ctx.fillStyle = pick.color;
+    this.#chromaDecoys = [fakeLike(plain, { mode }), fakeLike(plain, { mode })];
+    ctx.fillText(this.#chromaDecoys[0], w / 2, h * 0.17);
+    ctx.fillText(this.#chromaDecoys[1], w / 2, h * 0.83);
+
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.fillText(plain, w / 2, h / 2);
+
+    // scratch is exactly the target size, so setSource's contain-fit is
+    // identity and nothing is resampled.
+    await this.#flicker.setSource(scratch, { background });
+  }
+
+  /** The chroma decoys in play, for demos. Never exposes the real value. */
+  get chromaDecoys() {
+    return this.#chromaDecoys ?? [];
+  }
+
   async #drawScrambled(font, color, background) {
     const { width: w, height: h } = this.#flicker.canvas;
     const scratch = makeCanvas(w, h);
