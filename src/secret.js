@@ -1,7 +1,8 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange } from './splitter.js';
 import { decryptSecret } from './vault.js';
-import { checkPalette } from './palette.js';
+import { checkPalette, toLight, toCode } from './palette.js';
+import { fakeLike } from './fake.js';
 
 /**
  * Text-tuned defaults.
@@ -90,6 +91,7 @@ export class NocapSecret extends HTMLElement {
     'background',
     'adaptive',
     'scramble',
+    'fake',
     'width',
     'height',
     'placeholder',
@@ -104,6 +106,8 @@ export class NocapSecret extends HTMLElement {
   #hideTimer = 0;
   #revealed = false;
   #paletteWarned = false;
+  #lastDecoy = null;
+  #fakeWarned = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -222,8 +226,14 @@ export class NocapSecret extends HTMLElement {
 
     const { color, background } = this.#palette;
     const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
-    if (this.#chars) await this.#drawScrambled(font, color, background);
-    else await this.#flicker.setText(this.#secret, { font, color, background });
+    const fakeMode = this.getAttribute('fake');
+    if (fakeMode && fakeMode !== 'off' && this.#secret) {
+      await this.#drawFake(font, color, background, fakeMode);
+    } else if (this.#chars) {
+      await this.#drawScrambled(font, color, background);
+    } else {
+      await this.#flicker.setText(this.#secret, { font, color, background });
+    }
     this.#warnPalette();
     this.#cover.hidden = true;
     this.#revealed = true;
@@ -313,6 +323,84 @@ export class NocapSecret extends HTMLElement {
     this.#paletteWarned = true;
     const { warnings } = checkPalette(this.#palette);
     for (const w of warnings) console.warn(`[nocap-secret] ${w}`);
+  }
+
+  /**
+   * Decoy planes: one frame carries a plausible wrong value, the other carries
+   * whatever makes the pair average back to the truth.
+   *
+   * Noise announces failure and invites another screenshot. A value in the right
+   * shape does not. The cost is that only ONE of the two planes reads cleanly —
+   * offsets must sum to zero, so if plane 0 is the decoy then plane 1 is
+   * 2*target - decoy and looks like a ghosted negative. A single capture has
+   * roughly even odds of landing on either.
+   *
+   * Everything happens in light, so the mean is the authored value exactly.
+   * Where a pixel lacks the headroom to reach the decoy outright, it goes as far
+   * as it can: clipping would break the zero-sum property and shift the colour.
+   */
+  async #drawFake(font, color, background, mode) {
+    const decoy = fakeLike(this.#secret, { mode: mode === 'auto' ? 'auto' : mode });
+    this.#lastDecoy = decoy;
+
+    // Swapping a glyph means travelling the whole text-to-background distance,
+    // so fake mode needs more headroom than noise does. Without it the pixels
+    // only move part way and the REAL value ghosts through both frames — a
+    // silent failure that looks like it is working.
+    const { ratio } = checkPalette(this.#palette);
+    if (ratio < 1 && !this.#fakeWarned) {
+      this.#fakeWarned = true;
+      console.warn(
+        `[nocap-secret] fake mode needs a masking ratio of 1.0+; this palette is ` +
+          `${ratio.toFixed(2)}, so the real value will show through both frames. ` +
+          `Move both colours toward the mid-tones.`
+      );
+    }
+
+    const render = (text) => {
+      const { width: w, height: h } = this.#flicker.canvas;
+      const cv = makeCanvas(w, h);
+      const ctx = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, w / 2, h / 2);
+      return ctx.getImageData(0, 0, w, h);
+    };
+
+    const T = render(this.#secret);
+    const F = render(decoy);
+    const a = new Uint8ClampedArray(T.data.length);
+    const b = new Uint8ClampedArray(T.data.length);
+
+    for (let i = 0; i < T.data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const lt = toLight(T.data[i + c]);
+        const d = toLight(F.data[i + c]) - lt;
+        const reach = d === 0 ? 0 : Math.min(1, Math.min(lt, 1 - lt) / Math.abs(d));
+        a[i + c] = toCode(lt + reach * d);
+        b[i + c] = toCode(lt - reach * d);
+      }
+      a[i + 3] = b[i + 3] = 255;
+    }
+
+    await this.#flicker.setPlanes([
+      { width: T.width, height: T.height, data: a },
+      { width: T.width, height: T.height, data: b },
+    ]);
+  }
+
+  /** Current planes, for demos that show what a capture lands on. */
+  get planes() {
+    return this.#flicker?.planes ?? [];
+  }
+
+  /** The decoy shown last, for demos. Never exposes the real value. */
+  get lastDecoy() {
+    return this.#lastDecoy;
   }
 
   #onHold = (e) => {

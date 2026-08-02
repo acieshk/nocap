@@ -142,11 +142,11 @@
 <pre id="snippet">…</pre>
 
 <div class="note">
-  Swing is how much noise a colour can carry, and it is set by how close that
-  colour sits to black or white in <i>light</i>, not in hex. Linear light is
-  heavily compressed at the dark end, so <code>#101014</code> has almost none —
-  you get the exact colour you asked for and very little masking with it.
-  Mid-tones are what buy protection.
+  Swing is how far a colour's pixels can travel in code values, and it peaks
+  around mid-tones. It falls off toward black and — less obviously — toward
+  white, because light is expansive near white so a large swing there is worth
+  only a few code levels. <code>#101014</code> and <code>#f4f4f4</code> both
+  reproduce exactly and both carry almost no noise. Mid-tones buy protection.
 </div>
 
 </div>
@@ -175,11 +175,19 @@ const toLight = (v) => {
   const s = v / 255;
   return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 };
-/** Headroom in light, which is what caps the noise a colour can carry. */
-const swingOf = (hex) => {
-  const L = Math.max(...toRgb(hex).map(toLight));
-  return Math.min(L, 1 - L);
-};
+/**
+ * How far a colour's pixels travel in CODE values, which is what actually
+ * predicts masking. Measuring it in light overstates pale colours badly:
+ * #f0f0f0 keeps 26% of its light headroom and still leaks 0.76, because light
+ * is expansive near white and that headroom is worth only a few code levels.
+ * Matches checkPalette() in the library, which was previously inconsistent.
+ */
+const swingOf = (hex) =>
+  Math.min(...toRgb(hex).map((v) => {
+    const L = toLight(v);
+    const s = Math.min(L, 1 - L);
+    return (toCode(L + s) - toCode(L - s)) / 2;
+  })) / 127.5;
 
 let pending = 0;
 function schedule() {

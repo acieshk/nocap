@@ -105,79 +105,83 @@ Never ship the key with the page. A typed passphrase, a key in the URL fragment
 (never sent to the server), or a key issued after auth are all fine. A constant
 in the bundle is obfuscation, not encryption.
 
-## Tuning
+## Choosing colours
 
-Two knobs matter, and both are trade-offs rather than settings with a right answer.
+`color` and `background` **are** the perceived colours. The split runs in linear
+light, so what you author is what you see — verified to within 0.3 code levels
+across the range. There is no band, no compression, and no contrast
+pre-emphasis; those existed only to buy uniform noise headroom and linear light
+removed the need.
 
-**Amplitude** buys masking with perceived contrast. The source is remapped into
-`[amplitude, 255-amplitude]`, so that band *is* your contrast budget.
+What you cannot escape is that a colour can only carry so much noise. The
+predictor is the **masking ratio**:
 
-**Noise colour** (`chroma`) is not a trade-off — grey wins outright. Sharing one
-sign across R/G/B puts the whole budget into luminance, which is what both
-`leakScore` and the eye key on for text: 0.262 denoised leak versus 0.346 for
-independent per-channel noise, at identical visual loudness, and it looks like
-grey static rather than rainbow confetti.
+```js
+checkPalette({ color: '#9ea6b4', background: '#6b7280' })
+// { ratio: 1.42, grade: 'good', warnings: [] }
+```
 
-**Hardness** trades masking for calm. At `chroma: 0`, hardness 1 gives leak
-0.262 at loudness 96; hardness 0.5 gives 0.349 at loudness 72 — the same masking
-the old per-channel default gave, a quarter less visually loud.
+| ratio | measured leak | verdict |
+| --- | --- | --- |
+| ≥ 1.0 | 0.08 – 0.22 | good |
+| 0.5 – 1.0 | ~0.3 | fair |
+| < 0.5 | 0.47 – 0.79 | **do not ship** |
 
-**Block size** (`noise-scale`) buys blur resistance with flicker fusion. Per-pixel
-noise is *white* — it sits above the spatial frequencies text strokes occupy, so
-a small blur separates them. Coarse noise shares the band with the content, where
-no radius helps. But coarse noise is low spatial frequency, and that is exactly
-where the eye's temporal contrast sensitivity peaks: at 30Hz (any 60Hz display,
-two planes) large blocks strobe instead of fusing.
+Correlated at −0.73 against denoised leak over 28 palettes. Light headroom, the
+obvious metric, correlates −0.06 — no better than chance, because light is
+expansive near white: `#f0f0f0` keeps 26% of its light headroom and still leaks
+0.76.
 
-At amplitude 96 on 14 characters of monospace, with a box-blur attack allowed:
+Two hard limits fall out:
 
-| block | perceived contrast | denoised leak | fuses at 60Hz |
-| --- | --- | --- | --- |
-| 1 | 63 | 0.604 | yes |
-| **3** | 63 | **0.377** | yes — **default** |
-| 5 | 63 | 0.310 | no, strobes |
+- **Saturation is capped.** A channel at 0 or 255 has zero swing, so `#ff3131`
+  scores 0.00 at any lightness. Fully saturated colours cannot be masked.
+- **Both ends are bad.** Usable region is roughly channels in `[40, 214]`, both
+  colours mid-tone, separation under ~90.
 
-Block size costs nothing in legibility, only in fusion. Raise it toward the
-stroke width only when you know the display runs at 120Hz+.
+Put the secret on a **mid-tone panel**. It then matches its surroundings exactly
+*and* has room to be protected. `suggestConfig()` derives such a pair from a
+page's palette, and [the palette demo](https://acieshk.github.io/nocap/demo/colors.html)
+lets you check one interactively.
 
-Amplitude 110 was the earlier default and was wrong: its band is `[110, 145]`,
-giving the perceived image 35 levels of contrast — readable in a still, far too
-washed out to read through a live alternation.
+`amplitude` is now a fraction of whatever headroom the colours allow, so
+**choosing mid-tone colours buys more protection than raising amplitude ever
+does**. `noise-scale` trades blur resistance against flicker fusion: coarse
+noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
-## Colour
+## Fake values
 
-A pixel at value `v` carries at most `±min(v, 255-v)` before it clips, and
-clipping breaks the zero-sum property that makes the mean come out right. So the
-perceived palette must live inside `[amplitude, 255-amplitude]` — a band centred
-on mid-grey that narrows as masking gets stronger.
+Noise tells an attacker the capture failed, so they take another. A value in the
+right shape does not.
 
-- **Default** pulls your colours into the band, keeping hue via a luma+chroma
-  placement rather than an RGB scale (scaling blows out a near-black colour's
-  chroma into a cast). Tinted rather than grey; masking preserved.
-- **`adaptive`** reproduces authored colours exactly and caps amplitude per pixel
-  to their headroom instead. Check the ceiling first with `maxAmplitudeFor()` —
-  white-on-black gives **0**, and leaks 1.000. It is unmaskable.
+```html
+<nocap-secret hold fake="auto"></nocap-secret>
+```
 
-Masking only works when noise amplitude exceeds the text/background separation,
-so lower perceived contrast is not a cosmetic compromise here — it is the thing
-that makes the technique work.
+`detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
+grouped numbers, phone numbers, alphanumerics and free text. `fakeLike()`
+generates a decoy in `auto` / `number` / `text` / `random` mode.
 
-`suggestConfig({ background, color, amplitude })` turns a page's palette into a
-config that blends and still masks. It returns the colours to **author** (full
-range — the splitter compresses them) plus `perceivedColor` /
-`perceivedBackground` showing what they become, and `chromaRetained` so a
-suggestion cannot quietly grey out a brand palette and call it a match.
+The decoy always matches the source shape exactly — same length, separators, and
+digit/letter/case pattern — because a wrong-shaped decoy reveals the mechanism
+and is worse than noise. Auto mode is semantic too: fake dates have real months,
+and fake card numbers are solved to pass a Luhn check.
 
-Author full-range colours; do not pre-compress them into the band yourself. The
-splitter remaps every source pixel into `[amp, 255-amp]` already, so a
-pre-banded colour gets squeezed twice — red on white lands at `rgb(130,120,120)`
-instead of `rgb(159,96,96)`, i.e. grey instead of brick. The
-[live demo](https://acieshk.github.io/nocap/) recolours itself from two pickers
-and emits the matching snippet.
+```
+4471-0092-8834   grouped number, 12 digits   9098-0641-0308
+2026-09-01       ISO date                    2024-02-15
+4539578763621486 16-digit card number        4638875219028443
+```
 
-One constraint it will tell you about: the secret's background **cannot** match a
-near-black or near-white page, because it has to sit in the band. Style it as an
-inset field and the difference reads as a form input rather than a mistake.
+Two limits, both visible in [the demo](https://acieshk.github.io/nocap/demo/secret.html):
+
+- **Only one of the two frames reads cleanly.** Offsets must sum to zero, so if
+  frame 1 is the decoy then frame 2 is `2 x target - decoy` and looks like a
+  ghosted negative. A capture has roughly even odds of landing on either.
+- **It needs a masking ratio of 1.0+.** Swapping one glyph for another means a
+  pixel travels the whole text-to-background distance. Without the headroom for
+  that it only moves part way and the *real* value ghosts through both frames.
+  The component warns when you enable it on a palette that cannot carry it.
 
 ## `<nocap-secret>`
 
@@ -186,8 +190,10 @@ inset field and the difference reads as a form input rather than a mistake.
 | `hold` | off | Reveal only while the pointer is held. Recommended. |
 | `auto-hide` | `0` | Hide after N seconds. |
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
-| `amplitude` | `96` | 0–127. |
-| `noise-scale` | `3` | Noise block in px. |
+| `fake` | off | `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
+| `amplitude` | `96` | Fraction of the headroom the colours allow. |
+| `noise-scale` | `3` | Noise block in px. Higher resists blur, strobes below 120Hz. |
+| `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |
 | `frames` | `2` | Planes per cycle. 2 is almost always right. |
 | `contrast` | `2.6` | Pre-emphasis to claw back the band compression. |
 | `chroma` | `0` | 0 = grey noise, 1 = independent per channel. |
@@ -210,8 +216,8 @@ defeats the point.
 ```js
 import {
   Flicker, splitFrames, averageFrames, boxBlur, denoisedLeak,
-  leakScore, planeRange, maxAmplitudeFor, suggestConfig,
-  encryptSecret, decryptSecret,
+  leakScore, planeRange, suggestConfig, checkPalette, codeSwing,
+  encryptSecret, decryptSecret, detectFormat, fakeLike,
 } from 'nocap';
 ```
 
@@ -267,7 +273,11 @@ Live: **<https://acieshk.github.io/nocap/>** — or `npm run demo`, then
 - `/demo/` — tuning bench over public-domain paintings: live, single plane, ideal
   mean, and recovered-by-averaging, with a leak meter.
 - `/demo/secret.html` — the account-number reveal, live checks that search every
-  page surface for the secret, and both DevTools attacks running for real.
+  page surface for the secret, both DevTools attacks running for real, the
+  passphrase gate, and fake values with both captured frames shown.
+- `/demo/colors.html` — try a palette: live against a static reference, measured
+  leak, per-colour swing, and a perceived-colour null check.
+- `/demo/calibrate.html` — measure your display's gamma by nulling a patch.
 
 ## Test
 

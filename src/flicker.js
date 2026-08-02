@@ -112,6 +112,31 @@ export class Flicker {
     return this;
   }
 
+  /**
+   * Present planes built elsewhere, bypassing splitFrames.
+   *
+   * Needed by decoy modes, where the planes are not a noise split at all: one
+   * carries a plausible wrong value and the other carries whatever makes the
+   * pair average back to the truth.
+   */
+  async setPlanes(planes) {
+    const gen = ++this._gen;
+    const bmps = await Promise.all(
+      planes.map((pl) => createImageBitmap(new ImageData(pl.data, pl.width, pl.height)))
+    );
+    if (gen !== this._gen) {
+      for (const b of bmps) b.close?.();
+      return this;
+    }
+    this._closeBank();
+    this._bank = [bmps];
+    this._planes = planes;
+    this._bankIdx = 0;
+    this._phase = 0;
+    this._held = 0;
+    return this;
+  }
+
   /** Change split options and regenerate the bank. */
   async configure(patch) {
     Object.assign(this.opts, patch);

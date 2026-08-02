@@ -39,7 +39,11 @@ export function detectFormat(text) {
   else if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) kind = 'date-dmy';
   else if (/^\d{2}\/\d{2}$/.test(s)) kind = 'expiry';
   else if (digits >= 13 && digits <= 19 && letters === 0) kind = 'card';
-  else if (/^\+?\d[\d ()-]{7,}$/.test(s)) kind = 'phone';
+  // Grouped digits before phone: 4471-0092-8834 is an account number, and the
+  // old phone pattern allowed hyphens so it swallowed anything hyphen-grouped.
+  else if (/^\d+([- ]\d+)+$/.test(s)) kind = 'grouped-number';
+  // A phone needs a real phone marker: a leading +, parentheses, or a leading 0.
+  else if (/^(\+\d|\(|0\d)[\d ()-]{6,}$/.test(s)) kind = 'phone';
   else if (digits > 0 && letters > 0) kind = 'alphanumeric';
   else if (letters === 0 && digits > 0) kind = 'number';
   else if (/@/.test(s)) kind = 'email';
@@ -49,6 +53,7 @@ export function detectFormat(text) {
     'date-dmy': 'day/month/year date',
     expiry: 'card expiry',
     card: `${digits}-digit card number`,
+    'grouped-number': `grouped number, ${digits} digits`,
     phone: 'phone number',
     alphanumeric: 'mixed letters and digits',
     number: `${digits}-digit number`,
