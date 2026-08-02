@@ -120,17 +120,27 @@ export class Flicker {
    * pair average back to the truth.
    */
   async setPlanes(planes) {
+    return this.setBank([planes]);
+  }
+
+  /**
+   * Present a whole bank of prebuilt cycles.
+   *
+   * Decoy modes need this: each cycle carries a different fake value, so the
+   * bank is the rotation the viewer never resolves and a capture freezes one of.
+   */
+  async setBank(sets) {
     const gen = ++this._gen;
-    const bmps = await Promise.all(
-      planes.map((pl) => createImageBitmap(new ImageData(pl.data, pl.width, pl.height)))
-    );
+    const built = await Promise.all(sets.map((set) => Promise.all(
+      set.map((pl) => createImageBitmap(new ImageData(pl.data, pl.width, pl.height)))
+    )));
     if (gen !== this._gen) {
-      for (const b of bmps) b.close?.();
+      for (const set of built) for (const b of set) b.close?.();
       return this;
     }
     this._closeBank();
-    this._bank = [bmps];
-    this._planes = planes;
+    this._bank = built;
+    this._planes = sets[0];
     this._bankIdx = 0;
     this._phase = 0;
     this._held = 0;

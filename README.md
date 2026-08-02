@@ -150,30 +150,31 @@ right shape does not.
 <nocap-secret fake="auto"></nocap-secret>
 ```
 
-`detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
-grouped numbers, phone numbers, alphanumerics and free text. `fakeLike()`
-generates a decoy in `auto` / `number` / `text` / `random` mode.
+A different decoy is drawn into every cycle, added to one plane and subtracted
+from the other. Two consequences:
 
-The decoy always matches the source shape exactly — same length, separators, and
-digit/letter/case pattern — because a wrong-shaped decoy reveals the mechanism
-and is worse than noise. Auto mode is semantic too: fake dates have real months,
-and fake card numbers are solved to pass a Luhn check.
+- **The viewer never resolves any of them.** Each decoy cancels exactly within
+  its own cycle, and the next cycle carries a different one, so nothing
+  accumulates across the frames the eye integrates. You read the real value.
+- **A capture freezes one.** A screenshot cannot average, so it catches a single
+  frame and a single decoy, in the right format, at full contrast.
+
+`detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
+grouped numbers, phone numbers, alphanumerics and free text; `fakeLike()`
+generates the decoy in `auto` / `number` / `text` / `random`. The shape always
+matches the source exactly — same length, separators, digit/letter/case pattern —
+because a wrong-shaped decoy reveals the mechanism and is worse than noise. Auto
+mode is semantic too: fake dates have real months, fake card numbers pass Luhn.
 
 ```
-4471-0092-8834   grouped number, 12 digits   9098-0641-0308
+4471-0092-8834   grouped number, 12 digits   2206-9276-8289  6943-2162-7081 ...
 2026-09-01       ISO date                    2024-02-15
 4539578763621486 16-digit card number        4638875219028443
 ```
 
-Two limits, both visible in [the demo](https://acieshk.github.io/nocap/demo/secret.html):
-
-- **Only one of the two frames reads cleanly.** Offsets must sum to zero, so if
-  frame 1 is the decoy then frame 2 is `2 x target - decoy` and looks like a
-  ghosted negative. A capture has roughly even odds of landing on either.
-- **It needs a masking ratio of 1.0+.** Swapping one glyph for another means a
-  pixel travels the whole text-to-background distance. Without the headroom for
-  that it only moves part way and the *real* value ghosts through both frames.
-  The component warns when you enable it on a palette that cannot carry it.
+Decoys borrow from the headroom the noise already leaves, so they never clip and
+never shift the perceived value. They are drawn smaller than the real text so a
+capture reads them as their own line rather than as a smear over it.
 
 ## `<nocap-secret>`
 

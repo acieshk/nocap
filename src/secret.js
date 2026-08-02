@@ -2,6 +2,7 @@ import { Flicker } from './flicker.js';
 import { leakScore, planeRange } from './splitter.js';
 import { checkPalette, toLight, toCode } from './palette.js';
 import { fakeLike } from './fake.js';
+import { splitFrames } from './splitter.js';
 
 /**
  * Text-tuned defaults.
@@ -113,6 +114,7 @@ export class NocapSecret extends ElementBase {
   #revealed = false;
   #paletteWarned = false;
   #lastDecoy = null;
+  #decoys = null;
   #fakeWarned = false;
   #adapted = false;
   #gapWarned = false;
@@ -331,91 +333,68 @@ export class NocapSecret extends ElementBase {
   }
 
   async #drawFake(font, color, background, mode, plain) {
-    const decoy = fakeLike(plain, { mode: mode === 'auto' ? 'auto' : mode });
-    this.#lastDecoy = decoy;
+    const { width: w, height: h } = this.#flicker.canvas;
+    const cycles = 8;
+    const strength = 0.5; // fraction of the noise swing the decoy borrows
 
-    // Swapping a glyph means travelling the whole text-to-background distance,
-    // so fake mode needs more headroom than noise does. Without it the pixels
-    // only move part way and the REAL value ghosts through both frames — a
-    // silent failure that looks like it is working.
-    const { ratio } = checkPalette(this.#palette);
-    if (ratio < 1 && !this.#fakeWarned) {
-      this.#fakeWarned = true;
-      console.warn(
-        `[nocap-secret] fake mode needs a masking ratio of 1.0+; this palette is ` +
-          `${ratio.toFixed(2)}, so the real value will show through both frames. ` +
-          `Move both colours toward the mid-tones.`
-      );
-    }
-
-    const measureAdvance = (f) => {
-      const cv = makeCanvas(8, 8);
-      const ctx = cv.getContext('2d');
-      ctx.font = f;
-      return ctx.measureText('0').width;
-    };
-
-    const render = (text, dx = 0) => {
-      const { width: w, height: h } = this.#flicker.canvas;
+    const paint = (draw) => {
       const cv = makeCanvas(w, h);
       const ctx = cv.getContext('2d', { alpha: false, willReadFrequently: true });
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, w, h);
+      draw(ctx);
+      return ctx.getImageData(0, 0, w, h);
+    };
+
+    // The real value, split normally: its mean is what the eye resolves.
+    const base = splitFrames(paint((ctx) => {
       ctx.font = font;
       ctx.fillStyle = color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, w / 2 + dx, h / 2);
-      return ctx.getImageData(0, 0, w, h);
-    };
+      ctx.fillText(plain, w / 2, h / 2);
+    }), { ...this.#options(), decoy: null });
 
-    const T = render(plain);
-    // Offset by half an advance so decoy glyphs land between the real ones
-    // rather than on top of them.
-    const advance = measureAdvance(font);
-    const F = render(decoy, advance / 2);
+    const decoys = [];
+    const sets = [];
+    for (let k = 0; k < cycles; k++) {
+      const decoy = fakeLike(plain, { mode: mode === 'auto' ? 'auto' : mode });
+      decoys.push(decoy);
 
-    const a = new Uint8ClampedArray(T.data.length);
-    const b = new Uint8ClampedArray(T.data.length);
-    const gapsOnly = (this.getAttribute('fake-placement') ?? 'gaps') === 'gaps';
-    const bgLight = toLight(render('', 0).data[0]);
+      // Smaller than the real value and offset, so it reads as its own line of
+      // text in a capture rather than as a smear over the real glyphs.
+      const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.62)}px`);
+      const cover = paint((ctx) => {
+        ctx.font = small;
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(decoy, w / 2, h / 2 + h * 0.02);
+      });
+      const blank = paint(() => {});
 
-    let placed = 0;
-    for (let i = 0; i < T.data.length; i += 4) {
-      // A pixel is "empty" when the target left it at the background value.
-      const empty = Math.abs(toLight(T.data[i]) - bgLight) < 0.004;
-      const allow = !gapsOnly || empty;
-      for (let c = 0; c < 3; c++) {
-        const lt = toLight(T.data[i + c]);
-        const raw = toLight(F.data[i + c]) - lt;
-        const d = allow ? raw : 0;
-        const reach = d === 0 ? 0 : Math.min(1, Math.min(lt, 1 - lt) / Math.abs(d));
-        a[i + c] = toCode(lt + reach * d);
-        b[i + c] = toCode(lt - reach * d);
-        if (c === 0 && reach > 0.1) placed++;
+      // Equal and opposite within the cycle, so the decoy cancels exactly in the
+      // mean and the viewer never resolves any of them — while a single captured
+      // frame freezes one, at full contrast. A different decoy every cycle means
+      // nothing accumulates across the ones the eye does integrate.
+      const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
+      for (let i = 0; i < cover.data.length; i += 4) {
+        const ink = (cover.data[i] - blank.data[i]) / 255;
+        if (ink <= 0.02) continue;
+        for (let c = 0; c < 3; c++) {
+          // Borrow from the headroom the noise already left, so nothing clips.
+          const room = Math.min(base[0].data[i + c], 255 - base[0].data[i + c]);
+          const push = ink * strength * room;
+          set[0].data[i + c] = base[0].data[i + c] + push;
+          set[1].data[i + c] = base[1].data[i + c] - push;
+        }
       }
-      a[i + 3] = b[i + 3] = 255;
+      sets.push(set);
     }
 
-    // Nowhere to put it: showing the target unchanged is honest, and better
-    // than smearing a decoy over the glyphs and making the value unreadable.
-    if (gapsOnly && placed < T.width) {
-      this.#lastDecoy = null;
-      if (!this.#gapWarned) {
-        this.#gapWarned = true;
-        console.warn(
-          '[nocap-secret] fake: no empty space to place a decoy in, so none was ' +
-            'inserted. Use a shorter value, a wider element, or ' +
-            'fake-placement="overlay" to replace glyphs instead (harder to read).'
-        );
-      }
-      return this.#flicker.setText(plain, { font, color, background });
-    }
-
-    await this.#flicker.setPlanes([
-      { width: T.width, height: T.height, data: a },
-      { width: T.width, height: T.height, data: b },
-    ]);
+    this.#lastDecoy = decoys[0];
+    this.#decoys = decoys;
+    await this.#flicker.setBank(sets);
   }
 
   /** Current planes, for demos that show what a capture lands on. */
@@ -423,7 +402,11 @@ export class NocapSecret extends ElementBase {
     return this.#flicker?.planes ?? [];
   }
 
-  /** The decoy shown last, for demos. Never exposes the real value. */
+  /** The decoys in rotation, for demos. Never exposes the real value. */
+  get decoys() {
+    return this.#decoys ?? [];
+  }
+
   get lastDecoy() {
     return this.#lastDecoy;
   }
