@@ -95,6 +95,7 @@
   <span>after a blur <b id="sBlur">—</b></span>
   <span>text swing <b id="sFg">—</b></span>
   <span>background swing <b id="sBg">—</b></span>
+  <span>masking ratio <b id="sRatio">—</b></span>
   <span>display <b id="sHz">—</b></span>
 </div>
 
@@ -152,7 +153,7 @@
 </div>
 
 <script type="module">
-import { Flicker, splitFrames, averageFrames, leakScore, denoisedLeak } from '../src/index.js';
+import { Flicker, splitFrames, averageFrames, leakScore, denoisedLeak, checkPalette } from '../src/index.js';
 
 const $ = (id) => document.getElementById(id);
 const W = 300, H = 78;
@@ -256,13 +257,13 @@ function measure(fg, bg, amplitude, gamma) {
   $('sBg').className = bgS < 0.08 ? 'bad' : bgS < 0.2 ? 'warn' : 'ok';
   $('sHz').textContent = `${live.stats.refreshHz || '—'}Hz`;
 
+  // Grade with the library's own metric so the page and checkPalette cannot
+  // disagree. Swing alone was the earlier basis and correlates -0.06 with leak.
+  const pal = checkPalette({ color: fg, background: bg });
   const tips = [];
-  if (Math.min(fgS, bgS) < 0.08) {
-    tips.push(
-      'One of your colours sits very near black or white in light, so it carries almost no noise. ' +
-        'The colour will be exact and the masking will be weak — move it toward the mid-tones.'
-    );
-  }
+  $('sRatio').textContent = `${pal.ratio.toFixed(2)} ${pal.grade}`;
+  $('sRatio').className = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
+  tips.push(...pal.warnings);
   if (blurred.leak > 0.45) {
     tips.push(
       `A single frame plus a radius-${blurred.radius} blur still correlates ${blurred.leak.toFixed(2)} ` +

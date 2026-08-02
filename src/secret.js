@@ -108,6 +108,7 @@ export class NocapSecret extends HTMLElement {
   #paletteWarned = false;
   #lastDecoy = null;
   #fakeWarned = false;
+  #adapted = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -239,6 +240,7 @@ export class NocapSecret extends HTMLElement {
     this.#revealed = true;
     this.#flicker.start();
 
+    this.#adaptBlock();
     const seconds = +(this.getAttribute('auto-hide') ?? 0);
     if (seconds > 0) this.#hideTimer = setTimeout(this.hide, seconds * 1000);
     this.dispatchEvent(new CustomEvent('reveal'));
@@ -401,6 +403,29 @@ export class NocapSecret extends HTMLElement {
   /** The decoy shown last, for demos. Never exposes the real value. */
   get lastDecoy() {
     return this.#lastDecoy;
+  }
+
+  /**
+   * Coarser noise on a fast display.
+   *
+   * Block size trades blur resistance against flicker fusion: block 5 resists a
+   * denoise far better (0.31 leak against 0.60 at block 1) but sits at a low
+   * spatial frequency, which is where the eye's temporal sensitivity peaks. At
+   * 30Hz that strobes, so the default is a conservative 3. Above ~100Hz the
+   * cycle is fast enough to fuse and the stronger setting becomes free.
+   *
+   * Only applies when noise-scale was not set explicitly, and only once.
+   */
+  #adaptBlock() {
+    if (this.#adapted || this.hasAttribute('noise-scale')) return;
+    setTimeout(() => {
+      const hz = this.#flicker?.stats.refreshHz ?? 0;
+      if (this.#adapted || !hz || hz < 100 || !this.#revealed) return;
+      this.#adapted = true;
+      this.#flicker.configure({ noiseScale: 5 }).then(() => {
+        if (this.#revealed) this.reveal();
+      });
+    }, 800);
   }
 
   #onHold = (e) => {

@@ -100,7 +100,11 @@ function resolveCfg(opts = {}) {
     // ~163. Splitting in linear light makes the perceived colour exactly the
     // authored one, which is the only way "set the perceived background" can
     // mean anything.
-    linearLight: opts.linearLight ?? false,
+    // Only the modulated modes implement it. 'interleave' and 'channels' exist
+    // solely so leakScore can demonstrate that they do not work (they leak 0.69
+    // and 1.00), so implementing linear light for them would be wasted effort —
+    // but silently ignoring the flag would be worse. Forced off, and said so.
+    linearLight: carriesOnePlane(mode) ? false : opts.linearLight ?? false,
     gamma: opts.gamma ?? 2.4,
     hardness: clamp(opts.hardness ?? 1, 0, 1),
     chroma: clamp(opts.chroma ?? 1, 0, 1),

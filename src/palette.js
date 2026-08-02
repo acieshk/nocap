@@ -38,25 +38,30 @@ export function toHex(rgb) {
 }
 
 /**
- * Move a colour to a target luminance while keeping its hue.
+ * Move a colour to a target luminance while keeping its hue, inside bounds.
+ *
+ * `bounds` is no longer the old [amplitude, 255-amplitude] compression band —
+ * linear light removed that. It is now just a channel range, used to keep
+ * suggested colours off the 0 and 255 rails, since a channel at either extreme
+ * has zero swing and cannot be masked at all.
  *
  * Works in luma + chroma rather than scaling RGB: scaling would blow out a
- * near-black colour (multiplying (10,12,20) up to mid-grey amplifies its chroma
- * 11x into a garish cast). Here the chroma vector is added back at whatever
- * scale still fits inside the band, so hue direction survives and nothing clips.
+ * near-black colour, multiplying (10,12,20) up to mid-grey amplifies its chroma
+ * 11x into a garish cast. Here the chroma vector is added back at whatever scale
+ * still fits, so hue direction survives and nothing clips.
  */
-export function placeInBand(color, targetLuma, band) {
+export function placeInBand(color, targetLuma, bounds) {
   const rgb = toRgb(color);
   const base = luma(rgb);
   const chroma = rgb.map((c) => c - base);
 
   let scale = 1;
   for (const c of chroma) {
-    if (c > 0.001) scale = Math.min(scale, (band.hi - targetLuma) / c);
-    else if (c < -0.001) scale = Math.min(scale, (targetLuma - band.lo) / -c);
+    if (c > 0.001) scale = Math.min(scale, (bounds.hi - targetLuma) / c);
+    else if (c < -0.001) scale = Math.min(scale, (targetLuma - bounds.lo) / -c);
   }
   scale = Math.max(0, scale);
-  return chroma.map((c) => clamp(targetLuma + c * scale, band.lo, band.hi));
+  return chroma.map((c) => clamp(targetLuma + c * scale, bounds.lo, bounds.hi));
 }
 
 /**
