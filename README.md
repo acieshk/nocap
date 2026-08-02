@@ -1,8 +1,7 @@
 # nocap
 
 **Prevent screenshots of text on the web.** A display layer that shows a secret
-to a human but not to a screen capture, an OCR pass, or a page-reading AI agent
-— and that ships the attacks against itself so you can check the claim.
+to a human but not to a screen capture, an OCR pass, or a page-reading AI agent. And that ships the attacks against itself so you can check the claim.
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
@@ -13,8 +12,8 @@ to a human but not to a screen capture, an OCR pass, or a page-reading AI agent
 | ![one captured frame](https://raw.githubusercontent.com/acieshk/nocap/main/docs/screenshot.png) | ![the perceived mean](https://raw.githubusercontent.com/acieshk/nocap/main/docs/perceived.png) |
 
 Both are the same element at the same moment. The left is one plane straight out
-of the live pipeline; the right is the mean of that plane and its partner, which
-is what your visual system resolves. Neither is retouched — regenerate them from
+of the live pipeline. The right is the mean of that plane and its partner, which
+is what your visual system resolves. Neither is retouched. Regenerate them from
 the demo yourself.
 
 **[Live demo & playground](https://acieshk.github.io/nocap/)**
@@ -45,16 +44,16 @@ That is the whole API for most uses. It renders as soon as it has a value.
 
 | `strength` | Reads well at | Trade |
 | --- | --- | --- |
-| `weak` | 60Hz, comfortably | Easiest to read; a captured frame leaks noticeably more |
-| `medium` *(default)* | 60Hz | The balanced point. Start here. |
-| `strong` | 120Hz+ | Best against a blur; visibly strobes on a 60Hz panel |
+| `weak` | 60Hz, comfortably | Easiest to read. A captured frame leaks noticeably more |
+| `medium` *(default)* | 60Hz | The balanced point. Start here |
+| `strong` | 120Hz+ | Best against a blur. Visibly strobes on a 60Hz panel |
 
 Everything below is for when you need more control. You can ignore it.
 
 ### Three things to know before you ship
 
 1. **Check your colours.** A secret is only maskable if its two colours can carry
-   noise — `checkPalette({ color, background })` tells you, and the wrong pair
+   noise. `checkPalette({ color, background })` tells you, and the wrong pair
    leaves the value plainly readable in a screenshot. See
    [Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
 2. **Check your page.** `await auditPage(secret)` finds the value if your app
@@ -67,32 +66,30 @@ Everything below is for when you need more control. You can ignore it.
 ## How it works
 
 Content is split into frames that alternate at your display's refresh rate. Each
-frame is noise; their *mean* is the content. Your visual system does the
-averaging, so you read it — a single screenshot does not. The text never enters
+frame is noise. Their *mean* is the content. Your visual system does the
+averaging, so you read it. A single screenshot does not. The text never enters
 the DOM, so scrapers and DOM-reading AI agents get nothing at all.
 
 ---
 
 ## What this defeats, and what defeats it
 
-The claims are narrow on purpose. Read this before building on it.
-
-| Threat | Result |
+The claims are narrow on purpose. Read this before building on it | Threat | Result |
 | --- | --- |
-| Reflexive Print Screen / Win+Shift+S / Cmd+Shift+4 | **Blocked** — the capture lands on one plane |
-| DOM-reading AI agents, LLM scrapers, accessibility-tree readers | **Blocked absolutely** — the secret is never a DOM node |
-| Single-frame OCR / vision-model ingestion | **Blocked** — one frame is noise |
-| View Source, `curl`, Save Page As, Select-All + Copy | **Blocked** — verified live in the demo |
-| Quick phone photo | **Usually blocked** — short exposure lands on one plane |
-| **Screenshot + a box blur** | **Weakened.** Denoising recovers a lot; see the block-size table |
+| Reflexive Print Screen / Win+Shift+S / Cmd+Shift+4 | **Blocked**. The capture lands on one plane |
+| DOM-reading AI agents, LLM scrapers, accessibility-tree readers | **Blocked absolutely**. The secret is never a DOM node |
+| Single-frame OCR / vision-model ingestion | **Blocked**. One frame is noise |
+| View Source, `curl`, Save Page As, Select-All + Copy | **Blocked**. Verified live in the demo |
+| Quick phone photo | **Usually blocked**. Short exposure lands on one plane |
+| **Screenshot + a box blur** | **Weakened.** Denoising recovers a lot. See the block-size table |
 | **Screen recording + temporal averaging** | **Defeated.** `ffmpeg -i cap.mp4 -vf tmix=frames=2 out.mp4` |
 | **Burst screenshots** | **Defeated.** Average them, or keep the readable one |
-| Casual DevTools poke — heap search, one-line `fillText` hook | **Slowed** by `scramble` — yields the glyphs without their order |
+| Casual DevTools poke. Heap search, one-line `fillText` hook | **Slowed** by `scramble`. Yields the glyphs without their order |
 | **Anyone with DevTools and intent** | **Defeated.** The canvas must hold the arranged image, so averaging a run of frames recovers it |
 
 The re-encode row is the one with no attacker in it. Per-pixel noise is the most
 expensive thing in a frame to encode, so an encoder under a bitrate budget throws
-it away and keeps the strokes — the denoise attack, performed for free, by
+it away and keeps the strokes. The denoise attack, performed for free, by
 software nobody asked. Measured on real x264 at screen-share bitrates, worst
 decoded frame moved 0.181 → 0.268 against the mean. Weakened, not defeated: 0.27
 is still not readable. Treat the exact figure as one run of a noisy statistic,
@@ -102,7 +99,7 @@ harder than a test frame that is nothing but noise.
 The averaging limit is information-theoretic, not an implementation gap:
 **anything your eye can integrate, software can integrate better.** No tuning
 fixes it. `averageFrames()` and `denoisedLeak()` ship so you can run both attacks
-against your own settings — if you can't, you don't know what you're shipping.
+against your own settings. If you can't, you don't know what you're shipping.
 
 For protection that holds against a determined attacker the mechanism is the
 compositor, not the content: `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`
@@ -112,8 +109,7 @@ watermarking changes behaviour more than any technical speed bump.
 
 ## Check your own page
 
-nocap keeps the value out of the DOM. Your integration can still put it back —
-an `<input>` you kept for editing, an `aria-label` added for accessibility, a
+nocap keeps the value out of the DOM. Your integration can still put it back. An `<input>` you kept for editing, an `aria-label` added for accessibility, a
 `title`, a debug line in `localStorage`. Every one of those is read instantly by
 the scrapers and DOM-reading agents the canvas defeats, and none of them appear
 in View Source, so they are easy to miss.
@@ -126,7 +122,7 @@ console.log(report);
 ```
 
 ```
-nocap audit: LEAKED in 1 surface — formValues
+nocap audit: LEAKED in 1 surface: formValues
   ✓ HTML source (View Source, curl, scrapers)  not found
   ✓ Live DOM (DevTools, most agents)           not found
   ✓ Rendered text (Reader mode, innerText)     not found
@@ -135,7 +131,7 @@ nocap audit: LEAKED in 1 surface — formValues
   ✓ Accessible name (aria-label, title, alt)   not found
   ✓ Open shadow roots                          not found
   ✓ localStorage / sessionStorage              not found
-  ! Canvas pixels (average a run of frames)    recoverable with DevTools — inherent
+  ! Canvas pixels (average a run of frames)    recoverable with DevTools, inherent
 ```
 
 Same idea as shipping `averageFrames()` and `denoisedLeak()`: those attack the
@@ -146,7 +142,7 @@ The last row never reports clean. The canvas has to hold the arranged image or
 nobody could read it, so a run of frames averaged together is the plaintext, and
 no mode changes that.
 
-⚠️ It takes the plaintext, because it has to search for it — so the value exists
+⚠️ It takes the plaintext, because it has to search for it. So the value exists
 in one more place while the call runs. Development and tests, not a production
 render path.
 
@@ -154,9 +150,7 @@ render path.
 
 `scramble` is an optional mode that stores glyphs shuffled with a separate slot
 map and paints each back into place. It moves several of these attacks. It does
-not move the one that matters.
-
-| Attack | Default | With `scramble` |
+not move the one that matters | Attack | Default | With `scramble` |
 | --- | --- | --- |
 | **Average a run of frames off the canvas** | plaintext | **plaintext** |
 | Breakpoint on the `secret` setter | plaintext | plaintext |
@@ -166,14 +160,13 @@ not move the one that matters.
 
 The first row settles it, and no mode changes it: **the canvas must hold the
 correctly-arranged image, or you could not read it either.** A short run of frames averaged
-together is the plaintext — verified live in the demo, which recovers it
+together is the plaintext. Verified live in the demo, which recovers it
 identically with and without `scramble`. Scrambling protects how the value sits in JS memory
 and does blunt the one-line `fillText` dump, but it is obfuscation, not
-encryption — both the shuffled glyphs and their position map are live fields on
+encryption. Both the shuffled glyphs and their position map are live fields on
 the element, and the setter still receives the plaintext before any of it happens.
 
-A `fillText` hook has to patch **`OffscreenCanvasRenderingContext2D`** as well;
-text is rasterised off-screen, so patching only `CanvasRenderingContext2D`
+A `fillText` hook has to patch **`OffscreenCanvasRenderingContext2D`** as well. Text is rasterised off-screen, so patching only `CanvasRenderingContext2D`
 catches nothing and makes the default look safe when it is not.
 
 The real line is **automated pipeline vs. targeted attacker**. nocap defeats the
@@ -185,15 +178,15 @@ This library is the display effect and nothing else: split the content, show it,
 and tell you honestly how well it is hidden. It deliberately does **not** ship
 storage, delivery, encryption, expiry or accounts.
 
-That is not an oversight — those belong a layer up, and they are where the real
-protection lives. The flicker cannot beat a screen recording or DevTools; what
+That is not an oversight. Those belong a layer up, and they are where the real
+protection lives. The flicker cannot beat a screen recording or DevTools. What
 does beat them is making the captured value worthless. A one-time value that
 dies on first read turns an unwinnable fight into an economic one.
 
 **The value is unreadable to assistive technology, by construction.** It is a
 `<canvas>` inside a closed shadow root: no text node, no accessible name, no
 alternative. That is the same property that blocks scrapers and DOM-reading
-agents, and it cannot be had selectively — a screen reader is a DOM-reading
+agents, and it cannot be had selectively. A screen reader is a DOM-reading
 agent. Any integration has to provide an accessible route to the value itself.
 A copy-to-clipboard control is the usual answer, and it is what people want to
 do with an account number anyway.
@@ -201,15 +194,15 @@ do with an account number anyway.
 If you are building that layer, the pieces that pair with this are: encryption
 at rest with a key that never touches your server (a passphrase, or a key in the
 URL fragment), single-use or short-lived values, per-recipient watermarking, and
-on native, `WDA_EXCLUDEFROMCAPTURE` / `FLAG_SECURE` — which is enforcement
+on native, `WDA_EXCLUDEFROMCAPTURE` / `FLAG_SECURE`. Which is enforcement
 rather than friction. Use nocap for the moment the value is on screen.
 
 ## Choosing colours
 
 `color` and `background` **are** the perceived colours. The split runs in linear
-light, so what you author is what you see — verified to within 0.3 code levels
+light, so what you author is what you see. Verified to within 0.3 code levels
 across the range. There is no band, no compression, and no contrast
-pre-emphasis; those existed only to buy uniform noise headroom and linear light
+pre-emphasis. Those existed only to buy uniform noise headroom and linear light
 removed the need.
 
 What you cannot escape is that a colour can only carry so much noise. The
@@ -227,7 +220,7 @@ checkPalette({ color: '#9ea6b4', background: '#6b7280' })
 | < 0.5 | 0.47 – 0.79 | **do not ship** |
 
 Correlated at −0.73 against denoised leak over 28 palettes. Light headroom, the
-obvious metric, correlates −0.06 — no better than chance, because light is
+obvious metric, correlates −0.06. No better than chance, because light is
 expansive near white: `#f0f0f0` keeps 26% of its light headroom and still leaks
 0.76.
 
@@ -248,7 +241,7 @@ lets you check one interactively.
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
 noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
-## Fake values — experimental
+## Fake values. Experimental
 
 > **Experimental.** It works, and the trade that used to make it marginal is
 > gone (see below), but it has had far less use than the rest of the library.
@@ -266,7 +259,7 @@ right shape does not.
 subtracted on the other. Two consequences:
 
 - **The viewer never resolves any of them.** The pair cancels inside a single
-  cycle — about 16ms at 60Hz — so it is gone well within the 50-100ms your eye
+  cycle. About 16ms at 60Hz. So it is gone well within the 50-100ms your eye
   integrates over.
 - **A capture freezes one.** A screenshot cannot average, so it catches a single
   frame and a single decoy, in the right format, at full contrast. The rotation
@@ -281,11 +274,11 @@ push no longer cancels, so it ghosted into the mean. That looked like a hard
 tension between blending and legibility.
 
 It was not. The push was being applied in **code** space around a fixed centre,
-which preserves the code-space mean but not the mean in *light* — widening a
+which preserves the code-space mean but not the mean in *light*. Widening a
 pair raises its mean light, even with nothing clipping. Giving the decoy a fixed
 budget and then re-solving the centre for the widened pair removes it. The
 budget is capped per pixel by what that pixel can actually reach, because the
-reachable band narrows as the pair widens; a constant budget goes infeasible for
+reachable band narrows as the pair widens. A constant budget goes infeasible for
 dark pixels and the shortfall reappears as lift.
 
 Measured, worst perceived lift from enabling `fake`: **53 levels before, 0
@@ -295,18 +288,17 @@ Found by @ithiria894 in #5.
 
 **The pair has to sit inside one cycle**, and this is the subtle part. An earlier
 version split each pair one cycle apart, which cancels only over the full
-16-frame rotation — 267ms, far longer than the eye's window. The result inverted
+16-frame rotation. 267ms, far longer than the eye's window. The result inverted
 the whole effect: the decoys stayed visible and the noise averaged away. Two
 other failures cost a rebuild each, both visible only in a rendered frame:
 alternating signs over *different* strings does not cancel, it leaves the
-difference of their glyph coverage as a smear; and flipping the line and the sign
+difference of their glyph coverage as a smear. And flipping the line and the sign
 together re-correlates them and makes it worse.
 
 `detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
 grouped numbers, phone numbers, alphanumerics and free text; `fakeLike()`
 generates the decoy in `auto` / `number` / `text` / `random`. The shape always
-matches the source exactly — same length, separators, digit/letter/case pattern —
-because a wrong-shaped decoy reveals the mechanism and is worse than noise. Auto
+matches the source exactly. Same length, separators, digit/letter/case pattern. Because a wrong-shaped decoy reveals the mechanism and is worse than noise. Auto
 mode is semantic too: fake dates have real months, fake card numbers pass Luhn.
 
 ```
@@ -318,7 +310,7 @@ mode is semantic too: fake dates have real months, fake card numbers pass Luhn.
 Decoys are driven from the mean of the plane pair at full headroom, so they
 replace the noise where their ink falls rather than competing with it, and they
 never clip or shift the perceived value. Each gets its own random position and
-size, scattered across the field rather than stacked on fixed lines — the spot
+size, scattered across the field rather than stacked on fixed lines. The spot
 belongs to the decoy rather than to the appearance, so the added and subtracted
 copies still land on exactly the same pixels and cancel.
 
@@ -326,30 +318,30 @@ copies still land on exactly the same pixels and cancel.
 
 | Attribute | Default | Meaning |
 | --- | --- | --- |
-| `scramble` | off | Store glyphs shuffled; see the DevTools table. |
-| `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
-| `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together. |
-| `amplitude` | `110` | Fraction of the headroom the colours allow. |
-| `noise-scale` | `4 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz. |
-| `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |
-| `frames` | `2` | Planes per cycle. 2 is almost always right. |
-| `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress. |
-| `chroma` | `0` | 0 = grey noise, 1 = independent per channel. |
-| `hardness` | `1` | 1 slams every pixel to ±amplitude; lower keeps noise near the background. |
-| `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable — see below. |
-| `adaptive` | off | Exact colours, amplitude capped to their headroom. |
-| `width` / `height` | `260` / `56` | CSS pixels. |
+| `scramble` | off | Store glyphs shuffled. See the DevTools table |
+| `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+ |
+| `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
+| `amplitude` | `110` | Fraction of the headroom the colours allow |
+| `noise-scale` | `4 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz |
+| `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo |
+| `frames` | `2` | Planes per cycle. 2 is almost always right |
+| `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress |
+| `chroma` | `0` | 0 = grey noise, 1 = independent per channel |
+| `hardness` | `1` | 1 slams every pixel to ±amplitude. Lower keeps noise near the background |
+| `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable. See below |
+| `adaptive` | off | Exact colours, amplitude capped to their headroom |
+| `width` / `height` | `260` / `56` | CSS pixels |
 
 Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.render()`,
 `.stop()`, `.measureLeak()`. Events: `render`, `stop`.
 
 **It renders as soon as it has a value.** Hold-to-reveal, click-to-toggle,
-auto-hide on blur — those are product decisions, not part of the effect, so they
+auto-hide on blur. Those are product decisions, not part of the effect, so they
 are deliberately absent. Wire them up around the element with `render()` and
 `stop()`.
 
-**Set `.secret` from JS.** Putting the text in markup works — it is read once and
-erased from the DOM — but it was in the HTML source on the way there, which
+**Set `.secret` from JS.** Putting the text in markup works. It is read once and
+erased from the DOM. But it was in the HTML source on the way there, which
 defeats the point.
 
 ## Lower-level API
@@ -366,42 +358,41 @@ import {
 and DOM-free, so it runs in Node, a worker, or a native port.
 
 Split modes: **`amplitude`** (the one that works), plus `interleave`, `channels`
-and `decoy` — included so `leakScore` can show you why they do not:
+and `decoy`. Included so `leakScore` can show you why they do not:
 
 | Split | Single-plane leak |
 | --- | --- |
-| `channels` — RGB split across planes | 1.000 |
-| `decoy` — second image as modulator | 0.929 |
-| `interleave` ×2 — pixels split across planes | 0.693 |
+| `channels`. RGB split across planes | 1.000 |
+| `decoy`. Second image as modulator | 0.929 |
+| `interleave` ×2. Pixels split across planes | 0.693 |
 | `amplitude` 64 | 0.386 |
 | `amplitude` 96 | 0.137 |
 | `amplitude` 127 | 0.004 |
 
-Measured on a structured test image with `leakScore` — raw, with no denoising.
-See the block-size table above for numbers with a blur attack allowed; they are
+Measured on a structured test image with `leakScore`. Raw, with no denoising.
+See the block-size table above for numbers with a blur attack allowed. They are
 considerably worse, and that is the honest number to design against.
 
-**Splitting *where* pixels are does nothing; only randomizing *what they say*
+**Splitting *where* pixels are does nothing. Only randomizing *what they say*
 works.** Recognition survives losing colour, losing 90% of pixels, blur and
 quantization, so channel splitting and pixel interleaving both leak badly.
-Interleave only becomes safe once stacked noise carries it — at which point the
-interleaving contributed nothing. Noise amplitude is the only lever; frame count
+Interleave only becomes safe once stacked noise carries it. At which point the
+interleaving contributed nothing. Noise amplitude is the only lever. Frame count
 is not a substitute.
 
-Render at exact device pixels. `resize(cssW, cssH)` handles `devicePixelRatio`;
-if CSS rescales the canvas the noise blurs toward its mean and the content
-becomes readable in a *single* frame — a silent, total failure.
+Render at exact device pixels. `resize(cssW, cssH)` handles `devicePixelRatio`. If CSS rescales the canvas the noise blurs toward its mean and the content
+becomes readable in a *single* frame. A silent, total failure.
 
 ## Safety
 
 Noise is per-pixel and zero-mean, so **every frame carries the same local mean
 luminance as the source**. The alternation is a high-spatial-frequency contrast
-reversal, not a full-field flash — the mechanism 6-bit panels use for FRC
+reversal, not a full-field flash. The mechanism 6-bit panels use for FRC
 dithering. That keeps it out of the large-area-flash regime WCAG 2.3.1 targets.
 
 It is still moving high-contrast content, and **the element starts as soon as it
 has a value and does not stop on its own**. There is no `hold` or `auto-hide`
-here — those are product decisions (see Scope) — so gating the reveal, bounding
+here. Those are product decisions (see Scope). So gating the reveal, bounding
 how long it runs, and offering an opt-out are your responsibility. `stop()` is
 the hook.
 
@@ -410,13 +401,11 @@ mean statically instead of alternating, and warns to the console that there is
 no masking in that mode. Below ~120Hz the shimmer is clearly visible, and the
 library warns below 100Hz measured refresh.
 
-This argument has not had a real accessibility review. It reads plausibly —
-contrast reversal rather than full-field flash, small area, zero-mean per frame —
-but plausible is not assessed. Get one before shipping this anywhere public.
+This argument has not had a real accessibility review. It reads plausibly. Contrast reversal rather than full-field flash, small area, zero-mean per frame. But plausible is not assessed. Get one before shipping this anywhere public.
 
 ## Demo
 
-Live: **<https://acieshk.github.io/nocap/>** — or `npm run demo`, then
+Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 <http://127.0.0.1:8787/>.
 
 One page: the live/screenshot/denoise comparison, a playground with presets and

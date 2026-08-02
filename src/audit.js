@@ -126,13 +126,13 @@ function format(surfaces, found) {
   const lines = Object.entries(surfaces).map(([key, hit]) => {
     const mark = hit === true ? '✗' : hit === 'recoverable' ? '!' : hit === 'unavailable' ? '?' : '✓';
     const note = hit === true ? 'CONTAINS IT'
-      : hit === 'recoverable' ? 'recoverable with DevTools — inherent'
+      : hit === 'recoverable' ? 'recoverable with DevTools, inherent'
       : hit === 'unavailable' ? 'could not check'
       : 'not found';
     return `  ${mark} ${(label[key] ?? key).padEnd(42)} ${note}`;
   });
   const head = found.length
-    ? `nocap audit: LEAKED in ${found.length} surface${found.length > 1 ? 's' : ''} — ${found.join(', ')}`
+    ? `nocap audit: LEAKED in ${found.length} surface${found.length > 1 ? 's' : ''}: ${found.join(', ')}`
     : 'nocap audit: not found in any DOM surface';
   return [head, ...lines].join('\n');
 }
