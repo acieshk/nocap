@@ -22,7 +22,7 @@ const TEXT_DEFAULTS = {
   // the mean the eye integrates is exactly the authored colour. Averaging in
   // sRGB instead reads far too bright — #ff0000 arrives as #be8c8c.
   linearLight: true,
-  gamma: 2.2,
+  gamma: 2.4,
   // No band compression under linearLight, so no pre-emphasis to claw back.
   contrast: 1,
   // Noise magnitude spread. 1 slams every pixel to +/-amplitude, which is the

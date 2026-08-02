@@ -22,10 +22,18 @@ if (!file) {
 const data = JSON.parse(readFileSync(file, 'utf8'));
 const trials = data.trials.filter((t) => t.matched != null);
 
-/** Predicted match if the eye averages linear light at a given gamma. */
+/**
+ * Predicted match if the eye averages linear light at a given gamma.
+ *
+ * The calibration page runs adaptive:true, which caps the swing per pixel at
+ * min(amplitude, v, 255-v) so nothing clips. Modelling base±amplitude instead
+ * would assume swings that were never shown — at base 64 amplitude 96 the page
+ * actually alternates 0 and 128, not 0 and 160.
+ */
 function predict(base, amp, gamma) {
+  const swing = Math.min(amp, base, 255 - base);
   const lin = (v) => Math.pow(Math.max(0, Math.min(255, v)) / 255, gamma);
-  const mean = (lin(base + amp) + lin(base - amp)) / 2;
+  const mean = (lin(base + swing) + lin(base - swing)) / 2;
   return 255 * Math.pow(mean, 1 / gamma);
 }
 
@@ -83,7 +91,12 @@ if (hues.length > 1) {
       );
       if (rms < b.rms) b = { g: +g.toFixed(2), rms };
     }
-    console.log(`  ${hue.padEnd(6)} gamma ${b.g}  (n=${rows.length})`);
+    const railed = b.g <= 1.01 || b.g >= 3.19;
+    console.log(
+      `  ${hue.padEnd(6)} gamma ${b.g}  (n=${rows.length})` +
+        (railed ? '  <- hit the search bound; not a measurement' : '') +
+        (rows.length < 3 ? '  <- too few trials to trust' : '')
+    );
   }
   console.log();
 }

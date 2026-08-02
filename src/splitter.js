@@ -101,7 +101,7 @@ function resolveCfg(opts = {}) {
     // authored one, which is the only way "set the perceived background" can
     // mean anything.
     linearLight: opts.linearLight ?? false,
-    gamma: opts.gamma ?? 2.2,
+    gamma: opts.gamma ?? 2.4,
     hardness: clamp(opts.hardness ?? 1, 0, 1),
     chroma: clamp(opts.chroma ?? 1, 0, 1),
     noiseScale: Math.max(1, Math.floor(opts.noiseScale ?? 1)),
@@ -191,11 +191,10 @@ function fillModulated(planes, target, cfg) {
           // Headroom is per pixel, so nothing clips and no band is needed —
           // but a near-black or near-white pixel has almost none, and carries
           // almost no noise. Mid-tones are what buy masking.
-          const L = Math.pow(v / 255, cfg.gamma);
+          const L = toLight(v, cfg.gamma);
           const swing = (cfg.amplitude / MAX_AMP) * Math.min(L, 1 - L);
           for (let k = 0; k < n; k++) {
-            const lit = clamp(L + off[k] * swing, 0, 1);
-            planes[k].data[p + c] = 255 * Math.pow(lit, 1 / cfg.gamma);
+            planes[k].data[p + c] = toCode(clamp(L + off[k] * swing, 0, 1), cfg.gamma);
           }
         } else {
           // A pixel at v can only carry ±min(v, 255-v) before it clips, and
@@ -304,6 +303,29 @@ function decoyDraws(decoy, w, h) {
     const v = d[(sy * dw + sx) * 4 + c] / 255;
     return { phase: v, mag: Math.abs(v - 0.5) * 2 };
   };
+}
+
+/**
+ * sRGB electro-optical transfer function, code value -> emitted light.
+ *
+ * The real curve is piecewise: linear near black, then a 2.4 power with an
+ * offset. A pure 2.2 power is the usual shorthand and is wrong exactly where it
+ * matters here, since a plane driven to one extreme spends its time near black.
+ *
+ * `gamma` of 2.4 selects the standard curve; any other value falls back to a
+ * pure power so a display measured with tools/fit.mjs can be matched directly.
+ * Measured on one 60Hz panel: 2.45 fitted best as a pure power, and the true
+ * EOTF did slightly better still.
+ */
+function toLight(v, gamma) {
+  const s = clamp(v, 0, 255) / 255;
+  if (gamma !== 2.4) return Math.pow(s, gamma);
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+function toCode(x, gamma) {
+  if (gamma !== 2.4) return 255 * Math.pow(x, 1 / gamma);
+  return 255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
 }
 
 /** Contrast pre-emphasis around mid-grey, then compression into [lo, hi]. */
