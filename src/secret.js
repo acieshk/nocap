@@ -184,6 +184,7 @@ export class NocapSecret extends ElementBase {
     'chroma-decoy',
     'chroma-swing',
     'chroma-count',
+    'chroma-spread',
     'noise-scale',
     'chroma',
     'hardness',
@@ -464,12 +465,17 @@ export class NocapSecret extends ElementBase {
     for (let i = 0; i < count; i++) {
       const text = fakeLike(plain, { mode });
       this.#chromaDecoys.push(text);
-      // Keep them inside the canvas, and off the exact centre line where the
-      // value sits, so they neither fall outside nor sit on top of it.
-      const y = h * (0.12 + rand() * 0.76);
-      const clear = Math.abs(y - h / 2) < h * 0.14;
-      ctx.fillText(text, w / 2 + (rand() - 0.5) * w * 0.3,
-        clear ? y + (y < h / 2 ? -h * 0.16 : h * 0.16) : y);
+      // Overlaid on the value rather than kept clear of it. Sitting in the
+      // empty space around the value was itself a tell: anything on its own row
+      // is not the row being read. Landing on top means a reader cannot
+      // separate the two by position, only by colour.
+      //
+      // The cost lands on the person the library exists for. A mark drawn
+      // across the value competes with the value, and at a swing high enough
+      // for a capture to carry it, that competition is visible.
+      const spread = +(this.getAttribute('chroma-spread') ?? 0.35);
+      const y = h / 2 + (rand() - 0.5) * h * spread;
+      ctx.fillText(text, w / 2 + (rand() - 0.5) * w * spread, y);
     }
 
     ctx.font = font;
