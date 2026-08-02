@@ -100,6 +100,15 @@
   second. The right is that capture through a box blur, the cheapest attack on
   this. <span id="hz"></span>
 </p>
+<p style="font-size:12.5px;color:var(--faint);margin-top:8px">
+  <b>These panels are set to the page background, so they blend, and that costs
+  the masking.</b> A near-black colour has almost no room to carry noise, so at
+  <code>#0d0d0e</code> the best text colour that still hides the value is
+  <code>#1a1a1a</code>, which nobody can read. Every readable choice leaks
+  0.53 or worse, which is why the middle panel here is not as clean as it should
+  be. The playground below uses <code>#6d6d6d</code> on <code>#404040</code>,
+  the darkest pair that actually works, and that is what you would ship.
+</p>
 
 <h2>Playground</h2>
 <p>
@@ -308,9 +317,12 @@ async function layout() {
     cv.style.width = w + 'px'; cv.style.height = H + 'px';
     ctx.imageSmoothingEnabled = false;
   }
+  // The hero sits on the page background rather than the playground's palette,
+  // so the panel has no visible edge. It costs the masking: at #0d0d0e there is
+  // no text colour that both reads and hides. See the note under the panels.
   await hero.setText($('txt').value, {
     font: `600 ${Math.round(H * devicePixelRatio * 0.42)}px ui-monospace, monospace`,
-    color: $('fg').value, background: $('bg').value });
+    color: '#6d6d6d', background: '#0d0d0e' });
   hero.running ? capture() : still();
 }
 // Scratch canvas for the denoise panel, kept at a bounded size.
