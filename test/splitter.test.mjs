@@ -559,7 +559,7 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   assert.equal(override.hardness, 0.9);
   assert.equal(override.amplitude, STRENGTHS.weak.amplitude, 'the rest stays');
   // No strength named: plain defaults, dpr-scaled.
-  assert.equal(resolveOptions({}, 2).noiseScale, 8);
+  assert.equal(resolveOptions({}, 2).noiseScale, 12);
 });
 
 test('the viewer-facing mean is taken in light, not in code', async () => {

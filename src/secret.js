@@ -23,11 +23,11 @@ import { splitFrames } from './splitter.js';
 export const STRENGTHS = {
   // Easiest to read, and the only one that fuses comfortably on a slow 60Hz
   // panel. A single frame still leaks noticeably more.
-  weak: { amplitude: 80, noiseScale: 3, hardness: 0.5 },
-  medium: { amplitude: 110, noiseScale: 4, hardness: 1 },
+  weak: { amplitude: 80, noiseScale: 4, hardness: 0.5 },
+  medium: { amplitude: 110, noiseScale: 6, hardness: 1 },
   // Coarser noise resists a blur best but sits at a low spatial frequency,
   // where the eye's temporal sensitivity peaks. Wants 120Hz+ to fuse.
-  strong: { amplitude: 127, noiseScale: 6, hardness: 1 },
+  strong: { amplitude: 127, noiseScale: 8, hardness: 1 },
 };
 
 const TEXT_DEFAULTS = {
@@ -74,15 +74,18 @@ const TEXT_DEFAULTS = {
   // planes. Big blocks strobe instead of fusing and the text is unreadable.
   // Fine noise sits near the eye's spatial limit and fuses.
   //
-  // 4, not 3. Below about 4 the noise is fine enough that a small blur starts
-  // separating it from the strokes, and on a high-dpr phone the rendered stroke
-  // is wide enough that a 3px block is well under it. 4 is the floor where the
-  // block-to-stroke ratio still does useful work at the sizes text is actually
-  // rendered at.
+  // 6. Block size is the single biggest lever against a blur, because a block
+  // at or above the stroke width leaves the attacker no radius that helps, and
+  // at the sizes text is actually rendered a 6px block is close to that.
+  //
+  // The cost is fusion, not legibility: coarse noise sits at a low spatial
+  // frequency, which is where the eye's temporal sensitivity peaks, so it
+  // shimmers more at 30Hz than a fine block does. Use strength="weak" if a
+  // 60Hz display is the priority.
   //
   // Legibility still wins over going coarser: raise noise-scale toward the full
   // stroke width only if you know the display runs at 120Hz+.
-  noiseScale: 4,
+  noiseScale: 6,
   bankSize: 6,
 };
 

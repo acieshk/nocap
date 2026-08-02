@@ -322,7 +322,7 @@ copies still land on exactly the same pixels and cancel.
 | `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+ |
 | `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
 | `amplitude` | `110` | Fraction of the headroom the colours allow |
-| `noise-scale` | `4 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz |
+| `noise-scale` | `6 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo |
 | `frames` | `2` | Planes per cycle. 2 is almost always right |
 | `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress |
