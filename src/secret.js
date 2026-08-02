@@ -101,7 +101,6 @@ export class NocapSecret extends ElementBase {
     'adaptive',
     'scramble',
     'fake',
-    'fake-placement',
     'width',
     'height',
   ];
@@ -117,7 +116,6 @@ export class NocapSecret extends ElementBase {
   #decoys = null;
   #fakeWarned = false;
   #adapted = false;
-  #gapWarned = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -302,27 +300,17 @@ export class NocapSecret extends ElementBase {
    * Decoy planes: one frame carries a plausible wrong value, the other carries
    * whatever makes the pair average back to the truth.
    *
-   * Two placements, and the choice is a real trade rather than a preference.
-   *
-   * 'gaps' (default) puts decoy glyphs only where the target left background,
-   * so the real glyphs are untouched and stay readable. At 30Hz the alternation
-   * does not fully fuse, and overlaying a decoy on the real glyphs makes the
-   * value genuinely hard to read. The cost is that the real value is present in
-   * every frame — the decoy adds ambiguity about which digits are real, it does
-   * not replace them.
-   *
-   * 'overlay' replaces the glyphs, so a capture can show a wholly wrong value.
-   * Stronger, and harder to read.
-   *
    * Noise announces failure and invites another screenshot. A value in the right
-   * shape does not. The cost is that only ONE of the two planes reads cleanly —
-   * offsets must sum to zero, so if plane 0 is the decoy then plane 1 is
-   * 2*target - decoy and looks like a ghosted negative. A single capture has
-   * roughly even odds of landing on either.
+   * shape does not.
    *
-   * Everything happens in light, so the mean is the authored value exactly.
-   * Where a pixel lacks the headroom to reach the decoy outright, it goes as far
-   * as it can: clipping would break the zero-sum property and shift the colour.
+   * Every frame carries a DIFFERENT decoy, and every decoy appears exactly twice
+   * across the rotation — once added, once subtracted, one cycle apart. So they
+   * cancel exactly in the mean and the viewer never resolves any of them, while
+   * a capture, which cannot average, freezes one at full contrast.
+   *
+   * An earlier version placed a single decoy in the gaps between the real glyphs
+   * to protect readability. Per-frame cancellation removes the need: the decoy
+   * is never seen at all, so it no longer has to keep out of the way.
    */
   /** Put the scrambled glyphs back in order. Only for deriving a decoy shape. */
   #reassemble() {

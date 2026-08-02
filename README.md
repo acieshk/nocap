@@ -150,14 +150,22 @@ right shape does not.
 <nocap-secret fake="auto"></nocap-secret>
 ```
 
-A different decoy is drawn into every cycle, added to one plane and subtracted
-from the other. Two consequences:
+**Every frame carries a different decoy**, and every decoy appears exactly twice
+across the rotation — once added, once subtracted, one cycle apart. Two
+consequences:
 
-- **The viewer never resolves any of them.** Each decoy cancels exactly within
-  its own cycle, and the next cycle carries a different one, so nothing
-  accumulates across the frames the eye integrates. You read the real value.
+- **The viewer never resolves any of them.** The pairing cancels exactly in the
+  mean, so nothing accumulates over the frames the eye integrates and you read
+  the real value with no residue.
 - **A capture freezes one.** A screenshot cannot average, so it catches a single
-  frame and a single decoy, in the right format, at full contrast.
+  frame and a single decoy, in the right format, at full contrast — and the next
+  frame carries a different one, so a burst does not confirm anything either.
+
+Getting the cancellation right took three attempts, and each failure was visible
+only in a rendered frame. Alternating signs over *different* strings does not
+cancel: it leaves the difference of their glyph coverage as a smear above and
+below the value. Flipping the line and the sign together makes it worse by
+re-correlating them. Pairing each decoy with itself is what actually works.
 
 `detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
 grouped numbers, phone numbers, alphanumerics and free text; `fakeLike()`
@@ -172,9 +180,11 @@ mode is semantic too: fake dates have real months, fake card numbers pass Luhn.
 4539578763621486 16-digit card number        4638875219028443
 ```
 
-Decoys borrow from the headroom the noise already leaves, so they never clip and
-never shift the perceived value. They are drawn smaller than the real text so a
-capture reads them as their own line rather than as a smear over it.
+Decoys are driven from the mean of the plane pair at full headroom, so they
+replace the noise where their ink falls rather than competing with it, and they
+never clip or shift the perceived value. They are drawn smaller than the real
+text and on their own line, so a capture reads the decoy as the most legible
+thing in the frame.
 
 ## `<nocap-secret>`
 
