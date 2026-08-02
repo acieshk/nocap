@@ -335,7 +335,10 @@ export class NocapSecret extends ElementBase {
   async #drawFake(font, color, background, mode, plain) {
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
-    const strength = 0.5; // fraction of the noise swing the decoy borrows
+    // Full headroom. At half, the decoy competed with the noise and read as a
+    // ghost behind the real text; a capture is supposed to come away with the
+    // decoy as the most legible thing in the frame.
+    const strength = 1;
 
     const paint = (draw) => {
       const cv = makeCanvas(w, h);
@@ -357,36 +360,46 @@ export class NocapSecret extends ElementBase {
 
     const decoys = [];
     const sets = [];
-    for (let k = 0; k < cycles; k++) {
-      const decoy = fakeLike(plain, { mode: mode === 'auto' ? 'auto' : mode });
-      decoys.push(decoy);
+    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
+    const blank = paint(() => {});
 
-      // Smaller than the real value and offset, so it reads as its own line of
-      // text in a capture rather than as a smear over the real glyphs.
-      const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.62)}px`);
-      const cover = paint((ctx) => {
+    const inkFor = (text, dy) =>
+      paint((ctx) => {
         ctx.font = small;
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(decoy, w / 2, h / 2 + h * 0.02);
+        ctx.fillText(text, w / 2, h / 2 + dy);
       });
-      const blank = paint(() => {});
 
-      // Equal and opposite within the cycle, so the decoy cancels exactly in the
-      // mean and the viewer never resolves any of them — while a single captured
-      // frame freezes one, at full contrast. A different decoy every cycle means
-      // nothing accumulates across the ones the eye does integrate.
+    // Every decoy appears exactly twice across the rotation, once added and once
+    // subtracted, one cycle apart. That is what makes the residue vanish: signs
+    // alternating over DIFFERENT strings do not cancel, they leave the
+    // difference of their glyph coverage as a smear above and below the value.
+    // Pairing each decoy with itself cancels exactly, and offsetting the pair by
+    // one cycle keeps consecutive frames carrying different values.
+    for (let k = 0; k < cycles; k++) decoys.push(fakeLike(plain, { mode }));
+
+    const blankInk = blank.data;
+    const inks = decoys.map((d, i) => inkFor(d, i % 2 ? h * 0.22 : -h * 0.22));
+
+    for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
-      for (let i = 0; i < cover.data.length; i += 4) {
-        const ink = (cover.data[i] - blank.data[i]) / 255;
-        if (ink <= 0.02) continue;
-        for (let c = 0; c < 3; c++) {
-          // Borrow from the headroom the noise already left, so nothing clips.
-          const room = Math.min(base[0].data[i + c], 255 - base[0].data[i + c]);
-          const push = ink * strength * room;
-          set[0].data[i + c] = base[0].data[i + c] + push;
-          set[1].data[i + c] = base[1].data[i + c] - push;
+      // plane 0 adds this cycle's decoy; plane 1 subtracts the next one.
+      const use = [[0, inks[k], 1], [1, inks[(k + 1) % cycles], -1]];
+
+      for (const [plane, ink, sign] of use) {
+        for (let i = 0; i < blankInk.length; i += 4) {
+          const amount = (ink.data[i] - blankInk[i]) / 255;
+          if (amount <= 0.02) continue;
+          for (let c = 0; c < 3; c++) {
+            // Drive from the mean so the pair still resolves to the target, and
+            // take the full headroom so the decoy is the most legible thing in
+            // the frame rather than a ghost competing with the noise.
+            const mean = (base[0].data[i + c] + base[1].data[i + c]) / 2;
+            const room = Math.min(mean, 255 - mean);
+            set[plane].data[i + c] = mean + amount * strength * room * sign;
+          }
         }
       }
       sets.push(set);
