@@ -393,3 +393,27 @@ test('the package barrel imports outside a browser', async () => {
   assert.equal(m.checkPalette({ color: '#9ea6b4', background: '#6b7280' }).grade, 'good');
   assert.equal(m.fakeLike('4471-0092-8834', { rng: lcg(3) }).length, 14);
 });
+
+test('linear light keeps colours exact AND masks', async () => {
+  // Both properties, because fixing one at the expense of the other is exactly
+  // what went wrong: offsetting in light gave exact colour and a +/-13 swing.
+  const { checkPalette } = await import('../src/palette.js');
+  const solid = (v) => {
+    const d = new Uint8ClampedArray(64 * 4);
+    for (let i = 0; i < d.length; i += 4) { d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+    return { width: 8, height: 2, data: d };
+  };
+  const light = (v) => { const s = v / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+  const code = (x) => 255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055);
+
+  for (const v of [0x5a, 0x99, 0xbc]) {
+    const pl = splitFrames(solid(v), { frames: 2, amplitude: 110, chroma: 0, hardness: 1, linearLight: true });
+    const perceived = code((light(pl[0].data[0]) + light(pl[1].data[0])) / 2);
+    assert.ok(Math.abs(perceived - v) < 2, `${v} perceived as ${perceived.toFixed(1)}`);
+    // A mid-tone must get a swing worth having, not the ~13 the old version gave.
+    assert.ok(Math.abs(pl[0].data[0] - pl[1].data[0]) / 2 > 55, `swing too small at ${v}`);
+  }
+
+  // The shipped default palette has to be one the library would recommend.
+  assert.equal(checkPalette({ color: '#9ea6b4', background: '#6b7280' }).grade, 'good');
+});

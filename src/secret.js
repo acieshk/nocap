@@ -525,8 +525,12 @@ export class NocapSecret extends ElementBase {
 
   get #palette() {
     return {
-      color: this.getAttribute('color') ?? '#e8e8f0',
-      background: this.getAttribute('background') ?? '#14141a',
+      // Defaults must be maskable, not merely handsome. #e8e8f0 on #14141a is
+      // the obvious dark-UI pairing and it leaks 0.951 — a screenshot reads it
+      // outright. This pair scores a masking ratio of 1.42 and leaks 0.180.
+      // Anything you override with should be checked against checkPalette().
+      color: this.getAttribute('color') ?? '#9ea6b4',
+      background: this.getAttribute('background') ?? '#6b7280',
     };
   }
 }
