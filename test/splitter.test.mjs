@@ -333,29 +333,6 @@ test('boxBlur radius 0 is identity', () => {
   assert.equal(boxBlur(src, 0), src);
 });
 
-/* ----------------------------------------------------------------- vault -- */
-
-test('passphrase round-trips, and a wrong one fails loudly', async () => {
-  const { encryptSecret, decryptSecret } = await import('../src/vault.js');
-  // Low iterations purely to keep the test fast; the shipped default is 310k.
-  const payload = await encryptSecret('4471-0092-8834', 'correct-horse', { iterations: 1000 });
-
-  assert.ok(!JSON.stringify(payload).includes('4471'), 'payload leaked the plaintext');
-  assert.equal(await decryptSecret(payload, 'correct-horse'), '4471-0092-8834');
-
-  // AES-GCM is authenticated, so a bad key must throw rather than return garbage.
-  await assert.rejects(() => decryptSecret(payload, 'wrong'), /wrong passphrase/);
-});
-
-test('each encryption uses a fresh salt and iv', async () => {
-  const { encryptSecret } = await import('../src/vault.js');
-  const a = await encryptSecret('same', 'pass', { iterations: 1000 });
-  const b = await encryptSecret('same', 'pass', { iterations: 1000 });
-  assert.notEqual(a.salt, b.salt, 'salt reused');
-  assert.notEqual(a.iv, b.iv, 'iv reused');
-  assert.notEqual(a.ct, b.ct, 'identical ciphertext for identical plaintext');
-});
-
 /* ------------------------------------------------------------------ fake -- */
 
 test('decoys match the source shape exactly', async () => {

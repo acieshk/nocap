@@ -1,16 +1,5 @@
 {
   "account": "4471-0092-8834",
   "recoveryKey": "NKQ2-7T4W-ZP19",
-  "pin": "884 201",
-  "vault": {
-    "hint": "passphrase is: correct-horse",
-    "payload": {
-      "v": 1,
-      "kdf": "PBKDF2-SHA-256",
-      "iterations": 310000,
-      "salt": "sVQce5ag1Ad7FrNYloA9QA==",
-      "iv": "ORycZlqe6UFYE47B",
-      "ct": "t/oIBWbDeZkeeleEmvRm6UGf1B+ZI7UAqqaS3PfC"
-    }
-  }
+  "pin": "884 201"
 }

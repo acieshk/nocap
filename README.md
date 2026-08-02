@@ -80,30 +80,22 @@ catches nothing and makes the default look safe when it is not.
 The real line is **automated pipeline vs. targeted attacker**. nocap defeats the
 pipeline and never the person who has decided to come after the value.
 
-## Passphrase gating
+## Scope
 
-`encryptSecret` / `decryptSecret` are AES-GCM over a PBKDF2-derived key
-(310k iterations, WebCrypto, no dependencies). `el.unlock(payload, passphrase)`
-decrypts straight into the element so the caller never holds the plaintext.
+This library is the display effect and nothing else: split the content, show it,
+and tell you honestly how well it is hidden. It deliberately does **not** ship
+storage, delivery, encryption, expiry or accounts.
 
-```js
-const payload = await encryptSecret('4471-0092-8834', passphrase);  // store/serve this
-await el.unlock(payload, passphrase);
-```
+That is not an oversight — those belong a layer up, and they are where the real
+protection lives. The flicker cannot beat a screen recording or DevTools; what
+does beat them is making the captured value worthless. A one-time value that
+dies on first read turns an unwinnable fight into an economic one.
 
-**Fixes:** anyone holding the page, the JSON, a CDN copy, a backup or a
-forwarded link has ciphertext and nothing else. That is the host, a shared
-machine, and the network tab.
-
-**Does not fix:** the person who just typed the passphrase. After `decrypt`
-returns, the value is in memory and on a canvas — `crypto.subtle.decrypt` can be
-wrapped in one line without ever finding the key. If the viewer is your
-adversary, encryption is the wrong tool; make the value short-lived or
-single-use so extracting it is worth little.
-
-Never ship the key with the page. A typed passphrase, a key in the URL fragment
-(never sent to the server), or a key issued after auth are all fine. A constant
-in the bundle is obfuscation, not encryption.
+If you are building that layer, the pieces that pair with this are: encryption
+at rest with a key that never touches your server (a passphrase, or a key in the
+URL fragment), single-use or short-lived values, per-recipient watermarking, and
+on native, `WDA_EXCLUDEFROMCAPTURE` / `FLAG_SECURE` — which is enforcement
+rather than friction. Use nocap for the moment the value is on screen.
 
 ## Choosing colours
 
@@ -204,7 +196,7 @@ Two limits, both visible in [the demo](https://acieshk.github.io/nocap/demo/secr
 | `placeholder` | `hold to reveal` | Cover text. |
 
 Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.reveal()`,
-`.hide()`, `.unlock(payload, passphrase)`, `.measureLeak()`. Events: `reveal`, `hide`. It auto-hides on tab
+`.hide()`, `.measureLeak()`. Events: `reveal`, `hide`. It auto-hides on tab
 switch and window blur — the moment a screen share usually starts.
 
 **Set `.secret` from JS.** Putting the text in markup works — it is read once and
@@ -217,7 +209,7 @@ defeats the point.
 import {
   Flicker, splitFrames, averageFrames, boxBlur, denoisedLeak,
   leakScore, planeRange, suggestConfig, checkPalette, codeSwing,
-  encryptSecret, decryptSecret, detectFormat, fakeLike,
+  detectFormat, fakeLike,
 } from 'nocap';
 ```
 
@@ -274,7 +266,7 @@ Live: **<https://acieshk.github.io/nocap/>** — or `npm run demo`, then
   mean, and recovered-by-averaging, with a leak meter.
 - `/demo/secret.html` — the account-number reveal, live checks that search every
   page surface for the secret, both DevTools attacks running for real, the
-  passphrase gate, and fake values with both captured frames shown.
+  and fake values with both captured frames shown.
 - `/demo/colors.html` — try a palette: live against a static reference, measured
   leak, per-colour swing, and a perceived-colour null check.
 - `/demo/calibrate.html` — measure your display's gamma by nulling a patch.

@@ -1,6 +1,5 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange } from './splitter.js';
-import { decryptSecret } from './vault.js';
 import { checkPalette, toLight, toCode } from './palette.js';
 import { fakeLike } from './fake.js';
 
@@ -196,20 +195,6 @@ export class NocapSecret extends HTMLElement {
 
   get revealed() {
     return this.#revealed;
-  }
-
-  /**
-   * Decrypt a passphrase-gated payload straight into the element, so the caller
-   * never holds the plaintext in a variable of its own. Throws on a wrong
-   * passphrase — AES-GCM is authenticated, so it fails loudly.
-   *
-   * This closes the gap between "someone has the page" and "someone has the
-   * passphrase". It does not close the gap to DevTools: after this resolves the
-   * value is in memory and on a canvas either way.
-   */
-  async unlock(payload, passphrase) {
-    this.secret = await decryptSecret(payload, passphrase);
-    return this.reveal();
   }
 
   /**
