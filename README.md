@@ -91,6 +91,14 @@ protection lives. The flicker cannot beat a screen recording or DevTools; what
 does beat them is making the captured value worthless. A one-time value that
 dies on first read turns an unwinnable fight into an economic one.
 
+**The value is unreadable to assistive technology, by construction.** It is a
+`<canvas>` inside a closed shadow root: no text node, no accessible name, no
+alternative. That is the same property that blocks scrapers and DOM-reading
+agents, and it cannot be had selectively — a screen reader is a DOM-reading
+agent. Any integration has to provide an accessible route to the value itself.
+A copy-to-clipboard control is the usual answer, and it is what people want to
+do with an account number anyway.
+
 If you are building that layer, the pieces that pair with this are: encryption
 at rest with a key that never touches your server (a passphrase, or a key in the
 URL fragment), single-use or short-lived values, per-recipient watermarking, and
@@ -214,13 +222,13 @@ copies still land on exactly the same pixels and cancel.
 | --- | --- | --- |
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
 | `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
-| `amplitude` | `96` | Fraction of the headroom the colours allow. |
+| `amplitude` | `110` | Fraction of the headroom the colours allow. |
 | `noise-scale` | `3 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz. |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |
 | `frames` | `2` | Planes per cycle. 2 is almost always right. |
 | `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress. |
 | `chroma` | `0` | 0 = grey noise, 1 = independent per channel. |
-| `hardness` | `0.5` | 1 slams every pixel to ±amplitude; lower keeps noise near the background. |
+| `hardness` | `1` | 1 slams every pixel to ±amplitude; lower keeps noise near the background. |
 | `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable — see below. |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom. |
 | `width` / `height` | `260` / `56` | CSS pixels. |
@@ -284,11 +292,20 @@ luminance as the source**. The alternation is a high-spatial-frequency contrast
 reversal, not a full-field flash — the mechanism 6-bit panels use for FRC
 dithering. That keeps it out of the large-area-flash regime WCAG 2.3.1 targets.
 
-It is still moving high-contrast content. `hold` is the default pattern because
-it keeps the flicker on screen only while the pointer is down. Always offer an
-opt-out, and never engage it without user intent. Below ~120Hz the shimmer is
-clearly visible; the library warns to the console below 100Hz measured refresh,
-and the demos honour `prefers-reduced-motion`.
+It is still moving high-contrast content, and **the element starts as soon as it
+has a value and does not stop on its own**. There is no `hold` or `auto-hide`
+here — those are product decisions (see Scope) — so gating the reveal, bounding
+how long it runs, and offering an opt-out are your responsibility. `stop()` is
+the hook.
+
+`prefers-reduced-motion: reduce` is honoured: the element shows the perceived
+mean statically instead of alternating, and warns to the console that there is
+no masking in that mode. Below ~120Hz the shimmer is clearly visible, and the
+library warns below 100Hz measured refresh.
+
+This argument has not had a real accessibility review. It reads plausibly —
+contrast reversal rather than full-field flash, small area, zero-mean per frame —
+but plausible is not assessed. Get one before shipping this anywhere public.
 
 ## Demo
 

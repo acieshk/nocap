@@ -428,6 +428,13 @@ export function averageFrames(caps) {
  * are exactly the transforms an attacker undoes for free.
  */
 export function leakScore(plane, src) {
+  // averageFrames validates this; without the same check here a mismatch reads
+  // past the end of the smaller buffer and returns NaN instead of throwing.
+  if (plane.width !== src.width || plane.height !== src.height) {
+    throw new Error(
+      `leakScore: size mismatch, ${plane.width}x${plane.height} vs ${src.width}x${src.height}`
+    );
+  }
   const n = src.width * src.height;
   let sa = 0;
   let sb = 0;

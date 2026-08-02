@@ -18,7 +18,7 @@ const TEXT_DEFAULTS = {
   // 96, not 110. At 110 the band is [110, 145] and the perceived image has only
   // 35 levels of contrast — legible in a still, but far too washed out to read
   // through a live 30Hz alternation. 96 gives 63 levels for a modest leak cost.
-  amplitude: 96,
+  amplitude: 110,
   // Split in light, not in code values. This is what makes `color` and
   // `background` mean what they say: the planes are offset in linear light, so
   // the mean the eye integrates is exactly the authored colour. Averaging in
@@ -31,7 +31,7 @@ const TEXT_DEFAULTS = {
   // strongest mask but reads as harsh confetti. 0.5 clusters deviations near the
   // background — same measured leak as chroma:1/hardness:1 used to give, about a
   // quarter less visually loud.
-  hardness: 0.5,
+  hardness: 1,
   // Grey noise, not per-channel. This is a free win rather than a compromise:
   // sharing one sign across R/G/B puts the whole noise budget into luminance,
   // which is what leakScore and the eye both key on for text. Measured 0.262
@@ -116,6 +116,7 @@ export class NocapSecret extends ElementBase {
   #decoys = null;
   #fakeWarned = false;
   #adapted = false;
+  #motionWarned = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -142,6 +143,11 @@ export class NocapSecret extends ElementBase {
       +(this.getAttribute('height') ?? 56)
     );
 
+    // A value can be set before the element is in the document, and on re-attach
+    // #secret survives while the flicker does not. Without this both cases leave
+    // a blank canvas and no warning.
+    if (this.#secret || this.#chars?.length) this.render();
+
   }
 
   disconnectedCallback() {
@@ -163,8 +169,18 @@ export class NocapSecret extends ElementBase {
       // Keep the glyphs, drop the arrangement. Nothing in this object is ever
       // the plaintext in order, so a heap snapshot search for it finds nothing.
       const pairs = [...str].map((ch, i) => [ch, i]);
+      // Still obfuscation, not encryption — but a CSPRNG is free here and
+      // removes the question of whether the shuffle is predictable.
+      const rand = (n) => {
+        if (typeof crypto?.getRandomValues === 'function') {
+          const buf = new Uint32Array(1);
+          crypto.getRandomValues(buf);
+          return buf[0] % n;
+        }
+        return Math.floor(Math.random() * n);
+      };
       for (let i = pairs.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = rand(i + 1);
         [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
       }
       this.#chars = pairs.map((p) => p[0]);
@@ -481,6 +497,26 @@ export class NocapSecret extends ElementBase {
    * helps the attacker. Measured on the default palette: stroke 3 leaks 0.30
    * under a blur, stroke 8 with the same block leaks 0.58, same settings.
    */
+  #reducedMotion() {
+    return typeof matchMedia === 'function'
+      && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /** The perceived image, drawn once. No alternation, and no masking with it. */
+  #showStill() {
+    const planes = this.#flicker.planes;
+    if (!planes.length) return;
+    const mean = averageFrames(planes);
+    this.#flicker.ctx.putImageData(
+      new ImageData(mean.data, mean.width, mean.height), 0, 0);
+    if (this.#motionWarned) return;
+    this.#motionWarned = true;
+    console.warn(
+      '[nocap-secret] prefers-reduced-motion is set, so the value is shown ' +
+        'statically. There is no masking in this mode — a screenshot reads it.'
+    );
+  }
+
   #defaultBlock() {
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
     return Math.max(TEXT_DEFAULTS.noiseScale, Math.round(TEXT_DEFAULTS.noiseScale * dpr));

@@ -171,7 +171,12 @@
 
 <h2>It is not in the page</h2>
 <p>
-  These search each surface for the secret currently on screen. Run them
+  These search each surface for the secret currently on screen. The last row is
+  expected to fail: this demo keeps the value in a text input so you can edit it,
+  and form values are invisible to every other check — an agent reading
+  <code>querySelectorAll('input')</code> gets it instantly. That is demo
+  scaffolding rather than the component, and hiding it would make this panel less
+  convincing, not more. Run them
   <b>before</b> the attacks below — those print the recovered value into the page
   on purpose, and it would show up here as a leak the demo created itself.
 </p>
@@ -423,6 +428,11 @@ $('runChecks').onclick = async () => {
     ['Rendered text (Reader mode, innerText)', document.body.innerText],
     ['Select All + Copy', copied],
     ['Element markup', chip.outerHTML],
+    // Form control values appear in none of the surfaces above, and this demo
+    // puts the secret in an input. Any agent doing querySelectorAll('input')
+    // reads it instantly, so a clean sweep here would be misleading.
+    ['Form control values (this demo’s own input)',
+      [...document.querySelectorAll('input, textarea')].map((el) => el.value).join(' ')],
   ];
   const rows = surfaces.map(([label, hay]) => {
     const found = String(hay).includes(needle);
@@ -433,8 +443,10 @@ $('runChecks').onclick = async () => {
   rows.push('<tr class="leak"><td>✗</td><td>JS memory / <code>canvas.toDataURL()</code></td>' +
     '<td>recoverable with DevTools</td></tr>');
   $('checks').innerHTML = rows.join('');
-  const clean = surfaces.filter(([, h]) => String(h).includes(needle)).length;
-  $('checksOut').textContent = `"${needle}" found in ${clean} of ${surfaces.length} page surfaces`;
+  const hits = surfaces.filter(([, h]) => String(h).includes(needle)).length;
+  $('checksOut').textContent =
+    `"${needle}" found in ${hits} of ${surfaces.length} page surfaces` +
+    (hits ? ' — the demo’s own input, not the component' : '');
 };
 
 /* -------------------------------------------------------------- attacks -- */

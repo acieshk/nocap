@@ -231,9 +231,13 @@ export class Flicker {
       const bmps = await Promise.all(
         planes.map((p) => createImageBitmap(new ImageData(p.data, p.width, p.height)))
       );
-      // A newer rebuild started while we were awaiting; drop this one.
+      // A newer rebuild started while we were awaiting; drop this one. Close
+      // everything built so far, not just this iteration — closing only the
+      // current set stranded every earlier cycle's bitmaps, and a fast slider
+      // drag supersedes several rebuilds a second.
       if (gen !== this._gen) {
         for (const bmp of bmps) bmp.close?.();
+        for (const set of bank) for (const bmp of set) bmp.close?.();
         return;
       }
       bank.push(bmps);

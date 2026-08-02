@@ -145,7 +145,7 @@ export function suggestConfig(design) {
         'page pair further apart in lightness.'
     );
   }
-  const { ratio, grade } = checkPalette({ color, background });
+  const { ratio, grade } = checkPalette({ color, background, gamma: design.gamma });
   if (grade === 'weak') {
     notes.push(
       `The secret's background now matches your page exactly — linear light removed ` +
@@ -217,14 +217,20 @@ function clamp(v, min, max) {
 /* -------------------------------------------------------------------------- */
 
 /** sRGB EOTF: code value -> emitted light. Piecewise, linear near black. */
-export function toLight(v) {
+export function toLight(v, gamma = 2.4) {
   const s = clamp(v, 0, 255) / 255;
+  // Matches splitter.js: 2.4 selects the real piecewise sRGB curve, anything
+  // else falls back to a pure power so a measured display can be graded on the
+  // same curve it is split with. Grading at 2.4 while splitting at a measured
+  // gamma silently compares two different things.
+  if (gamma !== 2.4) return Math.pow(s, gamma);
   return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 }
 
 /** sRGB OETF: emitted light -> code value. Inverse of toLight. */
-export function toCode(x) {
+export function toCode(x, gamma = 2.4) {
   const v = clamp(x, 0, 1);
+  if (gamma !== 2.4) return 255 * Math.pow(v, 1 / gamma);
   return 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
 }
 
@@ -240,11 +246,11 @@ export function toCode(x) {
  * Peaks at 127.5 where light is 0.5 (around #bcbcbc) and falls off in both
  * directions — far faster toward white than toward black.
  */
-export function codeSwing(color) {
+export function codeSwing(color, gamma = 2.4) {
   const swings = toRgb(color).map((v) => {
-    const L = toLight(v);
+    const L = toLight(v, gamma);
     const s = Math.min(L, 1 - L);
-    return (toCode(L + s) - toCode(L - s)) / 2;
+    return (toCode(L + s, gamma) - toCode(L - s, gamma)) / 2;
   });
   return Math.min(...swings);
 }
@@ -264,9 +270,9 @@ export function codeSwing(color) {
  * @returns {{ratio:number, grade:'good'|'fair'|'weak', textSwing:number,
  *            backgroundSwing:number, separation:number, warnings:string[]}}
  */
-export function checkPalette({ color, background }) {
-  const textSwing = codeSwing(color);
-  const backgroundSwing = codeSwing(background);
+export function checkPalette({ color, background, gamma = 2.4 }) {
+  const textSwing = codeSwing(color, gamma);
+  const backgroundSwing = codeSwing(background, gamma);
   const separation = Math.max(
     1,
     Math.abs(luma(toRgb(color)) - luma(toRgb(background)))
