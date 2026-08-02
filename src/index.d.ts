@@ -216,6 +216,12 @@ export const STRENGTHS: Record<Strength, {
   hardness: number;
 }>;
 
+/** Merge defaults, a strength preset and explicit attributes. Pure, for tests. */
+export function resolveOptions(
+  attrs?: Record<string, string>,
+  dpr?: number
+): SplitOptions & { adaptive: boolean };
+
 export class NocapSecret extends HTMLElement {
   /** Write-only: reading it back would put the secret in reach again. */
   set secret(value: string);

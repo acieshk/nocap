@@ -111,6 +111,39 @@ const TEXT_DEFAULTS = {
  */
 const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
 
+/**
+ * Merge defaults, a strength preset and explicit attributes into split options.
+ *
+ * Pure and exported so it can be tested. It was inline and private, and the
+ * first version silently dropped two thirds of every preset: the explicit keys
+ * sat after a `...base` spread and their fallbacks still read TEXT_DEFAULTS, so
+ * `strength` moved amplitude and nothing else. That is not a bug you can catch
+ * by reading, and it was invisible to a test suite that could only check the
+ * STRENGTHS table itself.
+ *
+ * @param {Record<string,string>} attrs  attributes that are actually present
+ * @param {number} [dpr=1]  a preset's block is authored at dpr 1 and scaled here
+ */
+export function resolveOptions(attrs = {}, dpr = 1) {
+  const preset = STRENGTHS[attrs.strength] ?? {};
+  const base = { ...TEXT_DEFAULTS, ...preset };
+  // Block size follows the stroke, which follows devicePixelRatio.
+  base.noiseScale = Math.max(base.noiseScale, Math.round(base.noiseScale * dpr));
+
+  const num = (name, fallback) => (name in attrs ? +attrs[name] : fallback);
+  return {
+    ...base,
+    amplitude: num('amplitude', base.amplitude),
+    frames: num('frames', base.frames),
+    contrast: num('contrast', base.contrast),
+    noiseScale: num('noise-scale', base.noiseScale),
+    chroma: num('chroma', base.chroma),
+    gamma: num('gamma', base.gamma),
+    hardness: num('hardness', base.hardness),
+    adaptive: 'adaptive' in attrs,
+  };
+}
+
 export class NocapSecret extends ElementBase {
   static observedAttributes = [
     'amplitude',
@@ -603,29 +636,17 @@ export class NocapSecret extends ElementBase {
     );
   }
 
-  #defaultBlock(base = TEXT_DEFAULTS.noiseScale) {
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    return Math.max(base, Math.round(base * dpr));
+  #defaultBlock() {
+    return this.#options().noiseScale;
   }
 
   #options() {
-    const num = (name, fallback) =>
-      this.hasAttribute(name) ? +this.getAttribute(name) : fallback;
-    const preset = STRENGTHS[this.getAttribute('strength')] ?? {};
-    const base = { ...TEXT_DEFAULTS, ...preset };
-    // A preset's block is authored at dpr 1; scale it like the default.
-    if (preset.noiseScale) base.noiseScale = this.#defaultBlock(preset.noiseScale);
-    return {
-      ...base,
-      amplitude: num('amplitude', base.amplitude),
-      frames: num('frames', TEXT_DEFAULTS.frames),
-      contrast: num('contrast', TEXT_DEFAULTS.contrast),
-      noiseScale: num('noise-scale', this.#defaultBlock()),
-      chroma: num('chroma', TEXT_DEFAULTS.chroma),
-      gamma: num('gamma', TEXT_DEFAULTS.gamma),
-      hardness: num('hardness', TEXT_DEFAULTS.hardness),
-      adaptive: this.hasAttribute('adaptive'),
-    };
+    const attrs = {};
+    for (const name of NocapSecret.observedAttributes) {
+      if (this.hasAttribute(name)) attrs[name] = this.getAttribute(name);
+    }
+    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    return resolveOptions(attrs, dpr);
   }
 
   /**

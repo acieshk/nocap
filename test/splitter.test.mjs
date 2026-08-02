@@ -539,3 +539,25 @@ test('stronger presets leak less', async () => {
   };
   assert.ok(leak('strong') < leak('weak'), 'strong must beat weak');
 });
+
+test('a strength preset applies all of its values, not just amplitude', async () => {
+  // The first version dropped two thirds of every preset: explicit keys sat
+  // after a spread and their fallbacks still read the defaults, so `strength`
+  // moved amplitude and nothing else. Untestable while it was inline.
+  const { resolveOptions, STRENGTHS } = await import('../src/secret.js');
+  for (const [name, preset] of Object.entries(STRENGTHS)) {
+    const got = resolveOptions({ strength: name }, 1);
+    assert.equal(got.amplitude, preset.amplitude, `${name} amplitude`);
+    assert.equal(got.hardness, preset.hardness, `${name} hardness`);
+    assert.equal(got.noiseScale, preset.noiseScale, `${name} noiseScale`);
+  }
+  // Presets are authored at dpr 1 and scaled like the default.
+  assert.equal(resolveOptions({ strength: 'strong' }, 2).noiseScale,
+    STRENGTHS.strong.noiseScale * 2, 'preset block must scale with dpr');
+  // An explicit attribute still wins over its part of the preset.
+  const override = resolveOptions({ strength: 'weak', hardness: '0.9' }, 1);
+  assert.equal(override.hardness, 0.9);
+  assert.equal(override.amplitude, STRENGTHS.weak.amplitude, 'the rest stays');
+  // No strength named: plain defaults, dpr-scaled.
+  assert.equal(resolveOptions({}, 2).noiseScale, 6);
+});
