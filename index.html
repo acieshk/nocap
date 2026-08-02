@@ -114,7 +114,18 @@
     <button data-p="broken">Unmaskable</button>
   </div>
 
-  <div class="body" id="stage"><nocap-secret id="chip" width="300" height="62"></nocap-secret></div>
+  <div class="body" id="stage">
+    <nocap-secret id="chip" width="300" height="62"></nocap-secret>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <div><div class="lbl" style="margin-bottom:5px">frame 1</div><canvas id="f1"></canvas></div>
+      <div><div class="lbl" style="margin-bottom:5px">frame 2</div><canvas id="f2"></canvas></div>
+    </div>
+  </div>
+  <p style="font-size:12.5px;color:var(--faint);margin:0;padding:0 16px 14px;text-align:center">
+    The two frames a capture can land on. With <b>fake</b> on each carries a
+    different decoy — you never see them live, because they cancel in the average
+    your eye computes. That is the point, and it is why the frames are shown here.
+  </p>
 
   <div class="knobs">
     <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
@@ -352,6 +363,25 @@ function apply() {
     `\n></nocap-secret>\n\nel.secret = await fetchAccountNumber();`;
 
   layout();
+  showFrames();
+}
+
+/**
+ * Draw the individual planes. The decoy is invisible while the element runs —
+ * that is the whole design — so without this the only way to see fake mode
+ * working is to take an actual screenshot.
+ */
+function showFrames() {
+  const planes = chip.planes;
+  if (!planes?.length) return;
+  for (const [i, id] of [[0, 'f1'], [1, 'f2']]) {
+    const cv = $(id);
+    if (!planes[i]) continue;
+    cv.width = planes[i].width; cv.height = planes[i].height;
+    cv.style.width = '272px'; cv.style.height = 'auto';
+    cv.getContext('2d').putImageData(
+      new ImageData(planes[i].data, planes[i].width, planes[i].height), 0, 0);
+  }
 }
 
 for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','fake','scr'])
@@ -444,6 +474,7 @@ $('avgBtn').onclick = async () => {
 
 /* ----------------------------------------------------------------- boot -- */
 apply();
+chip.addEventListener('render', () => setTimeout(showFrames, 60));
 reduce ? still() : play();
 let rt = 0;
 addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(layout, 200); });
