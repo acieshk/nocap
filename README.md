@@ -153,8 +153,15 @@ so lower perceived contrast is not a cosmetic compromise here — it is the thin
 that makes the technique work.
 
 `suggestConfig({ background, color, amplitude })` turns a page's palette into a
-config that blends and still masks, and reports `chromaRetained` so a suggestion
-cannot quietly grey out a brand palette and call it a match. The
+config that blends and still masks. It returns the colours to **author** (full
+range — the splitter compresses them) plus `perceivedColor` /
+`perceivedBackground` showing what they become, and `chromaRetained` so a
+suggestion cannot quietly grey out a brand palette and call it a match.
+
+Author full-range colours; do not pre-compress them into the band yourself. The
+splitter remaps every source pixel into `[amp, 255-amp]` already, so a
+pre-banded colour gets squeezed twice — red on white lands at `rgb(130,120,120)`
+instead of `rgb(159,96,96)`, i.e. grey instead of brick. The
 [live demo](https://acieshk.github.io/nocap/) recolours itself from two pickers
 and emits the matching snippet.
 

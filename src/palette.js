@@ -91,48 +91,66 @@ export function suggestConfig(design) {
       ? clamp(Math.round(design.amplitude), 0, 127)
       : clamp(Math.floor((255 - minContrast / usable) / 2), 24, 127);
   const band = { lo: amplitude, hi: 255 - amplitude };
-  const width = band.hi - band.lo;
-  const margin = width * 0.14;
 
-  // Preserve which of the two is lighter, so the design reads the same way.
+  // Author the colours as-is and let the splitter do the band compression.
+  //
+  // This used to place them inside the band here, which double-compressed them:
+  // the splitter remaps every source pixel into [amp, 255-amp] anyway, so a
+  // pre-banded colour got squeezed a second time. Red on white came out at
+  // rgb(130,120,120) — saturation 8, perceived contrast 11, i.e. grey on grey.
+  // Passing the authored colours straight through lands red at rgb(159,96,96):
+  // saturation 53, contrast 50.
+  //
+  // The band cube [lo, hi]^3 is the whole achievable gamut, and a linear remap
+  // puts a fully saturated input on its corner. Nothing here can beat that.
+  const outFgHex = toHex(toRgb(color));
+  const outBgHex = toHex(toRgb(background));
+  const span = (band.hi - band.lo) / 255;
+  const perceive = (c) => toRgb(c).map((v) => band.lo + v * span);
+  const outFg = perceive(outFgHex);
+  const outBg = perceive(outBgHex);
+
+  // A stroke is roughly an eighth of the glyph size at weight 600. Coarser noise
+  // resists a blur better but stops fusing below 120Hz, so this stays modest.
+  const noiseScale = clamp(Math.round(fontSize / 10), 2, 6);
+
   const pageBgLuma = luma(toRgb(background));
   const pageFgLuma = luma(toRgb(color));
-  const fgIsLighter = pageFgLuma >= pageBgLuma;
-
-  const bgTarget = fgIsLighter ? band.lo + margin : band.hi - margin;
-  const fgTarget = fgIsLighter ? band.hi - margin : band.lo + margin;
-
-  const outBg = placeInBand(background, bgTarget, band);
-  const outFg = placeInBand(color, fgTarget, band);
-
-  // A stroke is roughly an eighth of the glyph size at weight 600; noise coarser
-  // than that cannot be blurred away without destroying the text along with it.
-  const noiseScale = clamp(Math.round(fontSize / 8), 2, 10);
 
   const notes = [];
-  if (Math.abs(pageFgLuma - pageBgLuma) > 150) {
+  if (Math.abs(luma(outFg) - luma(outBg)) < 30) {
     notes.push(
-      'Your page contrast is high, so the secret will look noticeably softer than ' +
-        'surrounding text. Style it as an inset field and that reads as intentional.'
+      'Perceived contrast is low here. Lower the masking strength, or pick a ' +
+        'page pair further apart in lightness.'
     );
   }
   if (pageBgLuma < 40 || pageBgLuma > 215) {
     notes.push(
       `The secret's background cannot match a very dark or very light page — the ` +
-        `palette has to sit inside [${band.lo}, ${band.hi}]. Give the wrapper the ` +
-        `page background and let the chip sit on top of it.`
+        `perceived palette has to sit inside [${band.lo}, ${band.hi}]. Give the ` +
+        `wrapper the page background and let the chip sit on top of it.`
+    );
+  }
+  if (Math.abs(pageFgLuma - pageBgLuma) > 150) {
+    notes.push(
+      'Your page contrast is high, so the secret will look softer than surrounding ' +
+        'text. Styled as an inset field, that reads as intentional.'
     );
   }
   notes.push(
-    `Adaptive mode would reproduce your exact colours but cap amplitude at ` +
+    `Adaptive mode would reproduce these colours exactly but cap amplitude at ` +
       `${maxAmplitudeFor([color, background])}, which leaks badly. Not recommended here.`
   );
 
   return {
     amplitude,
     noiseScale,
-    color: toHex(outFg),
-    background: toHex(outBg),
+    // What to author — full range. The splitter compresses these.
+    color: outFgHex,
+    background: outBgHex,
+    // What they will actually look like once compressed into the band.
+    perceivedColor: toHex(outFg),
+    perceivedBackground: toHex(outBg),
     band,
     contrast: Math.round(Math.abs(luma(outFg) - luma(outBg))),
     chromaRetained: chromaRetained([color, background], [outFg, outBg]),

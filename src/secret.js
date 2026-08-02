@@ -1,5 +1,5 @@
 import { Flicker } from './flicker.js';
-import { leakScore } from './splitter.js';
+import { leakScore, planeRange } from './splitter.js';
 import { decryptSecret } from './vault.js';
 
 /**
@@ -109,7 +109,7 @@ export class NocapSecret extends HTMLElement {
     this.#canvas = document.createElement('canvas');
     this.#cover = document.createElement('div');
     this.#cover.className = 'cover';
-    this.#cover.style.setProperty('--cover', this.#palette.background);
+    this.#cover.style.setProperty('--cover', this.#perceived(this.#palette.background));
     this.#cover.textContent = this.getAttribute('placeholder') ?? 'hold to reveal';
     root.append(this.#canvas, this.#cover);
 
@@ -218,7 +218,7 @@ export class NocapSecret extends HTMLElement {
     this.#flicker.stop();
     // Overwrite the canvas — a stopped Flicker leaves the last plane on screen.
     const { ctx, canvas } = this.#flicker;
-    ctx.fillStyle = this.#palette.background;
+    ctx.fillStyle = this.#perceived(this.#palette.background);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.#cover.hidden = false;
     this.#revealed = false;
@@ -310,6 +310,24 @@ export class NocapSecret extends HTMLElement {
    * `adaptive` reproduces them exactly and caps amplitude to their headroom
    * instead; see maxAmplitudeFor().
    */
+  /**
+   * What an authored colour will actually look like: the splitter compresses
+   * every source pixel into [amplitude, 255-amplitude]. The cover has to use
+   * this, not the authored value, or the placeholder and the revealed canvas
+   * are visibly different colours.
+   */
+  #perceived(hex) {
+    const { lo, hi } = planeRange(this.#options());
+    const span = (hi - lo) / 255;
+    const s = String(hex).replace('#', '');
+    const full = s.length === 3 ? [...s].map((c) => c + c).join('') : s;
+    const out = [0, 2, 4]
+      .map((i) => Math.round(lo + (parseInt(full.slice(i, i + 2), 16) || 0) * span))
+      .map((v) => v.toString(16).padStart(2, '0'))
+      .join('');
+    return `#${out}`;
+  }
+
   get #palette() {
     return {
       color: this.getAttribute('color') ?? '#e8e8f0',

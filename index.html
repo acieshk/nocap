@@ -281,6 +281,11 @@
     <span>block <b id="rBlock">—</b></span>
     <span>perceived contrast <b id="rContrast">—</b></span>
     <span>brand colour kept <b id="rChroma">—</b></span>
+    <span>perceived
+      <b id="rSwatch" style="display:inline-flex;gap:3px;vertical-align:-2px">
+        <i style="width:13px;height:13px;border-radius:3px;display:inline-block"></i>
+        <i style="width:13px;height:13px;border-radius:3px;display:inline-block"></i>
+      </b></span>
     <span>band <b id="rBand">—</b></span>
   </div>
 </div>
@@ -496,6 +501,11 @@ function restyle() {
   $('rContrast').textContent = cfg.contrast;
   $('rChroma').textContent = `${Math.round(cfg.chromaRetained * 100)}%`;
   $('rBand').textContent = `[${cfg.band.lo}, ${cfg.band.hi}]`;
+  // The authored colours go on the element; these are what they become.
+  const sw = $('rSwatch').children;
+  sw[0].style.background = cfg.perceivedColor;
+  sw[1].style.background = cfg.perceivedBackground;
+  $('rSwatch').title = `${cfg.perceivedColor} on ${cfg.perceivedBackground}`;
 
   $('snippet').textContent =
     `<nocap-secret hold auto-hide="6"\n` +
