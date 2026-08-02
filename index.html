@@ -288,6 +288,7 @@
     <span>amplitude <b id="rAmp">—</b></span>
     <span>block <b id="rBlock">—</b></span>
     <span>perceived contrast <b id="rContrast">—</b></span>
+    <span>masking <b id="rMask">—</b></span>
     <span>brand colour kept <b id="rChroma">—</b></span>
     <span>perceived
       <b id="rSwatch" style="display:inline-flex;gap:3px;vertical-align:-2px">
@@ -513,6 +514,13 @@ function restyle() {
   $('rBlock').textContent = `${cfg.noiseScale}px`;
   $('rContrast').textContent = cfg.contrast;
   $('rChroma').textContent = `${Math.round(cfg.chromaRetained * 100)}%`;
+  // Ratio of carryable noise to text/background separation. Below 0.5 a single
+  // captured frame stays legible, so this is the number that decides whether
+  // the suggestion is worth shipping.
+  const m = cfg.masking;
+  $('rMask').textContent = `${m.ratio.toFixed(2)} ${m.grade}`;
+  $('rMask').style.color =
+    m.grade === 'good' ? '#6fa76f' : m.grade === 'fair' ? '#c2a15c' : '#d9885f';
   $('rBand').textContent = `[${cfg.band.lo}, ${cfg.band.hi}]`;
   // The authored colours go on the element; these are what they become.
   const sw = $('rSwatch').children;
