@@ -417,3 +417,26 @@ test('linear light keeps colours exact AND masks', async () => {
   // The shipped default palette has to be one the library would recommend.
   assert.equal(checkPalette({ color: '#9ea6b4', background: '#6b7280' }).grade, 'good');
 });
+
+test('a decoy can be derived from scrambled glyphs', async () => {
+  // scramble empties the plaintext and keeps glyphs out of order, so fake mode
+  // has to reassemble to know what shape to imitate. Guarding on the plaintext
+  // alone meant enabling both silently produced no decoy at all.
+  const { fakeLike, detectFormat } = await import('../src/fake.js');
+  const secret = '4471-0092-8834';
+  const pairs = [...secret].map((ch, i) => [ch, i]);
+  const rng = lcg(12);
+  for (let i = pairs.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+  }
+  const out = [];
+  pairs.forEach(([ch, slot]) => { out[slot] = ch; });
+  const reassembled = out.join('');
+
+  assert.equal(reassembled, secret, 'reassembly must restore the original order');
+  assert.equal(detectFormat(reassembled).kind, detectFormat(secret).kind);
+  const decoy = fakeLike(reassembled, { rng: lcg(13) });
+  assert.equal(decoy.length, secret.length);
+  assert.notEqual(decoy, secret);
+});

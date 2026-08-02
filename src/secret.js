@@ -196,8 +196,13 @@ export class NocapSecret extends ElementBase {
     const { color, background } = this.#palette;
     const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
     const fakeMode = this.getAttribute('fake');
-    if (fakeMode && fakeMode !== 'off' && this.#secret) {
-      await this.#drawFake(font, color, background, fakeMode);
+    // Scramble empties #secret and keeps the glyphs in #chars, so fake mode has
+    // to reassemble to know what shape to imitate. Guarding on #secret alone
+    // meant enabling both silently dropped the decoy — the mode looked on and
+    // did nothing.
+    const plain = this.#secret || this.#reassemble();
+    if (fakeMode && fakeMode !== 'off' && plain) {
+      await this.#drawFake(font, color, background, fakeMode, plain);
     } else if (this.#chars) {
       await this.#drawScrambled(font, color, background);
     } else {
@@ -317,8 +322,16 @@ export class NocapSecret extends ElementBase {
    * Where a pixel lacks the headroom to reach the decoy outright, it goes as far
    * as it can: clipping would break the zero-sum property and shift the colour.
    */
-  async #drawFake(font, color, background, mode) {
-    const decoy = fakeLike(this.#secret, { mode: mode === 'auto' ? 'auto' : mode });
+  /** Put the scrambled glyphs back in order. Only for deriving a decoy shape. */
+  #reassemble() {
+    if (!this.#chars) return '';
+    const out = [];
+    this.#chars.forEach((ch, i) => { out[this.#slots[i]] = ch; });
+    return out.join('');
+  }
+
+  async #drawFake(font, color, background, mode, plain) {
+    const decoy = fakeLike(plain, { mode: mode === 'auto' ? 'auto' : mode });
     this.#lastDecoy = decoy;
 
     // Swapping a glyph means travelling the whole text-to-background distance,
@@ -356,7 +369,7 @@ export class NocapSecret extends ElementBase {
       return ctx.getImageData(0, 0, w, h);
     };
 
-    const T = render(this.#secret);
+    const T = render(plain);
     // Offset by half an advance so decoy glyphs land between the real ones
     // rather than on top of them.
     const advance = measureAdvance(font);
@@ -396,7 +409,7 @@ export class NocapSecret extends ElementBase {
             'fake-placement="overlay" to replace glyphs instead (harder to read).'
         );
       }
-      return this.#flicker.setText(this.#secret, { font, color, background });
+      return this.#flicker.setText(plain, { font, color, background });
     }
 
     await this.#flicker.setPlanes([
