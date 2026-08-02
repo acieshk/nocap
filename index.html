@@ -6,10 +6,11 @@
 <title>nocap — anti-screenshot, anti-AI display for secrets</title>
 <meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single capture gets noise — and the text never enters the DOM.">
 <style>
-  /* Greyed to sit near the element's own #6b7280 background, so the secret
-     reads as part of the page rather than as a lighter patch stuck on it. */
-  :root { --bg:#3f444c; --fg:#e6e8ec; --muted:#c2c6cd; --faint:#9aa0a9; --line:#565c66;
-          --panel:#474d56; --panel2:#525863; --accent:#a8bcff; color-scheme: dark; }
+  /* Near black, with the panels stepping up toward the element's own #404040 so
+     the secret sits in a field rather than on a lighter patch. It cannot go all
+     the way to the page colour — see the note under the playground. */
+  :root { --bg:#0d0d0e; --fg:#dcdce2; --muted:#9d9da6; --faint:#75757e; --line:#2a2a2f;
+          --panel:#242427; --panel2:#303034; --accent:#7f9cff; color-scheme: dark; }
   * { box-sizing:border-box }
   body { margin:0; padding:0 20px 90px; background:var(--bg); color:var(--fg);
          font:15px/1.65 ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
@@ -106,6 +107,23 @@
   soon as it has a value — revealing on hover or hold is your product's job, not
   the library's.
 </p>
+<p style="font-size:13px">
+  <b>It is as dark as it can be, and it will not look like the page.</b> <code>#6d6d6d</code> on <code>#404040</code>
+  is the darkest pair that still reaches a masking ratio of 1.0 with enough
+  separation to read — go darker and the separation falls under 45 and the text
+  stops being legible, go much lighter and you are giving up contrast you did not
+  need to. It cannot match the page's near-black, because a near-black colour has
+  almost no swing to carry noise. That is the mid-tone panel the README argues
+  for, in practice.
+</p>
+<p style="font-size:13px">
+  If the colours look off against a near-black page, that is simultaneous
+  contrast rather than the split: the same physical grey reads lighter on a dark
+  surround than on a mid one. The split itself is exact — every authored colour
+  above round-trips to itself, verifiable with the perceived swatches. Step your
+  panel between the page and the secret, as this one does, and the mismatch goes
+  away without touching the palette.
+</p>
 
 <div class="rig">
   <div class="bar" id="presets">
@@ -131,8 +149,8 @@
 
   <div class="knobs">
     <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
-    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#9ea6b4"></label>
-    <label class="f"><span>Background</span><input type="color" id="bg" value="#6b7280"></label>
+    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
+    <label class="f"><span>Background</span><input type="color" id="bg" value="#404040"></label>
     <label class="f"><span>Amplitude <em id="ampV">110</em></span>
       <input type="range" id="amp" min="30" max="127" value="110"></label>
     <label class="f"><span>Noise block <em id="blkV">4</em>px</span>
@@ -364,10 +382,10 @@ const play = () => {
 /* ------------------------------------------------------------ playground -- */
 const chip = $('chip');
 const PRESETS = {
-  balanced: { amp:110, blk:4, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'',     scr:'' },
-  strong:   { amp:127, blk:6, hard:1,   chr:0, fg:'#a4a4a4', bg:'#8a8a8a', fake:'',     scr:'1' },
-  readable: { amp:80,  blk:3, hard:0.5, chr:0, fg:'#b4bcc8', bg:'#6b7280', fake:'',     scr:'' },
-  decoy:    { amp:110, blk:4, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'auto', scr:'' },
+  balanced: { amp:110, blk:4, hard:1,   chr:0, fg:'#6d6d6d', bg:'#404040', fake:'',     scr:'' },
+  strong:   { amp:127, blk:6, hard:1,   chr:0, fg:'#8f8f8f', bg:'#5a5a5a', fake:'',     scr:'1' },
+  readable: { amp:80,  blk:3, hard:0.5, chr:0, fg:'#7a7a7a', bg:'#484848', fake:'',     scr:'' },
+  decoy:    { amp:110, blk:4, hard:1,   chr:0, fg:'#6d6d6d', bg:'#404040', fake:'auto', scr:'' },
   // Deliberately bad: exact colours, and a screenshot reads it outright.
   broken:   { amp:110, blk:4, hard:1,   chr:0, fg:'#e8e8f0', bg:'#14141a', fake:'',     scr:'' },
 };
