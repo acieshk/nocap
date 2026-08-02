@@ -6,7 +6,7 @@
 
 Splits content into frames that alternate at your display's refresh rate. Each
 frame is noise; their *mean* is the content. Your visual system does the
-averaging, so you read it — a single screenshot does not, and passphrase payloads round-trip while a wrong passphrase throws.
+averaging, so you read it — a single screenshot does not.
 
 The text never enters the DOM, so page-reading AI agents and scrapers get
 nothing at all.
@@ -215,13 +215,13 @@ copies still land on exactly the same pixels and cancel.
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
 | `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
 | `amplitude` | `96` | Fraction of the headroom the colours allow. |
-| `noise-scale` | `3` | Noise block in px. Higher resists blur, strobes below 120Hz. |
+| `noise-scale` | `3 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz. |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |
 | `frames` | `2` | Planes per cycle. 2 is almost always right. |
-| `contrast` | `2.6` | Pre-emphasis to claw back the band compression. |
+| `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress. |
 | `chroma` | `0` | 0 = grey noise, 1 = independent per channel. |
 | `hardness` | `0.5` | 1 slams every pixel to ±amplitude; lower keeps noise near the background. |
-| `color` / `background` | `#e8e8f0` / `#14141a` | Authored palette. |
+| `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable — see below. |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom. |
 | `width` / `height` | `260` / `56` | CSS pixels. |
 
@@ -305,10 +305,10 @@ and both DevTools attacks running for real.
 npm test
 ```
 
-41 tests: the planes average back to the source at every amplitude and mode, no
+45 tests: the planes average back to the source at every amplitude and mode, no
 plane leaks, clipping never breaks the zero-sum property, the leak ordering
 holds, adaptive colour is exact, and coarse blocks resist a blur that fine noise
-does not, and passphrase payloads round-trip while a wrong passphrase throws.
+does not.
 
 ## License
 

@@ -1,5 +1,5 @@
 import { Flicker } from './flicker.js';
-import { leakScore, planeRange } from './splitter.js';
+import { leakScore, planeRange, averageFrames } from './splitter.js';
 import { checkPalette, toLight, toCode } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
@@ -232,8 +232,11 @@ export class NocapSecret extends ElementBase {
   measureLeak() {
     const planes = this.#flicker?.planes ?? [];
     if (!planes.length) return null;
-    const mean = planes[0];
-    return Math.max(...planes.map((p) => leakScore(p, mean)));
+    // Against the MEAN, not plane 0. Scoring plane 0 against itself is a
+    // correlation of a vector with itself, so Math.max always returned 1.0 and
+    // the method carried no information at any setting.
+    const target = averageFrames(planes);
+    return Math.max(...planes.map((p) => leakScore(p, target)));
   }
 
   /**
@@ -469,6 +472,20 @@ export class NocapSecret extends ElementBase {
     }, 800);
   }
 
+  /**
+   * Block size follows the stroke, which follows devicePixelRatio.
+   *
+   * The font is derived from the canvas height in DEVICE pixels, so stroke width
+   * doubles on a 2x display. A block pinned at 3 device px therefore halves the
+   * block-to-stroke ratio there — and that ratio is what decides whether a blur
+   * helps the attacker. Measured on the default palette: stroke 3 leaks 0.30
+   * under a blur, stroke 8 with the same block leaks 0.58, same settings.
+   */
+  #defaultBlock() {
+    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    return Math.max(TEXT_DEFAULTS.noiseScale, Math.round(TEXT_DEFAULTS.noiseScale * dpr));
+  }
+
   #options() {
     const num = (name, fallback) =>
       this.hasAttribute(name) ? +this.getAttribute(name) : fallback;
@@ -477,7 +494,7 @@ export class NocapSecret extends ElementBase {
       amplitude: num('amplitude', TEXT_DEFAULTS.amplitude),
       frames: num('frames', TEXT_DEFAULTS.frames),
       contrast: num('contrast', TEXT_DEFAULTS.contrast),
-      noiseScale: num('noise-scale', TEXT_DEFAULTS.noiseScale),
+      noiseScale: num('noise-scale', this.#defaultBlock()),
       chroma: num('chroma', TEXT_DEFAULTS.chroma),
       gamma: num('gamma', TEXT_DEFAULTS.gamma),
       hardness: num('hardness', TEXT_DEFAULTS.hardness),

@@ -440,3 +440,43 @@ test('a decoy can be derived from scrambled glyphs', async () => {
   assert.equal(decoy.length, secret.length);
   assert.notEqual(decoy, secret);
 });
+
+/* ------------------------------------------------------------ regressions -- */
+
+test('measureLeak scores against the mean, not plane 0', async () => {
+  // It compared plane 0 with itself, which is a correlation of 1 by definition,
+  // so Math.max returned 1.0 at every setting and the number meant nothing.
+  const src = sceneImage(64, 64);
+  const planes = splitFrames(src, { frames: 2, amplitude: 96, linearLight: true, rng: lcg(41) });
+  const target = averageFrames(planes);
+  assert.equal(leakScore(planes[0], planes[0]), 1, 'self-correlation must be 1');
+  assert.ok(Math.max(...planes.map((p) => leakScore(p, target))) < 0.9,
+    'against the mean the leak must be informative');
+});
+
+test('the documented defaults are the shipped defaults', async () => {
+  // The README table drifted twice: it published a palette the code rejects as
+  // unmaskable, and a contrast value from before linear light removed the band.
+  const readme = await (await import('node:fs/promises')).readFile(
+    new URL('../README.md', import.meta.url), 'utf8');
+  const secret = await (await import('node:fs/promises')).readFile(
+    new URL('../src/secret.js', import.meta.url), 'utf8');
+
+  const palette = secret.match(/getAttribute\('color'\) \?\? '(#[0-9a-f]{6})'/)[1];
+  const background = secret.match(/getAttribute\('background'\) \?\? '(#[0-9a-f]{6})'/)[1];
+  assert.ok(readme.includes(palette), `README does not document color ${palette}`);
+  assert.ok(readme.includes(background), `README does not document background ${background}`);
+
+  for (const key of ['amplitude', 'contrast', 'hardness', 'chroma']) {
+    const value = secret.match(new RegExp(`^\\s*${key}: ([\\d.]+),`, 'm'))[1];
+    assert.ok(readme.includes(`| \`${key}\` | \`${value}\``),
+      `README documents a different ${key} than the code's ${value}`);
+  }
+});
+
+test('the shipped default palette is one checkPalette accepts', async () => {
+  const { checkPalette } = await import('../src/palette.js');
+  assert.equal(checkPalette({ color: '#9ea6b4', background: '#6b7280' }).grade, 'good');
+  // And the pair the README used to document is genuinely unusable.
+  assert.equal(checkPalette({ color: '#e8e8f0', background: '#14141a' }).grade, 'weak');
+});
