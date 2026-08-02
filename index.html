@@ -306,8 +306,32 @@ function still() {
 // Autoplaying flicker is what a reduced-motion preference exists for: show the
 // mean statically instead, which is literally what the eye resolves.
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let timer = 0;
-const play = () => { hero.start(); capture(); clearInterval(timer); timer = setInterval(capture, 1000); };
+/**
+ * Capture on a cycle boundary, never mid-cycle.
+ *
+ * getImageData forces a GPU->CPU sync, which stalls the rAF loop long enough to
+ * drop a frame. A frame dropped MID-cycle presents one plane twice in a row, so
+ * the pair goes unbalanced and you see a luminance flash — once a second,
+ * matching the old setInterval, and much worse on a phone where the readback
+ * costs more. Landing the stall between cycles keeps both planes of every cycle
+ * presented equally, so a dropped frame costs a little shimmer instead.
+ */
+let lastCapture = 0;
+function captureOnBoundary(now) {
+  if (!hero.running) return;
+  requestAnimationFrame(captureOnBoundary);
+  if (now - lastCapture < 1000) return;
+  // hero presents plane 0 when its phase is 0, so wait for the wrap.
+  if (hero._phase !== 0) return;
+  lastCapture = now;
+  capture();
+}
+const play = () => {
+  hero.start();
+  capture();
+  lastCapture = performance.now();
+  requestAnimationFrame(captureOnBoundary);
+};
 
 /* ------------------------------------------------------------ playground -- */
 const chip = $('chip');

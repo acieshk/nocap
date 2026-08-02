@@ -23,11 +23,11 @@ import { splitFrames } from './splitter.js';
 export const STRENGTHS = {
   // Easiest to read, and the only one that fuses comfortably on a slow 60Hz
   // panel. A single frame still leaks noticeably more.
-  weak: { amplitude: 80, noiseScale: 2, hardness: 0.5 },
-  medium: { amplitude: 110, noiseScale: 3, hardness: 1 },
+  weak: { amplitude: 80, noiseScale: 3, hardness: 0.5 },
+  medium: { amplitude: 110, noiseScale: 4, hardness: 1 },
   // Coarser noise resists a blur best but sits at a low spatial frequency,
   // where the eye's temporal sensitivity peaks — wants 120Hz+ to fuse.
-  strong: { amplitude: 127, noiseScale: 5, hardness: 1 },
+  strong: { amplitude: 127, noiseScale: 6, hardness: 1 },
 };
 
 const TEXT_DEFAULTS = {
@@ -74,9 +74,15 @@ const TEXT_DEFAULTS = {
   // planes — big blocks strobe instead of fusing and the text is unreadable.
   // Fine noise sits near the eye's spatial limit and fuses.
   //
-  // Legibility wins by default; raise noise-scale toward the stroke width only
-  // if you know the display runs at 120Hz+.
-  noiseScale: 3,
+  // 4, not 3. Below about 4 the noise is fine enough that a small blur starts
+  // separating it from the strokes, and on a high-dpr phone the rendered stroke
+  // is wide enough that a 3px block is well under it. 4 is the floor where the
+  // block-to-stroke ratio still does useful work at the sizes text is actually
+  // rendered at.
+  //
+  // Legibility still wins over going coarser: raise noise-scale toward the full
+  // stroke width only if you know the display runs at 120Hz+.
+  noiseScale: 4,
   bankSize: 6,
 };
 
