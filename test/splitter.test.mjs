@@ -581,7 +581,12 @@ test('the viewer-facing mean is taken in light, not in code', async () => {
     assert.ok(Math.abs(perceivedMean(planes).data[0] - v) < 2,
       `perceivedMean drifted at ${v}: ${perceivedMean(planes).data[0]}`);
     // And the code mean must be the darker one, or the bug has come back.
-    assert.ok(averageFrames(planes).data[0] < v - 2,
-      `averageFrames should read dark at ${v}, the whole reason this exists`);
+    // Only checked away from black: a near-black pixel has almost no swing, so
+    // there is barely any spread for convexity to act on and the gap is under a
+    // level. That is the same headroom limit that makes dark colours mask badly.
+    if (v >= 0x40) {
+      assert.ok(averageFrames(planes).data[0] < v - 10,
+        `averageFrames should read dark at ${v}, the whole reason this exists`);
+    }
   }
 });
