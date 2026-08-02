@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap — perceptual calibration</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 24px 60px; background: #17171a; color: #d6d6dd;
+         font: 14px/1.6 ui-sans-serif, system-ui, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  p { color: #9a9aa6; margin: 0 0 12px; }
+  .muted { color: #6d6d78; font-size: 13px; }
+  kbd { font: 600 11.5px ui-monospace, monospace; background: #26262e; color: #c3c3d0;
+        border: 1px solid #3a3a46; border-bottom-width: 2px; border-radius: 4px; padding: 2px 6px; }
+
+  /* Edge-to-edge: a seam is far easier to null than two separated patches. */
+  .stage { display: flex; justify-content: center; margin: 26px 0 14px; }
+  .pair { display: flex; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #2a2a33; }
+  canvas, .ref { display: block; width: 190px; height: 190px; image-rendering: pixelated; }
+
+  .bar { display: flex; align-items: center; gap: 14px; justify-content: center;
+         flex-wrap: wrap; margin-bottom: 8px; }
+  input[type=range] { width: 320px; accent-color: #6b8afd; }
+  button { background: #21212a; color: #d6d6dd; border: 1px solid #34343f; border-radius: 6px;
+           padding: 7px 14px; font: inherit; cursor: pointer; }
+  button:hover { background: #2a2a35; }
+  button.primary { background: #2f4bd0; border-color: #4560e0; color: #fff; }
+  .progress { font-family: ui-monospace, monospace; font-size: 12px; color: #6d6d78; text-align: center; }
+  pre { background: #101014; border: 1px solid #24242c; border-radius: 8px; padding: 14px;
+        font-size: 11.5px; color: #b8b8c4; overflow: auto; max-height: 260px; }
+  .hidden { display: none; }
+  .note { border-left: 2px solid #7a6134; background: #17140d; padding: 10px 14px;
+          color: #b39463; font-size: 13px; margin: 14px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Perceptual calibration</h1>
+<p>
+  The left square flickers; the right one is static. <b>Adjust the right square
+  until the seam between them disappears</b> — until it looks like one solid
+  block. Sit at your normal viewing distance and don't lean in; this is a
+  whole-field match, not a pixel-peeping task.
+</p>
+<p class="muted">
+  <kbd>←</kbd> <kbd>→</kbd> adjust · <kbd>Shift</kbd> + arrows for fine steps ·
+  <kbd>Enter</kbd> to accept · <kbd>Space</kbd> to skip a trial you can't null.
+</p>
+
+<div id="test">
+  <div class="stage">
+    <div class="pair">
+      <canvas id="flick" width="190" height="190"></canvas>
+      <div class="ref" id="ref"></div>
+    </div>
+  </div>
+  <div class="bar">
+    <input type="range" id="match" min="0" max="255" step="1" value="128">
+    <button class="primary" id="accept">Accept →</button>
+    <button id="skip">Skip</button>
+  </div>
+  <div class="progress" id="progress"></div>
+</div>
+
+<div id="done" class="hidden">
+  <div class="note">
+    Done. Save the JSON below and run <code>node tools/fit.mjs &lt;file&gt;</code>
+    to fit the correction curve.
+  </div>
+  <div class="bar">
+    <button class="primary" id="download">Download JSON</button>
+    <button id="copy">Copy to clipboard</button>
+    <button id="again">Run again</button>
+  </div>
+  <pre id="out"></pre>
+</div>
+
+</div>
+
+<script type="module">
+import { Flicker } from '../src/index.js';
+
+/* Trials span the value range at two amplitudes. If the mismatch is gamma, the
+   error should be largest at mid-grey and at high amplitude, and near zero at
+   amplitude 0 — which is the control that checks your matching accuracy. */
+const BASES = [64, 96, 128, 160, 192];
+const AMPS = [0, 48, 96];
+const TRIALS = [];
+for (const amplitude of AMPS) for (const base of BASES) TRIALS.push({ base, amplitude });
+
+// Grey alone cannot reveal a per-channel error, and phosphors do not share one
+// gamma exactly. These match a single channel at a time: you adjust only that
+// channel of the reference, so any red/green/blue-specific offset shows up.
+const HUES = [
+  { name: 'red', rgb: [200, 40, 40], channel: 0 },
+  { name: 'green', rgb: [40, 170, 80], channel: 1 },
+  { name: 'blue', rgb: [60, 90, 210], channel: 2 },
+];
+for (const h of HUES) for (const amplitude of [96]) TRIALS.push({ ...h, amplitude });
+// Interleave so fatigue and drift don't correlate with one condition.
+TRIALS.sort((a, b) => ((a.base * 7 + a.amplitude * 13) % 11) - ((b.base * 7 + b.amplitude * 13) % 11));
+
+const $ = (id) => document.getElementById(id);
+const flick = new Flicker($('flick'), { frames: 2, chroma: 0, hardness: 1, noiseScale: 3, contrast: 1 });
+flick.resize(190, 190);
+
+let i = 0;
+const results = [];
+
+function solid(rgb) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+  x.fillRect(0, 0, 64, 64);
+  return c;
+}
+
+/** The channel under test starts at `v`; the others stay at their true value. */
+function refColor(t, v) {
+  if (t.rgb == null) return [v, v, v];
+  const out = [...t.rgb];
+  out[t.channel] = v;
+  return out;
+}
+
+const baseOf = (t) => (t.rgb == null ? t.base : t.rgb[t.channel]);
+
+async function load() {
+  const t = TRIALS[i];
+  // adaptive:true so the patch is exactly `base` with no range compression —
+  // otherwise we would be measuring the remap, not the eye.
+  // adaptive, NOT linearLight: this trial has to measure the raw sRGB-averaging
+  // error, which is the thing the linear-light split is meant to cancel.
+  await flick.configure({ amplitude: t.amplitude, adaptive: true, linearLight: false });
+  await flick.setSource(solid(t.rgb ?? [t.base, t.base, t.base]));
+  flick.start();
+
+  // Start the match away from the answer so the first guess carries no signal.
+  const start = Math.max(0, Math.min(255, baseOf(t) + (i % 2 ? 40 : -40)));
+  $('match').value = start;
+  paint();
+  $('progress').textContent = `trial ${i + 1} of ${TRIALS.length}`;
+}
+
+function paint() {
+  const [r, g, b] = refColor(TRIALS[i], +$('match').value);
+  $('ref').style.background = `rgb(${r},${g},${b})`;
+}
+
+function record(skipped) {
+  const t = TRIALS[i];
+  results.push({
+    base: baseOf(t),
+    hue: t.name ?? 'grey',
+    channel: t.channel ?? null,
+    amplitude: t.amplitude,
+    matched: skipped ? null : +$('match').value,
+    error: skipped ? null : +$('match').value - baseOf(t),
+    refreshHz: flick.stats.refreshHz,
+    cycleHz: flick.stats.cycleHz,
+  });
+  i++;
+  if (i < TRIALS.length) load();
+  else finish();
+}
+
+function finish() {
+  flick.stop();
+  $('test').classList.add('hidden');
+  $('done').classList.remove('hidden');
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    devicePixelRatio,
+    refreshHz: Math.round(results.reduce((a, r) => a + r.refreshHz, 0) / results.length),
+    userAgent: navigator.userAgent,
+    trials: results,
+  };
+  $('out').textContent = JSON.stringify(payload, null, 2);
+  $('download').onclick = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    Object.assign(document.createElement('a'), { href: url, download: 'nocap-calibration.json' }).click();
+    URL.revokeObjectURL(url);
+  };
+  $('copy').onclick = () => navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+  $('again').onclick = () => location.reload();
+}
+
+$('match').oninput = paint;
+$('accept').onclick = () => record(false);
+$('skip').onclick = () => record(true);
+
+addEventListener('keydown', (e) => {
+  if (i >= TRIALS.length) return;
+  const step = e.shiftKey ? 1 : 4;
+  if (e.key === 'ArrowLeft') { $('match').value = +$('match').value - step; paint(); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { $('match').value = +$('match').value + step; paint(); e.preventDefault(); }
+  else if (e.key === 'Enter') { record(false); e.preventDefault(); }
+  else if (e.key === ' ') { record(true); e.preventDefault(); }
+});
+
+await load();
+</script>
+</body>
+</html>

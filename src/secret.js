@@ -17,7 +17,14 @@ const TEXT_DEFAULTS = {
   // 35 levels of contrast — legible in a still, but far too washed out to read
   // through a live 30Hz alternation. 96 gives 63 levels for a modest leak cost.
   amplitude: 96,
-  contrast: 2.6,
+  // Split in light, not in code values. This is what makes `color` and
+  // `background` mean what they say: the planes are offset in linear light, so
+  // the mean the eye integrates is exactly the authored colour. Averaging in
+  // sRGB instead reads far too bright — #ff0000 arrives as #be8c8c.
+  linearLight: true,
+  gamma: 2.2,
+  // No band compression under linearLight, so no pre-emphasis to claw back.
+  contrast: 1,
   // Noise magnitude spread. 1 slams every pixel to +/-amplitude, which is the
   // strongest mask but reads as harsh confetti. 0.5 clusters deviations near the
   // background — same measured leak as chroma:1/hardness:1 used to give, about a
@@ -77,6 +84,7 @@ export class NocapSecret extends HTMLElement {
     'noise-scale',
     'chroma',
     'hardness',
+    'gamma',
     'color',
     'background',
     'adaptive',
@@ -311,6 +319,7 @@ export class NocapSecret extends HTMLElement {
       contrast: num('contrast', TEXT_DEFAULTS.contrast),
       noiseScale: num('noise-scale', TEXT_DEFAULTS.noiseScale),
       chroma: num('chroma', TEXT_DEFAULTS.chroma),
+      gamma: num('gamma', TEXT_DEFAULTS.gamma),
       hardness: num('hardness', TEXT_DEFAULTS.hardness),
       adaptive: this.hasAttribute('adaptive'),
     };
@@ -331,6 +340,9 @@ export class NocapSecret extends HTMLElement {
    */
   #perceived(hex) {
     const { lo, hi } = planeRange(this.#options());
+    // linearLight and adaptive both return the full range, i.e. no compression,
+    // so the authored colour is already what you see.
+    if (lo === 0 && hi === 255) return hex;
     const span = (hi - lo) / 255;
     const s = String(hex).replace('#', '');
     const full = s.length === 3 ? [...s].map((c) => c + c).join('') : s;

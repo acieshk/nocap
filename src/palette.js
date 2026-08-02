@@ -105,8 +105,11 @@ export function suggestConfig(design) {
   // puts a fully saturated input on its corner. Nothing here can beat that.
   const outFgHex = toHex(toRgb(color));
   const outBgHex = toHex(toRgb(background));
+  // Under linearLight (the component default) the planes are offset in light,
+  // so nothing is compressed and the perceived colour is the authored one.
+  const linear = design.linearLight ?? true;
   const span = (band.hi - band.lo) / 255;
-  const perceive = (c) => toRgb(c).map((v) => band.lo + v * span);
+  const perceive = (c) => (linear ? toRgb(c) : toRgb(c).map((v) => band.lo + v * span));
   const outFg = perceive(outFgHex);
   const outBg = perceive(outBgHex);
 
@@ -149,6 +152,7 @@ export function suggestConfig(design) {
     // hardness keeps deviations near the background instead of at the extremes.
     chroma: design.chroma ?? 0,
     hardness: design.hardness ?? 0.5,
+    linearLight: linear,
     // What to author — full range. The splitter compresses these.
     color: outFgHex,
     background: outBgHex,

@@ -52,7 +52,9 @@ export function planeRange(opts = {}) {
   const cfg = resolveCfg(opts);
   // Adaptive mode does not compress: it caps amplitude per pixel instead, so
   // the perceived colours come out exactly as authored.
-  if (cfg.adaptive) return { lo: 0, hi: 255 };
+  // Neither adaptive nor linear-light compresses: both keep authored colours
+  // exact and cap the swing per pixel instead.
+  if (cfg.adaptive || cfg.linearLight) return { lo: 0, hi: 255 };
   if (!carriesOnePlane(cfg.mode)) return { lo: cfg.amplitude, hi: 255 - cfg.amplitude };
 
   // carrier = n*v - (n-1)*fill must land in [amp, 255-amp] so stacked noise
@@ -92,6 +94,14 @@ function resolveCfg(opts = {}) {
     // Keep authored colours exact by capping amplitude per pixel to its own
     // headroom, instead of compressing everything into [amp, 255-amp].
     adaptive: opts.adaptive ?? false,
+    // Average in light, not in code values. A display emits light proportional
+    // to (v/255)^gamma and the eye integrates light, so alternating v±d in sRGB
+    // reads BRIGHTER than v — at amplitude 96 around mid-grey, 128 looks like
+    // ~163. Splitting in linear light makes the perceived colour exactly the
+    // authored one, which is the only way "set the perceived background" can
+    // mean anything.
+    linearLight: opts.linearLight ?? false,
+    gamma: opts.gamma ?? 2.2,
     hardness: clamp(opts.hardness ?? 1, 0, 1),
     chroma: clamp(opts.chroma ?? 1, 0, 1),
     noiseScale: Math.max(1, Math.floor(opts.noiseScale ?? 1)),
@@ -160,25 +170,40 @@ function fillModulated(planes, target, cfg) {
       const p = (y * w + x) * 4;
       for (let c = 0; c < 3; c++) {
         const v = t[p + c];
-        // A pixel at value v can only carry ±min(v, 255-v) before it clips, and
-        // clipping breaks the zero-sum property that makes the mean come out
-        // right. Adaptive mode respects that ceiling per pixel rather than
-        // buying uniform headroom by compressing the whole image.
-        const amp = cfg.adaptive ? Math.min(cfg.amplitude, v, 255 - v) : cfg.amplitude;
         const { phase, mag } = draws(x, y, c);
-        // n === 2 -> +/-r. All energy at one magnitude, the strongest mask you
-        // can build for a given amplitude.
-        // n  >  2 -> r*cos(2*PI*(phase + k/n)). Sums to exactly zero over k,
-        // and unlike a permutation of [+amp, 0, -amp] it never leaves a plane
-        // holding a clean, unmasked pixel.
-        const r = amp * (cfg.hardness + (1 - cfg.hardness) * mag);
+
+        // Normalised zero-sum offsets in [-1, 1], scaled per pixel below.
+        // n === 2 -> +/-r, all energy at one magnitude: the strongest mask for
+        // a given budget. n > 2 -> r*cos(2*PI*(phase + k/n)), which sums to
+        // exactly zero and never leaves a plane holding a clean pixel.
+        const r = cfg.hardness + (1 - cfg.hardness) * mag;
         if (n === 2) {
           off[0] = phase < 0.5 ? -r : r;
           off[1] = -off[0];
         } else {
           for (let k = 0; k < n; k++) off[k] = r * Math.cos(2 * Math.PI * (phase + k / n));
         }
-        for (let k = 0; k < n; k++) planes[k].data[p + c] = t[p + c] + off[k];
+
+        if (cfg.linearLight) {
+          // Offset in light. The mean of the planes' *emitted light* is then
+          // exactly the target's, so the patch reads as the authored colour
+          // instead of the ~35-levels-too-bright value sRGB averaging gives.
+          // Headroom is per pixel, so nothing clips and no band is needed —
+          // but a near-black or near-white pixel has almost none, and carries
+          // almost no noise. Mid-tones are what buy masking.
+          const L = Math.pow(v / 255, cfg.gamma);
+          const swing = (cfg.amplitude / MAX_AMP) * Math.min(L, 1 - L);
+          for (let k = 0; k < n; k++) {
+            const lit = clamp(L + off[k] * swing, 0, 1);
+            planes[k].data[p + c] = 255 * Math.pow(lit, 1 / cfg.gamma);
+          }
+        } else {
+          // A pixel at v can only carry ±min(v, 255-v) before it clips, and
+          // clipping breaks the zero-sum property. Adaptive respects that
+          // ceiling per pixel; otherwise the source was compressed for it.
+          const amp = cfg.adaptive ? Math.min(cfg.amplitude, v, 255 - v) : cfg.amplitude;
+          for (let k = 0; k < n; k++) planes[k].data[p + c] = v + off[k] * amp;
+        }
       }
     }
   }
