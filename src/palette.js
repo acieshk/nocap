@@ -3,23 +3,21 @@ import { maxAmplitudeFor } from './splitter.js';
 /**
  * Fitting a secret into an existing design.
  *
- * The hard constraint: a pixel at value v can only carry ±min(v, 255-v) of noise
- * before it clips, and clipping breaks the zero-sum property that makes the mean
- * come out right. So the perceived palette has to live inside
- * [amplitude, 255-amplitude] — a band centred on mid-grey that *narrows as
- * masking gets stronger*.
+ * Under the default linear-light split there is no band and no compression:
+ * authored colours are reproduced exactly, so the secret's background can equal
+ * the page background and the two become indistinguishable. The earlier advice
+ * that it could not is obsolete — that was a consequence of compressing into
+ * [amplitude, 255-amplitude], which linear light removed.
  *
- * Two consequences worth stating plainly, because they surprise people:
+ * What survives is the real constraint, and it is about protection rather than
+ * appearance: a colour can only carry noise up to min(L, 1-L) of its own emitted
+ * light. Light is heavily compressed at the dark end, so #101014 has under 1% of
+ * headroom while a mid-tone has nearly all of it. Exact colours are free; the
+ * masking that comes with them is not.
  *
- *   1. The secret's background cannot equal a near-black or near-white page
- *      background. At amplitude 96 the band is [96, 159]; a #0a0a0c page simply
- *      is not in it. Style the secret as an inset field — a chip that reads as a
- *      form input rather than as body text — and the difference looks deliberate.
- *
- *   2. Masking needs the noise to exceed the text/background separation. White
- *      on black gives 255 of separation and 0 of headroom, so it is unmaskable.
- *      Lower perceived contrast is not a cosmetic compromise here; it is the
- *      thing that makes the technique work.
+ * Practical consequence: put the secret on a mid-tone panel. It then matches its
+ * surroundings exactly AND has room to be protected. A near-black page chrome is
+ * fine — just not directly behind the secret.
  */
 
 const LUMA = [0.2126, 0.7152, 0.0722];
@@ -127,11 +125,18 @@ export function suggestConfig(design) {
         'page pair further apart in lightness.'
     );
   }
-  if (pageBgLuma < 40 || pageBgLuma > 215) {
+  const weakest = Math.min(swingFor(color), swingFor(background));
+  if (weakest < 0.08) {
     notes.push(
-      `The secret's background cannot match a very dark or very light page — the ` +
-        `perceived palette has to sit inside [${band.lo}, ${band.hi}]. Give the ` +
-        `wrapper the page background and let the chip sit on top of it.`
+      `The secret's background now matches your page exactly — linear light removed ` +
+        `the old restriction — but at ${(weakest * 200).toFixed(0)}% noise headroom it ` +
+        `is barely masked. Put the secret on a mid-tone panel inside the page and it ` +
+        `both blends and protects.`
+    );
+  } else if (weakest < 0.2) {
+    notes.push(
+      `Colours reproduce exactly and masking here is fair (${(weakest * 200).toFixed(0)}% ` +
+        `headroom). A slightly more mid-tone panel would protect it better.`
     );
   }
   if (Math.abs(pageFgLuma - pageBgLuma) > 150) {
@@ -186,4 +191,54 @@ function chromaRetained(before, after) {
 
 function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v;
+}
+
+/* -------------------------------------------------------------------------- */
+
+/** sRGB EOTF: code value -> emitted light. Piecewise, linear near black. */
+export function toLight(v) {
+  const s = clamp(v, 0, 255) / 255;
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+/**
+ * How much noise a colour can carry, 0..1, once the split runs in linear light.
+ *
+ * This is the number that decides whether a palette can be protected at all,
+ * and it is not visible from the hex. Light is heavily compressed at the dark
+ * end, so #101014 sits at under 1% of full output and has almost no room either
+ * side — you get exactly the colour you asked for and almost no masking with it.
+ * A mid-tone sits near 0.5 and has the most room in both directions.
+ */
+export function swingFor(color) {
+  const L = Math.max(...toRgb(color).map(toLight));
+  return Math.min(L, 1 - L);
+}
+
+/**
+ * Check a palette before shipping it.
+ *
+ * The library cannot buy headroom that a colour does not have, so rather than
+ * silently under-protecting a dark palette this reports what is achievable and
+ * says so plainly.
+ *
+ * @returns {{fgSwing:number, backgroundSwing:number, weakest:number,
+ *            grade:'good'|'fair'|'weak', warnings:string[]}}
+ */
+export function checkPalette({ color, background }) {
+  const fgSwing = swingFor(color);
+  const backgroundSwing = swingFor(background);
+  const weakest = Math.min(fgSwing, backgroundSwing);
+  const grade = weakest >= 0.2 ? 'good' : weakest >= 0.08 ? 'fair' : 'weak';
+
+  const warnings = [];
+  if (grade !== 'good') {
+    const which = fgSwing < backgroundSwing ? 'text' : 'background';
+    warnings.push(
+      `The ${which} colour sits at ${(Math.min(fgSwing, backgroundSwing) * 200).toFixed(0)}% ` +
+        `of the available noise headroom. Colours are reproduced exactly, but masking ` +
+        `here is ${grade}. Move it toward the mid-tones to protect it properly.`
+    );
+  }
+  return { fgSwing, backgroundSwing, weakest, grade, warnings };
 }

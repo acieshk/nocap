@@ -1,6 +1,7 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange } from './splitter.js';
 import { decryptSecret } from './vault.js';
+import { checkPalette } from './palette.js';
 
 /**
  * Text-tuned defaults.
@@ -102,6 +103,7 @@ export class NocapSecret extends HTMLElement {
   #cover = null;
   #hideTimer = 0;
   #revealed = false;
+  #paletteWarned = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -222,6 +224,7 @@ export class NocapSecret extends HTMLElement {
     const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
     if (this.#chars) await this.#drawScrambled(font, color, background);
     else await this.#flicker.setText(this.#secret, { font, color, background });
+    this.#warnPalette();
     this.#cover.hidden = true;
     this.#revealed = true;
     this.#flicker.start();
@@ -298,6 +301,18 @@ export class NocapSecret extends HTMLElement {
     // scratch is exactly the target size, so setSource's contain-fit is identity
     // and the noise is never resampled.
     await this.#flicker.setSource(scratch, { background });
+  }
+
+  /**
+   * Linear light reproduces colours exactly but cannot invent headroom, so a
+   * near-black or near-white palette is protected far less than it looks.
+   * Say so once rather than under-protecting silently.
+   */
+  #warnPalette() {
+    if (this.#paletteWarned) return;
+    this.#paletteWarned = true;
+    const { warnings } = checkPalette(this.#palette);
+    for (const w of warnings) console.warn(`[nocap-secret] ${w}`);
   }
 
   #onHold = (e) => {
