@@ -183,6 +183,7 @@ export class NocapSecret extends ElementBase {
     'strength',
     'chroma-decoy',
     'chroma-swing',
+    'chroma-count',
     'noise-scale',
     'chroma',
     'hardness',
@@ -439,14 +440,37 @@ export class NocapSecret extends ElementBase {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Decoys first, so the real glyphs win any overlap. They sit in the space
-    // above and below the value, which is empty in the normal layout.
-    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.42)}px`);
-    ctx.font = small;
+    // Decoys first, so the real glyphs win any overlap.
+    //
+    // Scattered rather than parked above and below, and at the SAME size as the
+    // value. Fixed rows and a smaller face were both tells: they told a reader
+    // which line was the real one before colour even came into it. Position and
+    // size are cheap to fix, so they are fixed.
+    //
+    // What this does NOT fix is the tell that matters, and that one is
+    // structural. See the note above about luminance.
+    const count = Math.max(1, Math.min(8, +(this.getAttribute('chroma-count') ?? 3)));
+    const rand = () => {
+      if (typeof crypto?.getRandomValues === 'function') {
+        const buf = new Uint32Array(1);
+        crypto.getRandomValues(buf);
+        return buf[0] / 2 ** 32;
+      }
+      return Math.random();
+    };
+    ctx.font = font;
     ctx.fillStyle = pick.color;
-    this.#chromaDecoys = [fakeLike(plain, { mode }), fakeLike(plain, { mode })];
-    ctx.fillText(this.#chromaDecoys[0], w / 2, h * 0.17);
-    ctx.fillText(this.#chromaDecoys[1], w / 2, h * 0.83);
+    this.#chromaDecoys = [];
+    for (let i = 0; i < count; i++) {
+      const text = fakeLike(plain, { mode });
+      this.#chromaDecoys.push(text);
+      // Keep them inside the canvas, and off the exact centre line where the
+      // value sits, so they neither fall outside nor sit on top of it.
+      const y = h * (0.12 + rand() * 0.76);
+      const clear = Math.abs(y - h / 2) < h * 0.14;
+      ctx.fillText(text, w / 2 + (rand() - 0.5) * w * 0.3,
+        clear ? y + (y < h / 2 ? -h * 0.16 : h * 0.16) : y);
+    }
 
     ctx.font = font;
     ctx.fillStyle = color;
