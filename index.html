@@ -6,8 +6,10 @@
 <title>nocap — anti-screenshot, anti-AI display for secrets</title>
 <meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single capture gets noise — and the text never enters the DOM.">
 <style>
-  :root { --bg:#0a0a0d; --fg:#d8d8e0; --muted:#9a9aa6; --faint:#6d6d78; --line:#22222b;
-          --panel:#141419; --panel2:#1c1c23; --accent:#6b8afd; color-scheme: dark; }
+  /* Greyed to sit near the element's own #6b7280 background, so the secret
+     reads as part of the page rather than as a lighter patch stuck on it. */
+  :root { --bg:#3f444c; --fg:#e6e8ec; --muted:#c2c6cd; --faint:#9aa0a9; --line:#565c66;
+          --panel:#474d56; --panel2:#525863; --accent:#a8bcff; color-scheme: dark; }
   * { box-sizing:border-box }
   body { margin:0; padding:0 20px 90px; background:var(--bg); color:var(--fg);
          font:15px/1.65 ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
@@ -287,14 +289,40 @@ async function layout() {
     color: $('fg').value, background: $('bg').value });
   hero.running ? capture() : still();
 }
+// Scratch canvas for the denoise panel, kept at a bounded size.
+const small = document.createElement('canvas');
+const smallCtx = small.getContext('2d', { willReadFrequently: true });
+
 function capture() {
   shotCtx.drawImage($('live'), 0, 0);
-  const blur = boxBlur(shotCtx.getImageData(0, 0, $('shot').width, $('shot').height), ATTACK_R);
-  denCtx.putImageData(new ImageData(blur.data, blur.width, blur.height), 0, 0);
-  if (!hero.planes.length) return;
-  const l = leakScore(blur, averageFrames(hero.planes));
-  $('leakOut').textContent = `leak ${l.toFixed(2)}`;
-  $('leakOut').style.color = l < 0.2 ? '#6fa76f' : l < 0.45 ? '#c2a15c' : '#d9885f';
+
+  // Blur a bounded-size copy, not the full canvas.
+  //
+  // boxBlur is O(w * h * r) on the main thread. On a phone the panes stack full
+  // width at dpr 3, so the canvas is several times larger than on a laptop and
+  // this ran into tens of milliseconds — long enough to drop a frame mid-cycle,
+  // present one plane twice, and show as a flash. Bounding the width keeps the
+  // cost flat regardless of viewport, and the panel is illustrative anyway: the
+  // leak number quoted in the readout is computed off-screen in apply().
+  const W = Math.min(480, $('shot').width);
+  const H = Math.round($('shot').height * (W / $('shot').width));
+  if (small.width !== W) { small.width = W; small.height = H; smallCtx.imageSmoothingEnabled = false; }
+  smallCtx.drawImage($('shot'), 0, 0, W, H);
+  const blur = boxBlur(smallCtx.getImageData(0, 0, W, H), Math.max(1, Math.round(ATTACK_R * W / $('shot').width)));
+  smallCtx.putImageData(new ImageData(blur.data, W, H), 0, 0);
+  denCtx.imageSmoothingEnabled = true;
+  denCtx.drawImage(small, 0, 0, $('den').width, $('den').height);
+}
+
+/**
+ * The hero's leak badge comes from apply()'s off-screen measurement, not from
+ * this panel. Scoring the displayed blur meant a second full-resolution pass per
+ * capture, which is the cost this bounded copy exists to avoid — and apply()
+ * already computes the authoritative number on a fixed-size render.
+ */
+function showLeak(value) {
+  $('leakOut').textContent = `leak ${value.toFixed(2)}`;
+  $('leakOut').style.color = value < 0.2 ? '#6fa76f' : value < 0.45 ? '#c2a15c' : '#d9885f';
 }
 function still() {
   if (!hero.planes.length) return;
@@ -381,6 +409,7 @@ function apply() {
   $('rMask').className = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
   $('rLeak').textContent = raw.toFixed(2); $('rLeak').className = grade(raw);
   $('rBlur').textContent = `${blur.leak.toFixed(2)} (r=${blur.radius})`;
+  showLeak(blur.leak);
   $('rBlur').className = grade(blur.leak);
   $('rFmt').textContent = detectFormat(v.txt).describe;
 
