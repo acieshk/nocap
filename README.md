@@ -6,11 +6,11 @@ to a human but not to a screen capture, an OCR pass, or a page-reading AI agent
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
-[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/acieshk/nocap/blob/main/LICENSE)
 
 | What a screenshot captures | What you see |
 | --- | --- |
-| ![one captured frame](docs/screenshot.png) | ![the perceived mean](docs/perceived.png) |
+| ![one captured frame](https://raw.githubusercontent.com/acieshk/nocap/main/docs/screenshot.png) | ![the perceived mean](https://raw.githubusercontent.com/acieshk/nocap/main/docs/perceived.png) |
 
 Both are the same element at the same moment. The left is one plane straight out
 of the live pipeline; the right is the mean of that plane and its partner, which
@@ -56,10 +56,10 @@ Everything below is for when you need more control. You can ignore it.
 1. **Check your colours.** A secret is only maskable if its two colours can carry
    noise — `checkPalette({ color, background })` tells you, and the wrong pair
    leaves the value plainly readable in a screenshot. See
-   [Choosing colours](#choosing-colours).
+   [Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
 2. **Check your page.** `await auditPage(secret)` finds the value if your app
    leaked it into an input, an `aria-label`, or `localStorage`.
-3. **Read [what this defeats](#what-this-defeats-and-what-defeats-it).** A screen
+3. **Read [what this defeats](https://github.com/acieshk/nocap#what-this-defeats-and-what-defeats-it).** A screen
    recording beats it. That is inherent, not a bug.
 
 ---
