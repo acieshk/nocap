@@ -371,27 +371,78 @@ export class NocapSecret extends ElementBase {
     if (!this.#fakeWarned) {
       this.#fakeWarned = true;
       console.warn(
-        '[nocap-secret] fake mode is EXPERIMENTAL. The decoy is capped by the ' +
-          'headroom the noise leaves — larger clips and stops cancelling — so it ' +
-          'is subtle in a capture. Blending and legibility are in direct tension ' +
-          'and no setting gives both. Do not rely on it in production.'
+        '[nocap-secret] fake mode is EXPERIMENTAL. It works — a capture reads a ' +
+          'plausible wrong value and the viewer sees none of them — but it has ' +
+          'had far less use than the rest of the library. Verify it on your own ' +
+          'content before relying on it.'
       );
     }
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
+    // How far the decoy widens the pair, in code levels, before feasibility.
+    const decoyPush = 110;
+
+    /**
+     * The centre whose planes at ±half average, in light, to `want`.
+     *
+     * The same solve linearMeanTable() performs for the base split, applied
+     * again after the decoy widens the pair. Light-mean is monotonic in the
+     * centre, so a binary search converges.
+     */
+    const centreFor = (want, half) => {
+      let lo = half;
+      let hi = 255 - half;
+      for (let i = 0; i < 22; i++) {
+        const mid = (lo + hi) / 2;
+        if ((toLight(mid + half) + toLight(mid - half)) / 2 < want) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
+    };
+
+    /**
+     * The largest half that can still hit a given target, per target value.
+     *
+     * This is what makes the re-solve work. A pair at ±half can only reach light
+     * means between (toLight(2·half) + toLight(0)) / 2 and
+     * (toLight(255) + toLight(255 - 2·half)) / 2, and that band narrows as half
+     * grows. A FIXED budget therefore becomes infeasible for dark pixels — the
+     * search clamps and the shortfall surfaces as a lift in the perceived value.
+     * Measured at a constant 110: 53 levels of lift, worse than no re-solve.
+     *
+     * Capping half per pixel keeps the decoy at uniform contrast wherever
+     * physics allows and backs off only where it must. 256 entries, solved once.
+     */
+    const feasibleHalf = (() => {
+      const table = new Float64Array(256);
+      for (let v = 0; v < 256; v++) {
+        const want = toLight(v);
+        let lo = 0;
+        let hi = 127;
+        for (let i = 0; i < 20; i++) {
+          const mid = (lo + hi) / 2;
+          const min = (toLight(2 * mid) + toLight(0)) / 2;
+          const max = (toLight(255) + toLight(255 - 2 * mid)) / 2;
+          if (want >= min && want <= max) lo = mid;
+          else hi = mid;
+        }
+        table[v] = lo;
+      }
+      return table;
+    })();
     // Full headroom. At half, the decoy competed with the noise and read as a
     // ghost behind the real text; a capture is supposed to come away with the
     // decoy as the most legible thing in the frame.
-    const strength = 1;
 
-    const paint = (draw) => {
+    const paintOn = (bg, draw) => {
       const cv = makeCanvas(w, h);
       const ctx = cv.getContext('2d', { alpha: false, willReadFrequently: true });
-      ctx.fillStyle = background;
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, w, h);
       draw(ctx);
       return ctx.getImageData(0, 0, w, h);
     };
+    const paint = (draw) => paintOn(background, draw);
 
     // The real value, split normally: its mean is what the eye resolves.
     const base = splitFrames(paint((ctx) => {
@@ -407,8 +458,12 @@ export class NocapSecret extends ElementBase {
     const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
     const blank = paint(() => {});
 
+    // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
+    // white text against a blank of `background` capped it at
+    // (255 - background.r) / 255 — 0.58 on the default palette, worse on a
+    // redder one, so the decoy could never reach full strength.
     const inkFor = (text, dx, dy, size) =>
-      paint((ctx) => {
+      paintOn('#000', (ctx) => {
         ctx.font = small.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * size)}px`);
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
@@ -442,30 +497,32 @@ export class NocapSecret extends ElementBase {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
       const ink = inks[k];
       for (let i = 0; i < blankInk.length; i += 4) {
-        const amount = (ink.data[i] - blankInk[i]) / 255;
+        const amount = ink.data[i] / 255;
         if (amount <= 0.02) continue;
         for (let c = 0; c < 3; c++) {
           const b0 = base[0].data[i + c];
           const b1 = base[1].data[i + c];
-          // Bias the noise the split already produced instead of overwriting it.
-          // Replacing it left the decoy as smooth glyphs on a noisy field, which
-          // reads as something pasted on top; biasing keeps the grain, so the
-          // decoy is made of noise exactly like the real text is.
+
+          // Widen the pair by a budget, then re-solve the centre so it still
+          // averages IN LIGHT to what it did before.
           //
-          // The push uses the smaller of the two planes' headroom so it is equal
-          // and opposite on both — that is what lets it cancel exactly, and it
-          // is why the headroom cannot be taken per plane.
+          // Adding +push / -push around a fixed centre preserves the mean in
+          // code space but not in light, because light is convex — widening a
+          // pair raises its mean light even with nothing clipping. That is the
+          // exact error linearMeanTable() cancels for the base split, and doing
+          // it here reintroduced it wherever the decoy's ink fell.
           //
-          // Strictly the residual headroom, never a floor. Flooring it to keep
-          // the decoy more legible clips wherever the noise already sits near an
-          // extreme, and a clipped push is no longer equal and opposite — the
-          // decoy stops cancelling and ghosts into the mean, where the viewer
-          // sees it. Legibility of the decoy is worth less than the guarantee
-          // that it never reaches the eye.
-          const room = Math.min(b0, 255 - b0, b1, 255 - b1);
-          const push = amount * strength * room;
-          set[0].data[i + c] = b0 + push;
-          set[1].data[i + c] = b1 - push;
+          // The budget is capped by what this pixel can actually reach, which
+          // is the part a constant push gets wrong.
+          const want = (toLight(b0) + toLight(b1)) / 2;
+          const half = Math.min(
+            Math.abs(b0 - b1) / 2 + amount * decoyPush,
+            feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))]
+          );
+          const centre = centreFor(want, half);
+          const up = b0 >= b1;
+          set[0].data[i + c] = centre + (up ? half : -half);
+          set[1].data[i + c] = centre + (up ? -half : half);
         }
       }
       sets.push(set);

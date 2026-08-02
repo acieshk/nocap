@@ -250,9 +250,9 @@ noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
 ## Fake values — experimental
 
-> **Experimental, and not recommended for production yet.** It works, but the
-> useful range is narrow enough that it may not be worth the complexity. Read
-> the trade below before enabling it.
+> **Experimental.** It works, and the trade that used to make it marginal is
+> gone (see below), but it has had far less use than the rest of the library.
+> Verify it on your own content.
 
 
 Noise tells an attacker the capture failed, so they take another. A value in the
@@ -272,19 +272,26 @@ subtracted on the other. Two consequences:
   frame and a single decoy, in the right format, at full contrast. The rotation
   holds eight, so a burst lands on different ones.
 
-### Why it is marked experimental
+### The trade that used to limit this is gone
 
-The decoy's push is bounded by the headroom the noise leaves, because anything
-larger clips — and a clipped push is no longer equal and opposite, so the decoy
-stops cancelling and ghosts into the mean where the viewer sees it. That bound
-also makes the decoy subtle in a capture: it shares the noise's grain and
-contrast rather than standing out from it.
+The decoy used to be sized from the *residual* headroom the noise left, which
+varies per pixel, so its contrast was modulated by the noise and a capture came
+away with texture rather than a glyph. Pushing harder clipped, and a clipped
+push no longer cancels, so it ghosted into the mean. That looked like a hard
+tension between blending and legibility.
 
-So the two things you want are in direct tension. A decoy that blends and never
-reaches the eye is hard to read in a screenshot; one that is boldly legible
-leaks. There is no setting that gives both, and the honest summary is that fake
-mode currently buys less than its complexity costs. It is kept because the
-mechanism is sound and a larger decoy font may widen the window later.
+It was not. The push was being applied in **code** space around a fixed centre,
+which preserves the code-space mean but not the mean in *light* — widening a
+pair raises its mean light, even with nothing clipping. Giving the decoy a fixed
+budget and then re-solving the centre for the widened pair removes it. The
+budget is capped per pixel by what that pixel can actually reach, because the
+reachable band narrows as the pair widens; a constant budget goes infeasible for
+dark pixels and the shortfall reappears as lift.
+
+Measured, worst perceived lift from enabling `fake`: **53 levels before, 0
+after**, with the decoy legible in a captured frame.
+
+Found by @ithiria894 in #5.
 
 **The pair has to sit inside one cycle**, and this is the subtle part. An earlier
 version split each pair one cycle apart, which cancels only over the full
