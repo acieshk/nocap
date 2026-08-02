@@ -360,12 +360,15 @@ export class NocapSecret extends ElementBase {
         ctx.fillText(text, w / 2 + dx, h / 2 + dy);
       });
 
-    // Every decoy appears exactly twice across the rotation, once added and once
-    // subtracted, one cycle apart. That is what makes the residue vanish: signs
-    // alternating over DIFFERENT strings do not cancel, they leave the
-    // difference of their glyph coverage as a smear above and below the value.
-    // Pairing each decoy with itself cancels exactly, and offsetting the pair by
-    // one cycle keeps consecutive frames carrying different values.
+    // Each decoy is added on one plane of a cycle and subtracted on the other,
+    // so it cancels within a single 2-frame cycle — about 16ms at 60Hz.
+    //
+    // Pairing them one cycle apart instead was wrong, and wrong in a way that
+    // inverted the whole effect. The eye integrates roughly 50-100ms, i.e. 3-6
+    // frames, so a pair 16 frames apart never cancels inside the window you
+    // actually see: the decoys stayed visible and the noise averaged away,
+    // exactly backwards. Variety comes from the eight cycles in the rotation,
+    // not from splitting a pair across them.
     for (let k = 0; k < cycles; k++) decoys.push(fakeLike(plain, { mode }));
 
     const blankInk = blank.data;
@@ -381,8 +384,8 @@ export class NocapSecret extends ElementBase {
 
     for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
-      // plane 0 adds this cycle's decoy; plane 1 subtracts the next one.
-      const use = [[0, inks[k], 1], [1, inks[(k + 1) % cycles], -1]];
+      // Same decoy, opposite signs, adjacent frames.
+      const use = [[0, inks[k], 1], [1, inks[k], -1]];
 
       for (const [plane, ink, sign] of use) {
         for (let i = 0; i < blankInk.length; i += 4) {

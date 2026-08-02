@@ -150,22 +150,24 @@ right shape does not.
 <nocap-secret fake="auto"></nocap-secret>
 ```
 
-**Every frame carries a different decoy**, and every decoy appears exactly twice
-across the rotation — once added, once subtracted, one cycle apart. Two
-consequences:
+**Each cycle carries a different decoy**, added on one of its two frames and
+subtracted on the other. Two consequences:
 
-- **The viewer never resolves any of them.** The pairing cancels exactly in the
-  mean, so nothing accumulates over the frames the eye integrates and you read
-  the real value with no residue.
+- **The viewer never resolves any of them.** The pair cancels inside a single
+  cycle — about 16ms at 60Hz — so it is gone well within the 50-100ms your eye
+  integrates over.
 - **A capture freezes one.** A screenshot cannot average, so it catches a single
-  frame and a single decoy, in the right format, at full contrast — and the next
-  frame carries a different one, so a burst does not confirm anything either.
+  frame and a single decoy, in the right format, at full contrast. The rotation
+  holds eight, so a burst lands on different ones.
 
-Getting the cancellation right took three attempts, and each failure was visible
-only in a rendered frame. Alternating signs over *different* strings does not
-cancel: it leaves the difference of their glyph coverage as a smear above and
-below the value. Flipping the line and the sign together makes it worse by
-re-correlating them. Pairing each decoy with itself is what actually works.
+**The pair has to sit inside one cycle**, and this is the subtle part. An earlier
+version split each pair one cycle apart, which cancels only over the full
+16-frame rotation — 267ms, far longer than the eye's window. The result inverted
+the whole effect: the decoys stayed visible and the noise averaged away. Two
+other failures cost a rebuild each, both visible only in a rendered frame:
+alternating signs over *different* strings does not cancel, it leaves the
+difference of their glyph coverage as a smear; and flipping the line and the sign
+together re-correlates them and makes it worse.
 
 `detectFormat()` classifies ISO and d/m/y dates, card expiries, card numbers,
 grouped numbers, phone numbers, alphanumerics and free text; `fakeLike()`
