@@ -133,8 +133,8 @@
     <label class="f"><span>Background</span><input type="color" id="bg" value="#6b7280"></label>
     <label class="f"><span>Amplitude <em id="ampV">110</em></span>
       <input type="range" id="amp" min="30" max="127" value="110"></label>
-    <label class="f"><span>Noise block <em id="blkV">3</em>px</span>
-      <input type="range" id="blk" min="1" max="10" value="3"></label>
+    <label class="f"><span>Noise block <em id="blkV">4</em>px</span>
+      <input type="range" id="blk" min="1" max="10" value="4"></label>
     <label class="f"><span>Hardness <em id="hardV">1.00</em></span>
       <input type="range" id="hard" min="0.1" max="1" step="0.05" value="1"></label>
     <label class="f"><span>Chroma <em id="chrV">0.00</em></span>
@@ -268,7 +268,7 @@ $('txt').value = (await (await fetch('./demo/api-mock.json')).json()).account;
 /* ------------------------------------------------------------------ hero -- */
 const shotCtx = $('shot').getContext('2d', { alpha: false, willReadFrequently: true });
 const denCtx = $('den').getContext('2d', { alpha: false });
-const hero = new Flicker($('live'), { frames: 2, chroma: 0, hardness: 1, noiseScale: 3,
+const hero = new Flicker($('live'), { frames: 2, chroma: 0, hardness: 1, noiseScale: 4,
   amplitude: 110, linearLight: true, willReadFrequently: true });
 const H = 74, ATTACK_R = 4;
 
@@ -336,12 +336,12 @@ const play = () => {
 /* ------------------------------------------------------------ playground -- */
 const chip = $('chip');
 const PRESETS = {
-  balanced: { amp:110, blk:3, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'',     scr:'' },
-  strong:   { amp:127, blk:5, hard:1,   chr:0, fg:'#a4a4a4', bg:'#8a8a8a', fake:'',     scr:'1' },
-  readable: { amp:80,  blk:2, hard:0.5, chr:0, fg:'#b4bcc8', bg:'#6b7280', fake:'',     scr:'' },
-  decoy:    { amp:110, blk:3, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'auto', scr:'' },
+  balanced: { amp:110, blk:4, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'',     scr:'' },
+  strong:   { amp:127, blk:6, hard:1,   chr:0, fg:'#a4a4a4', bg:'#8a8a8a', fake:'',     scr:'1' },
+  readable: { amp:80,  blk:3, hard:0.5, chr:0, fg:'#b4bcc8', bg:'#6b7280', fake:'',     scr:'' },
+  decoy:    { amp:110, blk:4, hard:1,   chr:0, fg:'#9ea6b4', bg:'#6b7280', fake:'auto', scr:'' },
   // Deliberately bad: exact colours, and a screenshot reads it outright.
-  broken:   { amp:110, blk:3, hard:1,   chr:0, fg:'#e8e8f0', bg:'#14141a', fake:'',     scr:'' },
+  broken:   { amp:110, blk:4, hard:1,   chr:0, fg:'#e8e8f0', bg:'#14141a', fake:'',     scr:'' },
 };
 
 let pending = 0;
