@@ -9,8 +9,12 @@
   /* Near black, with the panels stepping up toward the element's own #404040 so
      the secret sits in a field rather than on a lighter patch. It cannot go all
      the way to the page colour. See the note under the playground. */
-  :root { --bg:#0d0d0e; --fg:#dcdce2; --muted:#9d9da6; --faint:#75757e; --line:#2a2a2f;
-          --panel:#242427; --panel2:#303034; --accent:#7f9cff; color-scheme: dark; }
+  /* The page IS the element's background: #404040, the darkest colour that can
+     still carry enough noise to mask. Going darker looks better and cannot be
+     protected, which is the whole trade this library is about, so the page
+     meets the secret rather than the other way round. */
+  :root { --bg:#404040; --fg:#ededed; --muted:#c9c9c9; --faint:#a0a0a0; --line:#565656;
+          --panel:#3a3a3a; --panel2:#4c4c4c; --accent:#a9bcff; color-scheme: dark; }
   * { box-sizing:border-box }
   body { margin:0; padding:0 20px 90px; background:var(--bg); color:var(--fg);
          font:15px/1.65 ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
@@ -101,13 +105,13 @@
   this. <span id="hz"></span>
 </p>
 <p style="font-size:12.5px;color:var(--faint);margin-top:8px">
-  <b>These panels are set to the page background, so they blend, and that costs
-  the masking.</b> A near-black colour has almost no room to carry noise, so at
-  <code>#0d0d0e</code> the best text colour that still hides the value is
-  <code>#1a1a1a</code>, which nobody can read. Every readable choice leaks
-  0.53 or worse, which is why the middle panel here is not as clean as it should
-  be. The playground below uses <code>#6d6d6d</code> on <code>#404040</code>,
-  the darkest pair that actually works, and that is what you would ship.
+  <b>The page is <code>#404040</code> on purpose.</b> That is the darkest colour
+  that still has room to carry noise, so the panels blend into the page and the
+  split still works. A near-black page cannot do both: at <code>#0d0d0e</code>
+  the best text colour that still hides the value is <code>#1a1a1a</code>, which
+  nobody can read, and every readable choice leaks 0.53 or worse. If your design
+  is darker than this, put the secret on a panel at this level rather than on the
+  page itself.
 </p>
 
 <h2>Playground</h2>
@@ -317,12 +321,12 @@ async function layout() {
     cv.style.width = w + 'px'; cv.style.height = H + 'px';
     ctx.imageSmoothingEnabled = false;
   }
-  // The hero sits on the page background rather than the playground's palette,
-  // so the panel has no visible edge. It costs the masking: at #0d0d0e there is
-  // no text colour that both reads and hides. See the note under the panels.
+  // The hero sits on the page background, which is also the darkest maskable
+  // colour, so the panels blend AND the split still works. Dragging the element
+  // down to a near-black page instead cost all the masking.
   await hero.setText($('txt').value, {
     font: `600 ${Math.round(H * devicePixelRatio * 0.42)}px ui-monospace, monospace`,
-    color: '#6d6d6d', background: '#0d0d0e' });
+    color: '#6d6d6d', background: '#404040' });
   hero.running ? capture() : still();
 }
 // Scratch canvas for the denoise panel, kept at a bounded size.
