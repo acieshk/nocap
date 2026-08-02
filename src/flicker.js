@@ -172,7 +172,7 @@ export class Flicker {
   }
 
   /**
-   * The current planes as plain image data — plane k is exactly what a single
+   * The current planes as plain image data. Plane k is exactly what a single
    * screenshot lands on. Use with averageFrames() to get the ideal perceived
    * image without waiting on the display.
    */
@@ -231,8 +231,8 @@ export class Flicker {
       const bmps = await Promise.all(
         planes.map((p) => createImageBitmap(new ImageData(p.data, p.width, p.height)))
       );
-      // A newer rebuild started while we were awaiting; drop this one. Close
-      // everything built so far, not just this iteration — closing only the
+      // A newer rebuild started while we were awaiting. Drop this one. Close
+      // everything built so far, not just this iteration. Closing only the
       // current set stranded every earlier cycle's bitmaps, and a fast slider
       // drag supersedes several rebuilds a second.
       if (gen !== this._gen) {
@@ -258,11 +258,11 @@ export class Flicker {
     if (this._last) {
       const dt = t - this._last;
       if (this._interval && dt > this._interval * 1.5) this.stats.dropped++;
-      // Rolling estimate; clamp so a tab stall doesn't poison it.
+      // Rolling estimate. Clamp so a tab stall doesn't poison it.
       const sample = Math.min(dt, 100);
       this._interval = this._interval ? this._interval * 0.9 + sample * 0.1 : sample;
       this.stats.refreshHz = Math.round(1000 / this._interval);
-      // Use the real plane count, not opts.frames — 'channels' mode forces 3.
+      // Use the real plane count, not opts.frames. 'channels' mode forces 3.
       const perCycle = (this._planes.length || this.opts.frames) * this.opts.planeHold;
       this.stats.cycleHz = Math.round(this.stats.refreshHz / perCycle);
       this._maybeWarn();

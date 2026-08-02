@@ -26,7 +26,7 @@ export const STRENGTHS = {
   weak: { amplitude: 80, noiseScale: 3, hardness: 0.5 },
   medium: { amplitude: 110, noiseScale: 4, hardness: 1 },
   // Coarser noise resists a blur best but sits at a low spatial frequency,
-  // where the eye's temporal sensitivity peaks — wants 120Hz+ to fuse.
+  // where the eye's temporal sensitivity peaks. Wants 120Hz+ to fuse.
   strong: { amplitude: 127, noiseScale: 6, hardness: 1 },
 };
 
@@ -35,19 +35,19 @@ const TEXT_DEFAULTS = {
   frames: 2,
   // Matches STRENGTHS.medium and the demo's "Balanced" preset. It used to be
   // 96, on reasoning about a [96, 159] compression band that linear light
-  // removed — there is no band now, so the contrast argument for the lower
+  // removed. There is no band now, so the contrast argument for the lower
   // value no longer applies and 96 was simply weaker than every preset.
   amplitude: 110,
   // Split in light, not in code values. This is what makes `color` and
   // `background` mean what they say: the planes are offset in linear light, so
   // the mean the eye integrates is exactly the authored colour. Averaging in
-  // sRGB instead reads far too bright — #ff0000 arrives as #be8c8c.
+  // sRGB instead reads far too bright. #ff0000 arrives as #be8c8c.
   linearLight: true,
   gamma: 2.4,
   // No band compression under linearLight, so no pre-emphasis to claw back.
   contrast: 1,
   // 1 puts every pixel at full amplitude. This was 0.5, on a claim that it gave
-  // the same leak for less visual noise — which does not reproduce. Measured on
+  // the same leak for less visual noise. Which does not reproduce. Measured on
   // the default palette at amplitude 110, stroke 5, worst plane over 6 seeds:
   //
   //   hardness 0.5   raw 0.278   after a blur 0.398
@@ -60,7 +60,7 @@ const TEXT_DEFAULTS = {
   // sharing one sign across R/G/B puts the whole noise budget into luminance,
   // which is what leakScore and the eye both key on for text. Measured 0.262
   // denoised leak versus 0.346 for independent per-channel noise, at identical
-  // visual loudness — and it looks like grey static instead of rainbow static.
+  // visual loudness. And it looks like grey static instead of rainbow static.
   chroma: 0,
   // Deliberately small, and this is a real trade-off rather than an oversight.
   //
@@ -70,8 +70,8 @@ const TEXT_DEFAULTS = {
   // that helps. Purely on masking, block >= stroke width wins.
   //
   // But coarse noise is low spatial frequency, and that is exactly where the
-  // eye's temporal contrast sensitivity peaks. At 30Hz — any 60Hz display, two
-  // planes — big blocks strobe instead of fusing and the text is unreadable.
+  // eye's temporal contrast sensitivity peaks. At 30Hz. Any 60Hz display, two
+  // planes. Big blocks strobe instead of fusing and the text is unreadable.
   // Fine noise sits near the eye's spatial limit and fuses.
   //
   // 4, not 3. Below about 4 the noise is fine enough that a small blur starts
@@ -87,7 +87,7 @@ const TEXT_DEFAULTS = {
 };
 
 /**
- * <nocap-secret> — show a short secret as flickered text.
+ * <nocap-secret>. Show a short secret as flickered text.
  *
  * The plaintext is rendered straight to a canvas and never enters the DOM. That
  * is worth more than it sounds: View Source never had it (it is set from JS),
@@ -97,22 +97,22 @@ const TEXT_DEFAULTS = {
  *
  * What it does NOT do: hide from anyone with DevTools and intent. The string is
  * a live JS value, so a breakpoint, a heap snapshot, or one canvas.toDataURL()
- * in the console retrieves it. Nothing running in a browser can prevent that —
- * the client belongs to the user. Treat this as raising the cost of a casual
+ * in the console retrieves it. Nothing running in a browser can prevent that.
+ * The client belongs to the user. Treat this as raising the cost of a casual
  * look, in the same spirit as the flicker itself.
  *
  *   <nocap-secret hold auto-hide="6"></nocap-secret>
  *   el.secret = '4471-0092-8834';
  *
  * Prefer the `.secret` property. Putting the text in the element's markup works
- * — it is read once and then erased from the DOM — but it was in the HTML source
+ *. It is read once and then erased from the DOM. But it was in the HTML source
  * on the way there, which defeats the point.
  */
 /**
  * Extending HTMLElement directly makes this module unimportable outside a
- * browser, which breaks `import 'nocap'` under SSR — Next, Astro and Remix all
+ * browser, which breaks `import 'nocap'` under SSR. Next, Astro and Remix all
  * evaluate module top-level on the server. Falling back to a plain base keeps
- * the barrel importable there; customElements.define is already guarded below,
+ * the barrel importable there. CustomElements.define is already guarded below,
  * so nothing registers and nothing renders until it reaches a browser.
  */
 const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
@@ -233,7 +233,7 @@ export class NocapSecret extends ElementBase {
       // Keep the glyphs, drop the arrangement. Nothing in this object is ever
       // the plaintext in order, so a heap snapshot search for it finds nothing.
       const pairs = [...str].map((ch, i) => [ch, i]);
-      // Still obfuscation, not encryption — but a CSPRNG is free here and
+      // Still obfuscation, not encryption. But a CSPRNG is free here and
       // removes the question of whether the shuffle is predictable.
       const rand = (n) => {
         if (typeof crypto?.getRandomValues === 'function') {
@@ -278,7 +278,7 @@ export class NocapSecret extends ElementBase {
     const fakeMode = this.getAttribute('fake');
     // Scramble empties #secret and keeps the glyphs in #chars, so fake mode has
     // to reassemble to know what shape to imitate. Guarding on #secret alone
-    // meant enabling both silently dropped the decoy — the mode looked on and
+    // meant enabling both silently dropped the decoy. The mode looked on and
     // did nothing.
     const plain = this.#secret || this.#reassemble();
     if (fakeMode && fakeMode !== 'off' && plain) {
@@ -324,8 +324,8 @@ export class NocapSecret extends ElementBase {
    *
    * Each character is rendered alone into a scratch canvas at a fixed point and
    * then blitted to its slot. That split matters: a hook on
-   * `CanvasRenderingContext2D.prototype.fillText` — the one-liner that otherwise
-   * defeats this component outright — sees single characters, in shuffled order,
+   * `CanvasRenderingContext2D.prototype.fillText`. The one-liner that otherwise
+   * defeats this component outright. Sees single characters, in shuffled order,
    * every one drawn at the same coordinates. It recovers the multiset of
    * characters and the length, not the arrangement. Position lives in the
    * drawImage calls instead, so an attacker now has to hook two APIs and
@@ -334,7 +334,7 @@ export class NocapSecret extends ElementBase {
    * Be clear about the level: this is obfuscation, not encryption. #chars and
    * #slots are both live fields on the element, so anyone who reads both
    * reconstructs the value immediately. It raises the cost of a casual console
-   * poke; it does not withstand someone who has decided to extract the value.
+   * poke. It does not withstand someone who has decided to extract the value.
    */
   async #drawScrambled(font, color, background) {
     const { width: w, height: h } = this.#flicker.canvas;
@@ -390,7 +390,7 @@ export class NocapSecret extends ElementBase {
    * shape does not.
    *
    * Every frame carries a DIFFERENT decoy, and every decoy appears exactly twice
-   * across the rotation — once added, once subtracted, one cycle apart. So they
+   * across the rotation. Once added, once subtracted, one cycle apart. So they
    * cancel exactly in the mean and the viewer never resolves any of them, while
    * a capture, which cannot average, freezes one at full contrast.
    *
@@ -410,8 +410,8 @@ export class NocapSecret extends ElementBase {
     if (!this.#fakeWarned) {
       this.#fakeWarned = true;
       console.warn(
-        '[nocap-secret] fake mode is EXPERIMENTAL. It works — a capture reads a ' +
-          'plausible wrong value and the viewer sees none of them — but it has ' +
+        '[nocap-secret] fake mode is EXPERIMENTAL. It works. A capture reads a ' +
+          'plausible wrong value and the viewer sees none of them. But it has ' +
           'had far less use than the rest of the library. Verify it on your own ' +
           'content before relying on it.'
       );
@@ -445,7 +445,7 @@ export class NocapSecret extends ElementBase {
      * This is what makes the re-solve work. A pair at ±half can only reach light
      * means between (toLight(2·half) + toLight(0)) / 2 and
      * (toLight(255) + toLight(255 - 2·half)) / 2, and that band narrows as half
-     * grows. A FIXED budget therefore becomes infeasible for dark pixels — the
+     * grows. A FIXED budget therefore becomes infeasible for dark pixels. The
      * search clamps and the shortfall surfaces as a lift in the perceived value.
      * Measured at a constant 110: 53 levels of lift, worse than no re-solve.
      *
@@ -470,7 +470,7 @@ export class NocapSecret extends ElementBase {
       return table;
     })();
     // Full headroom. At half, the decoy competed with the noise and read as a
-    // ghost behind the real text; a capture is supposed to come away with the
+    // ghost behind the real text. A capture is supposed to come away with the
     // decoy as the most legible thing in the frame.
 
     const paintOn = (bg, draw) => {
@@ -499,7 +499,7 @@ export class NocapSecret extends ElementBase {
 
     // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
     // white text against a blank of `background` capped it at
-    // (255 - background.r) / 255 — 0.58 on the default palette, worse on a
+    // (255 - background.r) / 255. 0.58 on the default palette, worse on a
     // redder one, so the decoy could never reach full strength.
     const inkFor = (text, dx, dy, size) =>
       paintOn('#000', (ctx) => {
@@ -511,7 +511,7 @@ export class NocapSecret extends ElementBase {
       });
 
     // Each decoy is added on one plane of a cycle and subtracted on the other,
-    // so it cancels within a single 2-frame cycle — about 16ms at 60Hz.
+    // so it cancels within a single 2-frame cycle. About 16ms at 60Hz.
     //
     // Pairing them one cycle apart instead was wrong, and wrong in a way that
     // inverted the whole effect. The eye integrates roughly 50-100ms, i.e. 3-6
@@ -524,7 +524,7 @@ export class NocapSecret extends ElementBase {
     const blankInk = blank.data;
     // A random spot and size per decoy, not two fixed lines. The position is a
     // property of the decoy rather than of the appearance, so the added and
-    // subtracted copies still land on exactly the same pixels and cancel — it
+    // subtracted copies still land on exactly the same pixels and cancel. It
     // just scatters them across the field instead of stacking two rows.
     // Ranges keep the text inside the canvas at the smallest size.
     const inks = decoys.map((d) =>
@@ -546,7 +546,7 @@ export class NocapSecret extends ElementBase {
           // averages IN LIGHT to what it did before.
           //
           // Adding +push / -push around a fixed centre preserves the mean in
-          // code space but not in light, because light is convex — widening a
+          // code space but not in light, because light is convex. Widening a
           // pair raises its mean light even with nothing clipping. That is the
           // exact error linearMeanTable() cancels for the base split, and doing
           // it here reintroduced it wherever the decoy's ink fell.
@@ -604,8 +604,8 @@ export class NocapSecret extends ElementBase {
       if (this.#adapted || !hz || hz < 100 || !this.#revealed) return;
       this.#adapted = true;
       // Scaled the same way #defaultBlock is, so this is always an increase.
-      // Hardcoding 5 meant that on a 2x display — which is most high-refresh
-      // hardware — the default was already 6 and this LOWERED it, running the
+      // Hardcoding 5 meant that on a 2x display. Which is most high-refresh
+      // hardware. The default was already 6 and this LOWERED it, running the
       // logic backwards on exactly the machines the branch exists for.
       this.#flicker.configure({ noiseScale: Math.round(this.#defaultBlock() * 5 / 3) }).then(() => {
         if (this.#revealed) this.render();
@@ -618,7 +618,7 @@ export class NocapSecret extends ElementBase {
    *
    * The font is derived from the canvas height in DEVICE pixels, so stroke width
    * doubles on a 2x display. A block pinned at 3 device px therefore halves the
-   * block-to-stroke ratio there — and that ratio is what decides whether a blur
+   * block-to-stroke ratio there. And that ratio is what decides whether a blur
    * helps the attacker. Measured on the default palette: stroke 3 leaks 0.30
    * under a blur, stroke 8 with the same block leaks 0.58, same settings.
    */
@@ -640,7 +640,7 @@ export class NocapSecret extends ElementBase {
     this.#motionWarned = true;
     console.warn(
       '[nocap-secret] prefers-reduced-motion is set, so the value is shown ' +
-        'statically. There is no masking in this mode — a screenshot reads it.'
+        'statically. There is no masking in this mode, so a screenshot reads it.'
     );
   }
 
@@ -660,9 +660,9 @@ export class NocapSecret extends ElementBase {
   /**
    * Authored colours. Under the default (non-adaptive) split these are pulled
    * into [amplitude, 255-amplitude], so what you see is a hue-preserved, lower
-   * contrast version — tinted rather than grey, but never the literal values.
+   * contrast version. Tinted rather than grey, but never the literal values.
    * `adaptive` reproduces them exactly and caps amplitude to their headroom
-   * instead; see maxAmplitudeFor().
+   * instead. See maxAmplitudeFor().
    */
   /**
    * What an authored colour will actually look like: the splitter compresses
@@ -688,7 +688,7 @@ export class NocapSecret extends ElementBase {
   get #palette() {
     return {
       // Defaults must be maskable, not merely handsome. #e8e8f0 on #14141a is
-      // the obvious dark-UI pairing and it leaks 0.951 — a screenshot reads it
+      // the obvious dark-UI pairing and it leaks 0.951. A screenshot reads it
       // outright. This pair scores a masking ratio of 1.42 and leaks 0.180.
       // Anything you override with should be checked against checkPalette().
       color: this.getAttribute('color') ?? '#9ea6b4',

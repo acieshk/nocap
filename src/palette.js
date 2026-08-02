@@ -6,18 +6,18 @@ import { maxAmplitudeFor } from './splitter.js';
  * Under the default linear-light split there is no band and no compression:
  * authored colours are reproduced exactly, so the secret's background can equal
  * the page background and the two become indistinguishable. The earlier advice
- * that it could not is obsolete — that was a consequence of compressing into
+ * that it could not is obsolete. That was a consequence of compressing into
  * [amplitude, 255-amplitude], which linear light removed.
  *
  * What survives is the real constraint, and it is about protection rather than
  * appearance: a colour can only carry noise up to min(L, 1-L) of its own emitted
  * light. Light is heavily compressed at the dark end, so #101014 has under 1% of
- * headroom while a mid-tone has nearly all of it. Exact colours are free; the
+ * headroom while a mid-tone has nearly all of it. Exact colours are free. The
  * masking that comes with them is not.
  *
  * Practical consequence: put the secret on a mid-tone panel. It then matches its
  * surroundings exactly AND has room to be protected. A near-black page chrome is
- * fine — just not directly behind the secret.
+ * fine. Just not directly behind the secret.
  */
 
 const LUMA = [0.2126, 0.7152, 0.0722];
@@ -40,8 +40,8 @@ export function toHex(rgb) {
 /**
  * Move a colour to a target luminance while keeping its hue, inside bounds.
  *
- * `bounds` is no longer the old [amplitude, 255-amplitude] compression band —
- * linear light removed that. It is now just a channel range, used to keep
+ * `bounds` is no longer the old [amplitude, 255-amplitude] compression band.
+ * Linear light removed that. It is now just a channel range, used to keep
  * suggested colours off the 0 and 255 rails, since a channel at either extreme
  * has zero swing and cannot be masked at all.
  *
@@ -70,7 +70,7 @@ export function placeInBand(color, targetLuma, bounds) {
  * @param {object} design
  * @param {string} design.background   the page background
  * @param {string} design.color        the page text colour
- * @param {number} [design.fontSize=26]  rendered glyph size in device px; sets
+ * @param {number} [design.fontSize=26]  rendered glyph size in device px. Sets
  *                                       the noise block, since noise must be at
  *                                       least as coarse as the stroke width
  * @param {number} [design.minContrast=42]  perceived luma separation to preserve
@@ -86,7 +86,7 @@ export function suggestConfig(design) {
   // Both perceived contrast AND surviving chroma come out of the same
   // 255 - 2A budget, so they compete: at amplitude 98 the band is 59 wide and a
   // saturated brand blue retains about a tenth of its chroma. There is no
-  // setting that gives strong masking and vivid colour — this is the same
+  // setting that gives strong masking and vivid colour. This is the same
   // masking-versus-appearance trade-off as amplitude itself, seen in colour.
   const usable = 1 - 2 * 0.14;
   const amplitude =
@@ -100,7 +100,7 @@ export function suggestConfig(design) {
   // This used to place them inside the band here, which double-compressed them:
   // the splitter remaps every source pixel into [amp, 255-amp] anyway, so a
   // pre-banded colour got squeezed a second time. Red on white came out at
-  // rgb(130,120,120) — saturation 8, perceived contrast 11, i.e. grey on grey.
+  // rgb(130,120,120). Saturation 8, perceived contrast 11, i.e. grey on grey.
   // Passing the authored colours straight through lands red at rgb(159,96,96):
   // saturation 53, contrast 50.
   //
@@ -121,7 +121,7 @@ export function suggestConfig(design) {
   const SAFE = { lo: 40, hi: 214 };
   const panelLuma = clamp(luma(toRgb(background)), 96, 176);
   const outBg = placeInBand(background, panelLuma, SAFE);
-  // 0.8 of the available swing targets a ratio near 1.25 — comfortably inside
+  // 0.8 of the available swing targets a ratio near 1.25. Comfortably inside
   // "good" without collapsing the contrast to nothing.
   const reach = 0.7 * codeSwing(toHex(outBg));
   const fgIsLighter = luma(toRgb(color)) >= luma(toRgb(background));
@@ -148,8 +148,8 @@ export function suggestConfig(design) {
   const { ratio, grade } = checkPalette({ color, background, gamma: design.gamma });
   if (grade === 'weak') {
     notes.push(
-      `The secret's background now matches your page exactly — linear light removed ` +
-        `the old restriction — but at a masking ratio of ${ratio.toFixed(2)} it is not ` +
+      `The secret's background now matches your page exactly, because linear light ` +
+        `removed the old restriction. But at a masking ratio of ${ratio.toFixed(2)} it is not ` +
         `protected. Put the secret on a mid-tone panel and lower its text contrast.`
     );
   } else if (grade === 'fair') {
@@ -177,7 +177,7 @@ export function suggestConfig(design) {
     chroma: design.chroma ?? 0,
     hardness: design.hardness ?? 0.5,
     linearLight: design.linearLight ?? true,
-    // What to author — full range. The splitter compresses these.
+    // What to author. Full range. The splitter compresses these.
     color: outFgHex,
     background: outBgHex,
     // What they will actually look like once compressed into the band.
@@ -244,7 +244,7 @@ export function toCode(x, gamma = 2.4) {
  * code levels. Code space is what both the eye and leakScore key on.
  *
  * Peaks at 127.5 where light is 0.5 (around #bcbcbc) and falls off in both
- * directions — far faster toward white than toward black.
+ * directions. Far faster toward white than toward black.
  */
 export function codeSwing(color, gamma = 2.4) {
   const swings = toRgb(color).map((v) => {
@@ -264,7 +264,7 @@ export function codeSwing(color, gamma = 2.4) {
  *   ratio = min(codeSwing(text), codeSwing(background)) / |text - background|
  *
  * Measured against denoised leak across 28 palettes, this correlates -0.73.
- * Raw light headroom, which this used to use, correlates -0.06 — no better than
+ * Raw light headroom, which this used to use, correlates -0.06. No better than
  * chance, and it graded #f0f0f0 as usable when it leaks 0.76.
  *
  * @returns {{ratio:number, grade:'good'|'fair'|'weak', textSwing:number,
@@ -285,7 +285,7 @@ export function checkPalette({ color, background, gamma = 2.4 }) {
     warnings.push(
       `This palette cannot be masked: the noise it can carry is ${ratio.toFixed(2)}x ` +
         `the text-to-background separation, and below 0.5 a single captured frame ` +
-        `stays legible. Colours are still exact — reduce the contrast between them, ` +
+        `stays legible. Colours are still exact. Reduce the contrast between them, ` +
         `or move both toward the mid-tones.`
     );
   } else if (grade === 'fair') {

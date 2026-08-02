@@ -1,5 +1,5 @@
 /**
- * nocap — anti-screenshot, anti-AI display for secrets on screen.
+ * nocap. Anti-screenshot, anti-AI display for secrets on screen.
  *
  * Hand-written rather than generated: the library is plain JS, and the whole
  * surface is a handful of functions over one struct.
@@ -15,7 +15,7 @@ export interface Pixels {
 export type SplitMode = 'amplitude' | 'interleave' | 'channels' | 'decoy';
 
 export interface SplitOptions {
-  /** `amplitude` is the only one that masks; the others exist to show why. */
+  /** `amplitude` is the only one that masks. The others exist to show why. */
   mode?: SplitMode;
   /** Planes per cycle. 2 is almost always right. */
   frames?: number;
@@ -35,7 +35,7 @@ export interface SplitOptions {
   decoy?: Pixels | null;
   /** Average in light, not in code values, so authored colours are exact. */
   linearLight?: boolean;
-  /** Display EOTF. 2.4 selects the real sRGB curve; else a pure power. */
+  /** Display EOTF. 2.4 selects the real sRGB curve. Else a pure power. */
   gamma?: number;
   rng?: () => number;
 }
@@ -201,7 +201,7 @@ export class Flicker {
 }
 
 /**
- * `<nocap-secret>` — renders as soon as it has a value.
+ * `<nocap-secret>`. Renders as soon as it has a value.
  *
  * Hold-to-reveal, auto-hide and click-to-toggle are product decisions and are
  * deliberately absent. The value is also unreadable to assistive technology by

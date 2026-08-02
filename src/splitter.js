@@ -1,9 +1,9 @@
 /**
  * Frame splitting: turn one image into N planes that alternate at refresh rate.
- * Each plane is degraded; their *mean* is the content, and your visual system
+ * Each plane is degraded. Their *mean* is the content, and your visual system
  * computes that mean.
  *
- * No DOM dependencies — takes and returns plain {width, height, data} objects
+ * No DOM dependencies. Takes and returns plain {width, height, data} objects
  * (structurally an ImageData) so the same code runs in Node, a worker, or a
  * native port.
  *
@@ -14,8 +14,8 @@
  *   'amplitude'  Every pixel is in every plane, perturbed by zero-sum noise.
  *                Strongest mask. A single plane is confetti.
  *
- *   'interleave' Each pixel is carried by exactly ONE plane; the others show a
- *                fill. This is spatial splitting — the pixels themselves are
+ *   'interleave' Each pixel is carried by exactly ONE plane. The others show a
+ *                fill. This is spatial splitting. The pixels themselves are
  *                divided across time. Note what this costs you: a single plane
  *                still holds 1/N of the true pixels at their true values, and
  *                subsampling does not destroy legibility. Stack noise on top
@@ -23,14 +23,14 @@
  *
  *   'channels'   Interleave along the colour axis: plane 0 carries R, plane 1
  *                G, plane 2 B. This is field-sequential colour, the technique
- *                DLP projectors use — and it is a *display* technique, not a
+ *                DLP projectors use. And it is a *display* technique, not a
  *                masking one. A single plane keeps full spatial resolution, so
  *                it is a legible monochrome version of the picture. Included so
- *                leakScore() can show you that; do not ship it.
+ *                leakScore() can show you that. Do not ship it.
  *
  *   'decoy'      The modulator is a second image instead of noise: plane 0 is
  *                target+decoy, plane 1 is target-decoy. Alternating two real
- *                pictures. Weakest mask — the target ghosts through both — but
+ *                pictures. Weakest mask. The target ghosts through both. But
  *                a single plane looks like a plausible image rather than noise.
  *
  * The through-line: a split that partitions a dimension the eye does not need
@@ -74,7 +74,7 @@ function carriesOnePlane(mode) {
 /**
  * Single source of truth for option defaulting. planeRange() and splitFrames()
  * both need the resolved fill and frame count, and when they each computed it
- * themselves they drifted — that is what let a fill of 0 clip against stacked
+ * themselves they drifted. That is what let a fill of 0 clip against stacked
  * noise. Everything derived goes here.
  */
 function resolveCfg(opts = {}) {
@@ -96,13 +96,13 @@ function resolveCfg(opts = {}) {
     adaptive: opts.adaptive ?? false,
     // Average in light, not in code values. A display emits light proportional
     // to (v/255)^gamma and the eye integrates light, so alternating v±d in sRGB
-    // reads BRIGHTER than v — at amplitude 96 around mid-grey, 128 looks like
+    // reads BRIGHTER than v. At amplitude 96 around mid-grey, 128 looks like
     // ~163. Splitting in linear light makes the perceived colour exactly the
     // authored one, which is the only way "set the perceived background" can
     // mean anything.
     // Only the modulated modes implement it. 'interleave' and 'channels' exist
     // solely so leakScore can demonstrate that they do not work (they leak 0.69
-    // and 1.00), so implementing linear light for them would be wasted effort —
+    // and 1.00), so implementing linear light for them would be wasted effort.
     // but silently ignoring the flag would be worse. Forced off, and said so.
     linearLight: carriesOnePlane(mode) ? false : opts.linearLight ?? false,
     gamma: opts.gamma ?? 2.4,
@@ -158,7 +158,7 @@ export function splitFrames(src, opts = {}) {
 /**
  * 'amplitude' and 'decoy': every plane carries every pixel, offset by a
  * zero-sum modulator. The two modes differ only in where the modulator comes
- * from — random draws, or a second image.
+ * from. Random draws, or a second image.
  */
 function fillModulated(planes, target, cfg) {
   const n = planes.length;
@@ -195,7 +195,7 @@ function fillModulated(planes, target, cfg) {
           // Offset in light. The mean of the planes' *emitted light* is then
           // exactly the target's, so the patch reads as the authored colour
           // instead of the ~35-levels-too-bright value sRGB averaging gives.
-          // Headroom is per pixel, so nothing clips and no band is needed —
+          // Headroom is per pixel, so nothing clips and no band is needed.
           // but a near-black or near-white pixel has almost none, and carries
           // almost no noise. Mid-tones are what buy masking.
           const centre = lut[v * 2];
@@ -204,7 +204,7 @@ function fillModulated(planes, target, cfg) {
         } else {
           // A pixel at v can only carry ±min(v, 255-v) before it clips, and
           // clipping breaks the zero-sum property. Adaptive respects that
-          // ceiling per pixel; otherwise the source was compressed for it.
+          // ceiling per pixel. Otherwise the source was compressed for it.
           const amp = cfg.adaptive ? Math.min(cfg.amplitude, v, 255 - v) : cfg.amplitude;
           for (let k = 0; k < n; k++) planes[k].data[p + c] = v + off[k] * amp;
         }
@@ -216,8 +216,8 @@ function fillModulated(planes, target, cfg) {
 /**
  * 'interleave': one plane carries the pixel, the rest show `fill`.
  *
- * The carrier is boosted to n*v - (n-1)*fill so the mean still lands on v —
- * without that the image would just dim by a factor of n. Optional zero-sum
+ * The carrier is boosted to n*v - (n-1)*fill so the mean still lands on v.
+ * Without that the image would just dim by a factor of n. Optional zero-sum
  * noise is stacked on top, because interleaving alone leaves 1/n of the true
  * pixels legible in every plane.
  */
@@ -228,7 +228,7 @@ function fillInterleave(planes, target, cfg) {
   const nw = Math.ceil(w / scale);
   const nh = Math.ceil(h / scale);
 
-  // Which plane carries each cell. Shared across channels — "split the pixel",
+  // Which plane carries each cell. Shared across channels. "split the pixel",
   // not "split the channel". In 'channels' mode the owner is the channel index
   // instead, which is the whole difference between the two modes.
   const byChannel = cfg.mode === 'channels';
@@ -297,7 +297,7 @@ function randomDraws(w, h, cfg) {
 /**
  * Decoy modulator: a second image drives the offsets. Its value maps to the
  * noise *phase*, so where the decoy is dark plane 0 goes down and plane 1 goes
- * up, and vice versa — the decoy's own contrast is what you see in each plane.
+ * up, and vice versa. The decoy's own contrast is what you see in each plane.
  */
 function decoyDraws(decoy, w, h) {
   if (!decoy) throw new Error("splitFrames: mode 'decoy' requires opts.decoy");
@@ -317,7 +317,7 @@ function decoyDraws(decoy, w, h) {
  * offset. A pure 2.2 power is the usual shorthand and is wrong exactly where it
  * matters here, since a plane driven to one extreme spends its time near black.
  *
- * `gamma` of 2.4 selects the standard curve; any other value falls back to a
+ * `gamma` of 2.4 selects the standard curve. Any other value falls back to a
  * pure power so a display measured with tools/fit.mjs can be matched directly.
  * Measured on one 60Hz panel: 2.45 fitted best as a pure power, and the true
  * EOTF did slightly better still.
@@ -326,7 +326,7 @@ function decoyDraws(decoy, w, h) {
  * Per-target centre and swing for linear-light splitting, as a 256-entry table.
  *
  * The first version offset in light directly: swing = k * min(L, 1-L). Colours
- * came out exact, but light is tiny for most real colours — #14141a sits at
+ * came out exact, but light is tiny for most real colours. #14141a sits at
  * L=0.007, giving a code range of [3, 30]. That is a +/-13 swing, i.e. almost
  * no masking, and it is why a mid-tone panel stopped hiding anything.
  *
@@ -394,7 +394,7 @@ function clamp(v, min, max) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Average a set of captured frames. This is the recovery attack — the same
+ * Average a set of captured frames. This is the recovery attack. The same
  * integration your eye performs, done in software. Kept in the library on
  * purpose: if you can't run this against your own output and see how much
  * comes back, you don't know what you're shipping.
@@ -420,7 +420,7 @@ export function averageFrames(caps) {
  * plane luma and source luma. 0 is a plane that tells you nothing; 1 is a plane
  * that is the picture.
  *
- * This is a legibility proxy, not a security metric — correlation is blind to
+ * This is a legibility proxy, not a security metric. Correlation is blind to
  * whether a human can read the result, and a low score is necessary but not
  * sufficient. Use it to compare modes against each other, not to certify one.
  *
@@ -428,7 +428,7 @@ export function averageFrames(caps) {
  * are exactly the transforms an attacker undoes for free.
  */
 export function leakScore(plane, src) {
-  // averageFrames validates this; without the same check here a mismatch reads
+  // averageFrames validates this. Without the same check here a mismatch reads
   // past the end of the smaller buffer and returns NaN instead of throwing.
   if (plane.width !== src.width || plane.height !== src.height) {
     throw new Error(
@@ -493,7 +493,7 @@ function toRgb(color) {
 }
 
 /**
- * Separable box blur — the cheapest denoise an attacker reaches for, and the
+ * Separable box blur. The cheapest denoise an attacker reaches for, and the
  * one that matters most here.
  *
  * Per-pixel noise is *white*: its energy sits above the spatial frequencies that
@@ -503,7 +503,7 @@ function toRgb(color) {
  *
  * Raising `noiseScale` pushes the noise down into the same frequency band as the
  * content, where no blur can separate them. At a block size at or above the
- * stroke width the attacker's best radius drops to 0 — blurring stops helping.
+ * stroke width the attacker's best radius drops to 0. Blurring stops helping.
  * That is the reason to set noiseScale, and leakScore() alone cannot see it.
  */
 export function boxBlur(img, radius) {

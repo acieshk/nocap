@@ -148,7 +148,14 @@
   </p>
 
   <div class="knobs">
-    <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
+    <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading..."></label>
+    <label class="f"><span>Strength <em id="strV">medium</em></span>
+      <select id="strength">
+        <option value="weak">weak, easiest to read</option>
+        <option value="medium" selected>medium, the default</option>
+        <option value="strong">strong, wants 120Hz+</option>
+        <option value="custom">custom</option>
+      </select></label>
     <label class="f"><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
     <label class="f"><span>Background</span><input type="color" id="bg" value="#404040"></label>
     <label class="f"><span>Amplitude <em id="ampV">110</em></span>
@@ -277,10 +284,10 @@ Element.prototype.attachShadow = function (init) {
 <script type="module">
 import './src/secret.js';
 import { Flicker, averageFrames, perceivedMean, boxBlur, leakScore, denoisedLeak,
-         checkPalette, detectFormat, splitFrames, auditPage } from './src/index.js';
+         checkPalette, detectFormat, splitFrames, auditPage, STRENGTHS } from './src/index.js';
 
 const $ = (id) => document.getElementById(id);
-// Fetched, not inlined — an inline literal would put this page's own secret
+// Fetched, not inlined. An inline literal would put this page's own secret
 // straight into its View Source, which is the thing being demonstrated.
 $('txt').value = (await (await fetch('./demo/api-mock.json')).json()).account;
 
@@ -317,7 +324,7 @@ function capture() {
   //
   // boxBlur is O(w * h * r) on the main thread. On a phone the panes stack full
   // width at dpr 3, so the canvas is several times larger than on a laptop and
-  // this ran into tens of milliseconds — long enough to drop a frame mid-cycle,
+  // this ran into tens of milliseconds. Long enough to drop a frame mid-cycle,
   // present one plane twice, and show as a flash. Bounding the width keeps the
   // cost flat regardless of viewport, and the panel is illustrative anyway: the
   // leak number quoted in the readout is computed off-screen in apply().
@@ -334,7 +341,7 @@ function capture() {
 /**
  * The hero's leak badge comes from apply()'s off-screen measurement, not from
  * this panel. Scoring the displayed blur meant a second full-resolution pass per
- * capture, which is the cost this bounded copy exists to avoid — and apply()
+ * capture, which is the cost this bounded copy exists to avoid. And apply()
  * already computes the authoritative number on a fixed-size render.
  */
 function showLeak(value) {
@@ -358,7 +365,7 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
  *
  * getImageData forces a GPU->CPU sync, which stalls the rAF loop long enough to
  * drop a frame. A frame dropped MID-cycle presents one plane twice in a row, so
- * the pair goes unbalanced and you see a luminance flash — once a second,
+ * the pair goes unbalanced and you see a luminance flash. Once a second,
  * matching the old setInterval, and much worse on a phone where the readback
  * costs more. Landing the stall between cycles keeps both planes of every cycle
  * presented equally, so a dropped frame costs a little shimmer instead.
@@ -401,6 +408,7 @@ function apply() {
   $('ampV').textContent = v.amp; $('blkV').textContent = v.blk;
   $('hardV').textContent = v.hard.toFixed(2); $('chrV').textContent = v.chr.toFixed(2);
   $('gamV').textContent = v.gam.toFixed(2);
+  $('strV').textContent = $('strength').value;
 
   for (const [a, val] of [['amplitude',v.amp],['noise-scale',v.blk],['hardness',v.hard],
     ['chroma',v.chr],['gamma',v.gam],['color',v.fg],['background',v.bg]])
@@ -439,22 +447,37 @@ function apply() {
   if (!tips.length) tips.push('These settings mask well and should fuse cleanly.');
   $('advice').innerHTML = tips.map((t) => `<li>${t}</li>`).join('');
 
+  // Emit `strength` when the settings are a named one, and the raw numbers only
+  // when they are not. Showing amplitude/noise-scale/hardness for a preset would
+  // teach the harder API for no reason.
+  const named = $('strength').value !== 'custom';
   $('snippet').textContent =
-    `<nocap-secret\n  color="${v.fg}" background="${v.bg}"\n` +
-    `  amplitude="${v.amp}" noise-scale="${v.blk}"\n` +
-    `  chroma="${v.chr}" hardness="${v.hard}"` +
-    (v.fake ? `\n  fake="${v.fake}"` : '') +
-    (v.scr ? `\n  scramble` : '') +
-    (v.gam !== 2.4 ? `\n  gamma="${v.gam.toFixed(2)}"` : '') +
-    `\n></nocap-secret>\n\nel.secret = await fetchAccountNumber();`;
+    `<nocap-secret
+  color="${v.fg}" background="${v.bg}"
+` +
+    (named
+      ? `  strength="${$('strength').value}"`
+      : `  amplitude="${v.amp}" noise-scale="${v.blk}"
+` +
+        `  chroma="${v.chr}" hardness="${v.hard}"`) +
+    (v.fake ? `
+  fake="${v.fake}"` : '') +
+    (v.scr ? `
+  scramble` : '') +
+    (v.gam !== 2.4 ? `
+  gamma="${v.gam.toFixed(2)}"` : '') +
+    `
+></nocap-secret>
+
+el.secret = await fetchAccountNumber();`;
 
   layout();
   showFrames();
 }
 
 /**
- * Draw the individual planes. The decoy is invisible while the element runs —
- * that is the whole design — so without this the only way to see fake mode
+ * Draw the individual planes. The decoy is invisible while the element runs,
+ * which is the whole design, so without this the only way to see fake mode
  * working is to take an actual screenshot.
  */
 function showFrames() {
@@ -470,6 +493,31 @@ function showFrames() {
   }
 }
 
+// The strength dropdown drives the three sliders it owns, so the numbers stay
+// visible rather than being hidden behind a name.
+$('strength').onchange = () => {
+  const preset = STRENGTHS[$('strength').value];
+  if (preset) {
+    $('amp').value = preset.amplitude;
+    $('blk').value = preset.noiseScale;
+    $('hard').value = preset.hardness;
+  }
+  apply();
+};
+
+// Touching one of those sliders means the settings are no longer a named
+// strength, and saying so is more honest than leaving a stale label up.
+for (const id of ['amp', 'blk', 'hard']) {
+  $(id).addEventListener('input', () => {
+    const preset = STRENGTHS[$('strength').value];
+    if (!preset) return;
+    const same = +$('amp').value === preset.amplitude
+      && +$('blk').value === preset.noiseScale
+      && +$('hard').value === preset.hardness;
+    if (!same) $('strength').value = 'custom';
+  });
+}
+
 for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','fake','scr'])
   $(id).oninput = $(id).onchange = schedule;
 
@@ -478,6 +526,10 @@ $('presets').onclick = (e) => {
   if (!b) return;
   for (const el of $('presets').querySelectorAll('button[data-p]')) el.classList.toggle('on', el === b);
   for (const [k, val] of Object.entries(PRESETS[b.dataset.p])) if ($(k)) $(k).value = val;
+  const named = Object.entries(STRENGTHS).find(([, s]) =>
+    s.amplitude === +$('amp').value && s.noiseScale === +$('blk').value
+    && s.hardness === +$('hard').value);
+  $('strength').value = named ? named[0] : 'custom';
   apply();
 };
 
@@ -488,7 +540,7 @@ $('runChecks').onclick = async () => {
   $('attackOut').innerHTML = '';
   await new Promise((r) => requestAnimationFrame(r));
 
-  // Same auditPage() the library exports — this panel is not a special case.
+  // Same auditPage() the library exports. This panel is not a special case.
   const { surfaces, found } = await auditPage($('txt').value);
   const LABEL = {
     htmlSource: 'HTML source (View Source, curl, scrapers)',

@@ -4,7 +4,7 @@
  * Noise tells an attacker they failed, so they take another screenshot. A value
  * in the right shape does not: a captured frame reading 5829-3471-9024 looks
  * like a successful capture, and nothing prompts a retry. That is the whole
- * point of this module — it trades "obviously protected" for "quietly wrong".
+ * point of this module. It trades "obviously protected" for "quietly wrong".
  *
  * The generated value always matches the source's shape exactly: same length,
  * same separators, same digit/letter/case pattern. A decoy that is visibly the
@@ -18,8 +18,8 @@ const LOWER = /[a-z]/;
 /**
  * What a value looks like, so a decoy can be built to match.
  *
- * `kind` drives semantic generation — a fake date has to have a real month, a
- * fake card number has to pass a Luhn check — while `mask` guarantees the shape
+ * `kind` drives semantic generation. A fake date has to have a real month, a
+ * fake card number has to pass a Luhn check. While `mask` guarantees the shape
  * is identical regardless.
  *
  * @returns {{kind:string, mask:string, digits:number, letters:number,
@@ -70,10 +70,10 @@ export function detectFormat(text) {
  * @param {string} text
  * @param {object} [opts]
  * @param {'auto'|'number'|'text'|'random'} [opts.mode='auto']
- *   auto   — match the detected kind, semantics included
- *   number — digits everywhere a digit or letter was
- *   text   — letters everywhere a digit or letter was
- *   random — mixed, ignoring what the source looked like
+ *   auto. Match the detected kind, semantics included
+ *   number. Digits everywhere a digit or letter was
+ *   text. Letters everywhere a digit or letter was
+ *   random. Mixed, ignoring what the source looked like
  * @param {() => number} [opts.rng=Math.random]
  */
 export function fakeLike(text, { mode = 'auto', rng = Math.random } = {}) {

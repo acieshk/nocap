@@ -10,7 +10,7 @@
  *
  * This is the same idea as shipping `averageFrames()` and `denoisedLeak()`: the
  * attack, in the public API, so a claim can be checked rather than believed.
- * Those two attack the pixels; this attacks the page around them.
+ * Those two attack the pixels. This attacks the page around them.
  *
  * ⚠️ It takes the plaintext, because it has to search for it. That means the
  * value exists in one more place while the call runs. Use it in development and
@@ -75,7 +75,7 @@ export async function auditPage(secret, opts = {}) {
     }
   });
 
-  // Not a search — a statement. The canvas has to hold the arranged image or
+  // Not a search. A statement. The canvas has to hold the arranged image or
   // nobody could read it, so a run of frames averaged together is the plaintext.
   // No mode changes this, and reporting it as clean would be a lie.
   surfaces.canvas = 'recoverable';
@@ -91,7 +91,7 @@ export async function auditPage(secret, opts = {}) {
  * Reads the current selection without disturbing it.
  *
  * Select-All + Copy is one of the cheapest ways to lift a page, so it is worth
- * checking — but doing so clobbers whatever the user had selected, which is why
+ * checking. But doing so clobbers whatever the user had selected, which is why
  * the ranges are saved and put back.
  */
 function selectionText(doc) {

@@ -45,7 +45,7 @@ function strokeImage(w, h, stroke) {
 }
 
 /**
- * A structured image — noise has no structure to leak, so it cannot show the
+ * A structured image. Noise has no structure to leak, so it cannot show the
  * difference between modes. Soft blobs plus hard edges stand in for a picture.
  */
 function sceneImage(w, h) {
@@ -175,7 +175,7 @@ test('interleave carries each cell in exactly one plane', () => {
 
 test('contrast pre-emphasis steepens the perceived image', () => {
   // The output band is fixed at [lo, hi], so contrast cannot widen it. What it
-  // does is push values toward the ends of that band — more local contrast,
+  // does is push values toward the ends of that band. More local contrast,
   // paid for by clipped highlights and shadows. Measure the spread, not the range.
   const src = noiseImage(32, 32, 13);
   const flat = { frames: 2, amplitude: 96, contrast: 1, rng: lcg(8) };
@@ -324,7 +324,7 @@ test('per-pixel noise is removable by a blur; coarser blocks are not', () => {
     coarse.best.leak < fine.best.leak * 0.5,
     `coarse blocks should resist: ${JSON.stringify(coarse)} vs ${JSON.stringify(fine)}`
   );
-  // Raw leak alone cannot see any of this — the reason denoisedLeak exists.
+  // Raw leak alone cannot see any of this. The reason denoisedLeak exists.
   assert.ok(Math.abs(fine.raw - coarse.raw) < 0.12, 'raw leak is blind to block size');
 });
 
@@ -483,7 +483,7 @@ test('the shipped default palette is one checkPalette accepts', async () => {
 
 test('auditPage finds a secret in every surface it claims to check', async () => {
   // No browser here, so a minimal document stands in. This asserts the search
-  // logic, not the DOM integration — the browser path is exercised in the demo.
+  // logic, not the DOM integration. The browser path is exercised in the demo.
   const { auditPage } = await import('../src/audit.js');
   const needle = '4471-0092-8834';
   const make = (over = {}) => ({
