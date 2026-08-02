@@ -47,7 +47,8 @@ const TEXT_DEFAULTS = {
   // No band compression under linearLight, so no pre-emphasis to claw back.
   contrast: 1,
   // 1 puts every pixel at full amplitude. This was 0.5, on a claim that it gave
-  // the same leak for less visual noise. Which does not reproduce. Measured on
+  // the same leak for less visual noise, and that claim does not reproduce.
+  // Measured on
   // the default palette at amplitude 110, stroke 5, worst plane over 6 seeds:
   //
   //   hardness 0.5   raw 0.278   after a blur 0.398
@@ -70,8 +71,9 @@ const TEXT_DEFAULTS = {
   // that helps. Purely on masking, block >= stroke width wins.
   //
   // But coarse noise is low spatial frequency, and that is exactly where the
-  // eye's temporal contrast sensitivity peaks. At 30Hz. Any 60Hz display, two
-  // planes. Big blocks strobe instead of fusing and the text is unreadable.
+  // eye's temporal contrast sensitivity peaks. At 30Hz, which is any 60Hz
+  // display with two planes, big blocks strobe instead of fusing and the text
+  // is unreadable.
   // Fine noise sits near the eye's spatial limit and fuses.
   //
   // 6. Block size is the single biggest lever against a blur, because a block
@@ -100,22 +102,22 @@ const TEXT_DEFAULTS = {
  *
  * What it does NOT do: hide from anyone with DevTools and intent. The string is
  * a live JS value, so a breakpoint, a heap snapshot, or one canvas.toDataURL()
- * in the console retrieves it. Nothing running in a browser can prevent that.
- * The client belongs to the user. Treat this as raising the cost of a casual
- * look, in the same spirit as the flicker itself.
+ * in the console retrieves it. Nothing running in a browser can prevent that,
+ * because the client belongs to the user. Treat this as raising the cost of a
+ * casual look, in the same spirit as the flicker itself.
  *
- *   <nocap-secret hold auto-hide="6"></nocap-secret>
- *   el.secret = '4471-0092-8834';
+ *   <nocap-secret strength="medium"></nocap-secret>
+ *   el.secret = await fetchAccountNumber();
  *
- * Prefer the `.secret` property. Putting the text in the element's markup works
- *. It is read once and then erased from the DOM. But it was in the HTML source
- * on the way there, which defeats the point.
+ * Prefer the `.secret` property. Putting the text in the element's markup works,
+ * since it is read once and then erased from the DOM, but it was in the HTML
+ * source on the way there, which defeats the point.
  */
 /**
  * Extending HTMLElement directly makes this module unimportable outside a
  * browser, which breaks `import 'nocap'` under SSR. Next, Astro and Remix all
  * evaluate module top-level on the server. Falling back to a plain base keeps
- * the barrel importable there. CustomElements.define is already guarded below,
+ * the barrel importable there. `customElements.define` is already guarded below,
  * so nothing registers and nothing renders until it reaches a browser.
  */
 const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
@@ -133,11 +135,31 @@ const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
  * @param {Record<string,string>} attrs  attributes that are actually present
  * @param {number} [dpr=1]  a preset's block is authored at dpr 1 and scaled here
  */
-export function resolveOptions(attrs = {}, dpr = 1) {
+export function resolveOptions(attrs = {}, dpr = 1, height = 56) {
   const preset = STRENGTHS[attrs.strength] ?? {};
   const base = { ...TEXT_DEFAULTS, ...preset };
-  // Block size follows the stroke, which follows devicePixelRatio.
-  base.noiseScale = Math.max(base.noiseScale, Math.round(base.noiseScale * dpr));
+
+  // Block size follows the stroke, which follows devicePixelRatio. But it stops
+  // there: past the stroke width there is no radius left for a blur to exploit,
+  // so a coarser block buys nothing and still costs fusion, which is the scarce
+  // resource. Measured at stroke 8, worst plane over 6 seeds:
+  //
+  //   block  6   raw 0.251   blurred 0.293   attacker radius 4
+  //   block  8   raw 0.283   blurred 0.291   attacker radius 3
+  //   block 10   raw 0.257   blurred 0.257   attacker radius 0   <- saturated
+  //   block 12   raw 0.301   blurred 0.301   attacker radius 0
+  //
+  // Scaling blindly gave 6 x dpr 2 = 12 against a real stroke of 8: nothing
+  // gained over 10, a worse raw leak, and 20% more shimmer paid for it.
+  //
+  // The font is canvas height * 0.46 and a 600-weight stroke is about an eighth
+  // of that, so the ceiling tracks the element rather than being another
+  // constant to keep in step.
+  const strokePx = Math.max(2, Math.round(height * dpr * 0.46 / 8));
+  base.noiseScale = Math.min(
+    Math.max(base.noiseScale, Math.round(base.noiseScale * dpr)),
+    Math.max(base.noiseScale, Math.round(strokePx * 1.25))
+  );
 
   const num = (name, fallback) => (name in attrs ? +attrs[name] : fallback);
   return {
@@ -328,7 +350,7 @@ export class NocapSecret extends ElementBase {
    * Each character is rendered alone into a scratch canvas at a fixed point and
    * then blitted to its slot. That split matters: a hook on
    * `CanvasRenderingContext2D.prototype.fillText`. The one-liner that otherwise
-   * defeats this component outright. Sees single characters, in shuffled order,
+   * defeats this component outright, sees single characters in shuffled order,
    * every one drawn at the same coordinates. It recovers the multiset of
    * characters and the length, not the arrangement. Position lives in the
    * drawImage calls instead, so an attacker now has to hook two APIs and
@@ -607,9 +629,9 @@ export class NocapSecret extends ElementBase {
       if (this.#adapted || !hz || hz < 100 || !this.#revealed) return;
       this.#adapted = true;
       // Scaled the same way #defaultBlock is, so this is always an increase.
-      // Hardcoding 5 meant that on a 2x display. Which is most high-refresh
-      // hardware. The default was already 6 and this LOWERED it, running the
-      // logic backwards on exactly the machines the branch exists for.
+      // Hardcoding 5 meant that on a 2x display, which is most high-refresh
+      // hardware, the default was already higher and this LOWERED it, running
+      // the logic backwards on exactly the machines the branch exists for.
       this.#flicker.configure({ noiseScale: Math.round(this.#defaultBlock() * 5 / 3) }).then(() => {
         if (this.#revealed) this.render();
       });
@@ -657,7 +679,7 @@ export class NocapSecret extends ElementBase {
       if (this.hasAttribute(name)) attrs[name] = this.getAttribute(name);
     }
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    return resolveOptions(attrs, dpr);
+    return resolveOptions(attrs, dpr, +(this.getAttribute('height') ?? 56));
   }
 
   /**

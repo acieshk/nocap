@@ -219,7 +219,8 @@ export const STRENGTHS: Record<Strength, {
 /** Merge defaults, a strength preset and explicit attributes. Pure, for tests. */
 export function resolveOptions(
   attrs?: Record<string, string>,
-  dpr?: number
+  dpr?: number,
+  height?: number
 ): SplitOptions & { adaptive: boolean };
 
 export class NocapSecret extends HTMLElement {

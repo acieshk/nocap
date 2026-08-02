@@ -545,21 +545,36 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   // after a spread and their fallbacks still read the defaults, so `strength`
   // moved amplitude and nothing else. Untestable while it was inline.
   const { resolveOptions, STRENGTHS } = await import('../src/secret.js');
+  const TEXT_BLOCK = STRENGTHS.medium.noiseScale;
   for (const [name, preset] of Object.entries(STRENGTHS)) {
     const got = resolveOptions({ strength: name }, 1);
     assert.equal(got.amplitude, preset.amplitude, `${name} amplitude`);
     assert.equal(got.hardness, preset.hardness, `${name} hardness`);
     assert.equal(got.noiseScale, preset.noiseScale, `${name} noiseScale`);
   }
-  // Presets are authored at dpr 1 and scaled like the default.
-  assert.equal(resolveOptions({ strength: 'strong' }, 2).noiseScale,
-    STRENGTHS.strong.noiseScale * 2, 'preset block must scale with dpr');
+  // Presets are authored at dpr 1 and scale with dpr, but stop at the stroke
+  // width: past there no blur radius helps, so a coarser block buys nothing and
+  // still costs fusion. Blind scaling gave 12 against a real stroke of 8.
+  const tall = 120;
+  const strokeAt = (dpr, h) => Math.round((h * dpr * 0.46) / 8);
+  for (const dpr of [1, 2, 3]) {
+    const got = resolveOptions({ strength: 'strong' }, dpr, tall).noiseScale;
+    assert.ok(got >= STRENGTHS.strong.noiseScale, `dpr ${dpr} must not shrink the preset`);
+    assert.ok(got <= Math.max(STRENGTHS.strong.noiseScale, Math.round(strokeAt(dpr, tall) * 1.25)),
+      `dpr ${dpr} overshot the stroke ceiling: ${got}`);
+  }
+  // A taller element has a wider stroke, so it earns a coarser block.
+  assert.ok(resolveOptions({}, 2, 120).noiseScale > resolveOptions({}, 2, 40).noiseScale,
+    'the ceiling should track the element, not be another constant');
   // An explicit attribute still wins over its part of the preset.
   const override = resolveOptions({ strength: 'weak', hardness: '0.9' }, 1);
   assert.equal(override.hardness, 0.9);
   assert.equal(override.amplitude, STRENGTHS.weak.amplitude, 'the rest stays');
   // No strength named: plain defaults, dpr-scaled.
-  assert.equal(resolveOptions({}, 2).noiseScale, 12);
+  // No strength named: defaults, dpr-scaled, still under the stroke ceiling.
+  const plain = resolveOptions({}, 2, 120).noiseScale;
+  assert.ok(plain >= TEXT_BLOCK && plain <= Math.round((120 * 2 * 0.46 / 8) * 1.25) + 1,
+    `plain default out of range: ${plain}`);
 });
 
 test('the viewer-facing mean is taken in light, not in code', async () => {

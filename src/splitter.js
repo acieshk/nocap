@@ -228,8 +228,8 @@ function fillInterleave(planes, target, cfg) {
   const nw = Math.ceil(w / scale);
   const nh = Math.ceil(h / scale);
 
-  // Which plane carries each cell. Shared across channels. "split the pixel",
-  // not "split the channel". In 'channels' mode the owner is the channel index
+  // Which plane carries each cell, shared across channels: this splits the
+  // pixel, not the channel. In 'channels' mode the owner is the channel index
   // instead, which is the whole difference between the two modes.
   const byChannel = cfg.mode === 'channels';
   const owner = new Uint8Array(byChannel ? 0 : nw * nh);
