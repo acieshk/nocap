@@ -351,13 +351,13 @@ export class NocapSecret extends ElementBase {
     const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
     const blank = paint(() => {});
 
-    const inkFor = (text, dy) =>
+    const inkFor = (text, dx, dy, size) =>
       paint((ctx) => {
-        ctx.font = small;
+        ctx.font = small.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * size)}px`);
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, w / 2, h / 2 + dy);
+        ctx.fillText(text, w / 2 + dx, h / 2 + dy);
       });
 
     // Every decoy appears exactly twice across the rotation, once added and once
@@ -369,7 +369,15 @@ export class NocapSecret extends ElementBase {
     for (let k = 0; k < cycles; k++) decoys.push(fakeLike(plain, { mode }));
 
     const blankInk = blank.data;
-    const inks = decoys.map((d, i) => inkFor(d, i % 2 ? h * 0.22 : -h * 0.22));
+    // A random spot and size per decoy, not two fixed lines. The position is a
+    // property of the decoy rather than of the appearance, so the added and
+    // subtracted copies still land on exactly the same pixels and cancel — it
+    // just scatters them across the field instead of stacking two rows.
+    // Ranges keep the text inside the canvas at the smallest size.
+    const inks = decoys.map((d) =>
+      inkFor(d, (Math.random() - 0.5) * w * 0.26,
+                (Math.random() - 0.5) * h * 0.62,
+                0.8 + Math.random() * 0.45));
 
     for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));

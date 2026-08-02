@@ -182,9 +182,10 @@ mode is semantic too: fake dates have real months, fake card numbers pass Luhn.
 
 Decoys are driven from the mean of the plane pair at full headroom, so they
 replace the noise where their ink falls rather than competing with it, and they
-never clip or shift the perceived value. They are drawn smaller than the real
-text and on their own line, so a capture reads the decoy as the most legible
-thing in the frame.
+never clip or shift the perceived value. Each gets its own random position and
+size, scattered across the field rather than stacked on fixed lines — the spot
+belongs to the decoy rather than to the appearance, so the added and subtracted
+copies still land on exactly the same pixels and cancel.
 
 ## `<nocap-secret>`
 
