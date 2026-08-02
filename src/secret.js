@@ -384,21 +384,32 @@ export class NocapSecret extends ElementBase {
 
     for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
-      // Same decoy, opposite signs, adjacent frames.
-      const use = [[0, inks[k], 1], [1, inks[k], -1]];
-
-      for (const [plane, ink, sign] of use) {
-        for (let i = 0; i < blankInk.length; i += 4) {
-          const amount = (ink.data[i] - blankInk[i]) / 255;
-          if (amount <= 0.02) continue;
-          for (let c = 0; c < 3; c++) {
-            // Drive from the mean so the pair still resolves to the target, and
-            // take the full headroom so the decoy is the most legible thing in
-            // the frame rather than a ghost competing with the noise.
-            const mean = (base[0].data[i + c] + base[1].data[i + c]) / 2;
-            const room = Math.min(mean, 255 - mean);
-            set[plane].data[i + c] = mean + amount * strength * room * sign;
-          }
+      const ink = inks[k];
+      for (let i = 0; i < blankInk.length; i += 4) {
+        const amount = (ink.data[i] - blankInk[i]) / 255;
+        if (amount <= 0.02) continue;
+        for (let c = 0; c < 3; c++) {
+          const b0 = base[0].data[i + c];
+          const b1 = base[1].data[i + c];
+          // Bias the noise the split already produced instead of overwriting it.
+          // Replacing it left the decoy as smooth glyphs on a noisy field, which
+          // reads as something pasted on top; biasing keeps the grain, so the
+          // decoy is made of noise exactly like the real text is.
+          //
+          // The push uses the smaller of the two planes' headroom so it is equal
+          // and opposite on both — that is what lets it cancel exactly, and it
+          // is why the headroom cannot be taken per plane.
+          //
+          // Strictly the residual headroom, never a floor. Flooring it to keep
+          // the decoy more legible clips wherever the noise already sits near an
+          // extreme, and a clipped push is no longer equal and opposite — the
+          // decoy stops cancelling and ghosts into the mean, where the viewer
+          // sees it. Legibility of the decoy is worth less than the guarantee
+          // that it never reaches the eye.
+          const room = Math.min(b0, 255 - b0, b1, 255 - b1);
+          const push = amount * strength * room;
+          set[0].data[i + c] = b0 + push;
+          set[1].data[i + c] = b1 - push;
         }
       }
       sets.push(set);
