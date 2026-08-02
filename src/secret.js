@@ -77,7 +77,16 @@ const TEXT_DEFAULTS = {
  * — it is read once and then erased from the DOM — but it was in the HTML source
  * on the way there, which defeats the point.
  */
-export class NocapSecret extends HTMLElement {
+/**
+ * Extending HTMLElement directly makes this module unimportable outside a
+ * browser, which breaks `import 'nocap'` under SSR — Next, Astro and Remix all
+ * evaluate module top-level on the server. Falling back to a plain base keeps
+ * the barrel importable there; customElements.define is already guarded below,
+ * so nothing registers and nothing renders until it reaches a browser.
+ */
+const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
+
+export class NocapSecret extends ElementBase {
   static observedAttributes = [
     'amplitude',
     'frames',

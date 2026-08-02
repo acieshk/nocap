@@ -378,3 +378,18 @@ test('semantic decoys survive a second look', async () => {
     assert.ok(passesLuhn(card), `${card} fails Luhn`);
   }
 });
+
+/* --------------------------------------------------------------- packaging -- */
+
+test('the package barrel imports outside a browser', async () => {
+  // Next, Astro and Remix all evaluate module top-level on the server, so a bare
+  // `import 'nocap'` must not throw there. secret.js defines a web component, so
+  // this only holds because its base class falls back when HTMLElement is absent.
+  const m = await import('../src/index.js');
+  for (const name of ['splitFrames', 'checkPalette', 'fakeLike', 'Flicker', 'NocapSecret']) {
+    assert.ok(name in m, `missing export ${name}`);
+  }
+  // The DOM-free half has to actually run server-side, not merely import.
+  assert.equal(m.checkPalette({ color: '#9ea6b4', background: '#6b7280' }).grade, 'good');
+  assert.equal(m.fakeLike('4471-0092-8834', { rng: lcg(3) }).length, 14);
+});
