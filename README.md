@@ -294,6 +294,17 @@ image. It does not cover anyone who has read this page.
 near the edge of the gamut rather than clipped, since clipping a channel breaks
 isoluminance silently.
 
+Verified in Chrome on the rendered element, not only on the arrays. With
+`chroma-decoy="auto"` at the default swing, in the averaged frame:
+
+| | decoy band | rest of the element |
+| --- | --- | --- |
+| chrominance variation | **16.6** | 6.0 |
+| luminance variation | **5.1** | 16.1 |
+
+The decoys sit in chrominance and carry almost no luminance; the real value is
+the opposite. That is the whole mechanism, measured end to end.
+
 **Isoluminant is not invisible.** Equiluminant text is a well-known case of
 something visible but hard to localise and hard to focus. Expect a faint tint,
 and decide on your own content whether it is tolerable. The element also needs
