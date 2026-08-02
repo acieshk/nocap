@@ -355,3 +355,49 @@ test('each encryption uses a fresh salt and iv', async () => {
   assert.notEqual(a.iv, b.iv, 'iv reused');
   assert.notEqual(a.ct, b.ct, 'identical ciphertext for identical plaintext');
 });
+
+/* ------------------------------------------------------------------ fake -- */
+
+test('decoys match the source shape exactly', async () => {
+  const { fakeLike } = await import('../src/fake.js');
+  const shape = (s) => s.replace(/[0-9]/g, 'D').replace(/[A-Z]/g, 'A').replace(/[a-z]/g, 'a');
+  for (const src of ['4471-0092-8834', 'NKQ2-7T4W-ZP19', '884 201', '+44 20 7946 0958']) {
+    for (const mode of ['auto', 'number', 'text', 'random']) {
+      const fake = fakeLike(src, { mode, rng: lcg(src.length + mode.length) });
+      assert.equal(fake.length, src.length, `${mode} changed the length of ${src}`);
+      if (mode === 'auto') {
+        // A decoy in the wrong shape reveals the mechanism, which is worse
+        // than showing noise.
+        assert.equal(shape(fake), shape(src), `${mode} broke the shape of ${src}`);
+      }
+      // Separators are structure, not content, and must survive every mode.
+      assert.equal(fake.replace(/[0-9A-Za-z]/g, ''), src.replace(/[0-9A-Za-z]/g, ''));
+      assert.notEqual(fake, src, 'decoy identical to the source protects nothing');
+    }
+  }
+});
+
+test('detectFormat recognises the kinds it generates for', async () => {
+  const { detectFormat } = await import('../src/fake.js');
+  assert.equal(detectFormat('2026-09-01').kind, 'date-iso');
+  assert.equal(detectFormat('01/09/2026').kind, 'date-dmy');
+  assert.equal(detectFormat('09/28').kind, 'expiry');
+  assert.equal(detectFormat('4539578763621486').kind, 'card');
+  assert.equal(detectFormat('NKQ2-7T4W-ZP19').kind, 'alphanumeric');
+  assert.equal(detectFormat('hold the line').kind, 'text');
+});
+
+test('semantic decoys survive a second look', async () => {
+  const { fakeLike, passesLuhn } = await import('../src/fake.js');
+  // A month of 83 or a card failing its checksum announces that the value is
+  // manufactured, which defeats the point of a decoy.
+  for (let i = 0; i < 30; i++) {
+    const d = fakeLike('2026-09-01', { rng: lcg(i + 1) });
+    const [, mm, dd] = d.split('-').map(Number);
+    assert.ok(mm >= 1 && mm <= 12, `bad month in ${d}`);
+    assert.ok(dd >= 1 && dd <= 31, `bad day in ${d}`);
+
+    const card = fakeLike('4539578763621486', { rng: lcg(i + 100) });
+    assert.ok(passesLuhn(card), `${card} fails Luhn`);
+  }
+});
