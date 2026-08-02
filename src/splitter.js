@@ -565,6 +565,42 @@ export function denoisedLeak(plane, src, maxRadius = 8) {
   return best;
 }
 
+/**
+ * The mean your eye actually resolves, averaged in light rather than in code.
+ *
+ * averageFrames() takes the arithmetic mean of the code values, which is what an
+ * attacker's ffmpeg does and therefore the right tool for scoring a leak. It is
+ * the wrong tool for asking what a viewer sees. Under linearLight the planes are
+ * solved so their emitted LIGHT averages to the target, and because light is
+ * convex the solved centre sits below the target in code. So the code-space mean
+ * comes out systematically dark: an authored #404040 reads as #2d2d2d, about 19
+ * levels, which is visible.
+ *
+ * Use this for anything meant to look like what the viewer sees. Use
+ * averageFrames for anything meant to model a capture.
+ */
+export function perceivedMean(caps, gamma = 2.4) {
+  if (!caps.length) throw new Error('perceivedMean: no frames');
+  const { width: w, height: h } = caps[0];
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < out.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      let lit = 0;
+      for (const cap of caps) lit += toLight(cap.data[i + c], gamma);
+      out[i + c] = toCode(lit / caps.length, gamma);
+    }
+    out[i + 3] = 255;
+  }
+  return { width: w, height: h, data: out };
+}
+
+/** Emitted light back to a code value. Inverse of toLight. */
+function toCode(x, gamma) {
+  const v = clamp(x, 0, 1);
+  if (gamma !== 2.4) return 255 * Math.pow(v, 1 / gamma);
+  return 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+}
+
 /** Undo the [lo, hi] compression, to compare a recovery against the original. */
 export function expandRange(img, range) {
   const { lo, hi } = range;

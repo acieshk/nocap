@@ -276,7 +276,7 @@ Element.prototype.attachShadow = function (init) {
 </script>
 <script type="module">
 import './src/secret.js';
-import { Flicker, averageFrames, boxBlur, leakScore, denoisedLeak,
+import { Flicker, averageFrames, perceivedMean, boxBlur, leakScore, denoisedLeak,
          checkPalette, detectFormat, splitFrames, auditPage } from './src/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -343,7 +343,9 @@ function showLeak(value) {
 }
 function still() {
   if (!hero.planes.length) return;
-  const m = averageFrames(hero.planes);
+  // What the viewer resolves is the mean in LIGHT. averageFrames is the code
+  // mean, which renders about 19 levels too dark under linearLight.
+  const m = perceivedMean(hero.planes);
   hero.ctx.putImageData(new ImageData(m.data, m.width, m.height), 0, 0);
   shotCtx.putImageData(new ImageData(hero.planes[0].data, m.width, m.height), 0, 0);
   capture();

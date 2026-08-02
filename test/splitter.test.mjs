@@ -561,3 +561,27 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   // No strength named: plain defaults, dpr-scaled.
   assert.equal(resolveOptions({}, 2).noiseScale, 8);
 });
+
+test('the viewer-facing mean is taken in light, not in code', async () => {
+  // averageFrames is the arithmetic mean of code values, which is what an
+  // attacker's ffmpeg computes and the right tool for scoring a leak. It is the
+  // wrong tool for asking what a viewer sees: under linearLight the planes are
+  // solved so their LIGHT averages to the target, and because light is convex
+  // the solved centre sits below the target in code. Rendering averageFrames as
+  // "what you see" was about 19 levels too dark at #404040 and 34 at #6d6d6d.
+  const { perceivedMean } = await import('../src/splitter.js');
+  const solid = (v) => {
+    const d = new Uint8ClampedArray(64 * 4);
+    for (let i = 0; i < d.length; i += 4) { d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+    return { width: 8, height: 2, data: d };
+  };
+  for (const v of [0x0d, 0x40, 0x6d, 0x8f, 0xbc]) {
+    const planes = splitFrames(solid(v), {
+      frames: 2, amplitude: 110, chroma: 0, hardness: 1, linearLight: true });
+    assert.ok(Math.abs(perceivedMean(planes).data[0] - v) < 2,
+      `perceivedMean drifted at ${v}: ${perceivedMean(planes).data[0]}`);
+    // And the code mean must be the darker one, or the bug has come back.
+    assert.ok(averageFrames(planes).data[0] < v - 2,
+      `averageFrames should read dark at ${v}, the whole reason this exists`);
+  }
+});

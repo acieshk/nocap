@@ -6,6 +6,7 @@ export { auditPage } from './audit.js';
 export {
   splitFrames,
   averageFrames,
+  perceivedMean,
   expandRange,
   planeRange,
   leakScore,

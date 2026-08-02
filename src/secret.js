@@ -1,5 +1,5 @@
 import { Flicker } from './flicker.js';
-import { leakScore, planeRange, averageFrames } from './splitter.js';
+import { leakScore, planeRange, averageFrames, perceivedMean } from './splitter.js';
 import { checkPalette, toLight, toCode } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
@@ -631,7 +631,9 @@ export class NocapSecret extends ElementBase {
   #showStill() {
     const planes = this.#flicker.planes;
     if (!planes.length) return;
-    const mean = averageFrames(planes);
+    // In light, not in code: averageFrames would render this about 19 levels
+    // too dark, which is the whole point of the static fallback looking right.
+    const mean = perceivedMean(planes, this.#options().gamma);
     this.#flicker.ctx.putImageData(
       new ImageData(mean.data, mean.width, mean.height), 0, 0);
     if (this.#motionWarned) return;
