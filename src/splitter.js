@@ -165,6 +165,9 @@ function fillModulated(planes, target, cfg) {
   const { width: w, height: h, data: t } = target;
   const off = new Float64Array(n);
 
+  // Built once per split; 256 entries is far cheaper than solving per pixel.
+  const lut = cfg.linearLight ? linearMeanTable(cfg.amplitude, cfg.gamma) : null;
+
   const draws = cfg.mode === 'decoy'
     ? decoyDraws(cfg.decoy, w, h)
     : randomDraws(w, h, cfg);
@@ -195,11 +198,9 @@ function fillModulated(planes, target, cfg) {
           // Headroom is per pixel, so nothing clips and no band is needed —
           // but a near-black or near-white pixel has almost none, and carries
           // almost no noise. Mid-tones are what buy masking.
-          const L = toLight(v, cfg.gamma);
-          const swing = (cfg.amplitude / MAX_AMP) * Math.min(L, 1 - L);
-          for (let k = 0; k < n; k++) {
-            planes[k].data[p + c] = toCode(clamp(L + off[k] * swing, 0, 1), cfg.gamma);
-          }
+          const centre = lut[v * 2];
+          const swing = lut[v * 2 + 1];
+          for (let k = 0; k < n; k++) planes[k].data[p + c] = centre + off[k] * swing;
         } else {
           // A pixel at v can only carry ±min(v, 255-v) before it clips, and
           // clipping breaks the zero-sum property. Adaptive respects that
@@ -321,15 +322,56 @@ function decoyDraws(decoy, w, h) {
  * Measured on one 60Hz panel: 2.45 fitted best as a pure power, and the true
  * EOTF did slightly better still.
  */
+/**
+ * Per-target centre and swing for linear-light splitting, as a 256-entry table.
+ *
+ * The first version offset in light directly: swing = k * min(L, 1-L). Colours
+ * came out exact, but light is tiny for most real colours — #14141a sits at
+ * L=0.007, giving a code range of [3, 30]. That is a +/-13 swing, i.e. almost
+ * no masking, and it is why a mid-tone panel stopped hiding anything.
+ *
+ * Instead: put the two planes symmetrically around a centre in CODE space, so
+ * the swing is as large as the amplitude asks for, and solve for the centre
+ * whose planes AVERAGE IN LIGHT to the target. Averaging a convex function
+ * overshoots, so the centre lands below the target and cancels it exactly.
+ *
+ * Both properties at once: full code-space noise, and a perceived colour equal
+ * to the authored one. The swing is only reduced where a pixel is close enough
+ * to an extreme that v +/- d would clip.
+ */
+function linearMeanTable(amplitude, gamma) {
+  const table = new Float64Array(512); // [centre, swing] per target value
+  for (let target = 0; target < 256; target++) {
+    const wanted = toLight(target, gamma);
+    let swing = amplitude;
+
+    for (; swing > 0; swing--) {
+      // Light-mean is monotonic in the centre, so the reachable band is set by
+      // the two ends of the centre's own range.
+      const lowest = (toLight(2 * swing, gamma) + toLight(0, gamma)) / 2;
+      const highest = (toLight(255, gamma) + toLight(255 - 2 * swing, gamma)) / 2;
+      if (wanted >= lowest && wanted <= highest) break;
+    }
+
+    let lo = swing;
+    let hi = 255 - swing;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      const got = (toLight(mid + swing, gamma) + toLight(mid - swing, gamma)) / 2;
+      if (got < wanted) lo = mid;
+      else hi = mid;
+    }
+    table[target * 2] = (lo + hi) / 2;
+    table[target * 2 + 1] = swing;
+  }
+  return table;
+}
+
+/** sRGB EOTF at gamma 2.4, else a pure power so a measured display can be matched. */
 function toLight(v, gamma) {
   const s = clamp(v, 0, 255) / 255;
   if (gamma !== 2.4) return Math.pow(s, gamma);
   return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
-
-function toCode(x, gamma) {
-  if (gamma !== 2.4) return 255 * Math.pow(x, 1 / gamma);
-  return 255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
 }
 
 /** Contrast pre-emphasis around mid-grey, then compression into [lo, hi]. */

@@ -100,6 +100,7 @@ export class NocapSecret extends ElementBase {
     'adaptive',
     'scramble',
     'fake',
+    'fake-placement',
     'width',
     'height',
     'placeholder',
@@ -117,6 +118,7 @@ export class NocapSecret extends ElementBase {
   #lastDecoy = null;
   #fakeWarned = false;
   #adapted = false;
+  #gapWarned = false;
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -325,6 +327,18 @@ export class NocapSecret extends ElementBase {
    * Decoy planes: one frame carries a plausible wrong value, the other carries
    * whatever makes the pair average back to the truth.
    *
+   * Two placements, and the choice is a real trade rather than a preference.
+   *
+   * 'gaps' (default) puts decoy glyphs only where the target left background,
+   * so the real glyphs are untouched and stay readable. At 30Hz the alternation
+   * does not fully fuse, and overlaying a decoy on the real glyphs makes the
+   * value genuinely hard to read. The cost is that the real value is present in
+   * every frame — the decoy adds ambiguity about which digits are real, it does
+   * not replace them.
+   *
+   * 'overlay' replaces the glyphs, so a capture can show a wholly wrong value.
+   * Stronger, and harder to read.
+   *
    * Noise announces failure and invites another screenshot. A value in the right
    * shape does not. The cost is that only ONE of the two planes reads cleanly —
    * offsets must sum to zero, so if plane 0 is the decoy then plane 1 is
@@ -353,7 +367,14 @@ export class NocapSecret extends ElementBase {
       );
     }
 
-    const render = (text) => {
+    const measureAdvance = (f) => {
+      const cv = makeCanvas(8, 8);
+      const ctx = cv.getContext('2d');
+      ctx.font = f;
+      return ctx.measureText('0').width;
+    };
+
+    const render = (text, dx = 0) => {
       const { width: w, height: h } = this.#flicker.canvas;
       const cv = makeCanvas(w, h);
       const ctx = cv.getContext('2d', { alpha: false, willReadFrequently: true });
@@ -363,24 +384,51 @@ export class NocapSecret extends ElementBase {
       ctx.fillStyle = color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, w / 2, h / 2);
+      ctx.fillText(text, w / 2 + dx, h / 2);
       return ctx.getImageData(0, 0, w, h);
     };
 
     const T = render(this.#secret);
-    const F = render(decoy);
+    // Offset by half an advance so decoy glyphs land between the real ones
+    // rather than on top of them.
+    const advance = measureAdvance(font);
+    const F = render(decoy, advance / 2);
+
     const a = new Uint8ClampedArray(T.data.length);
     const b = new Uint8ClampedArray(T.data.length);
+    const gapsOnly = (this.getAttribute('fake-placement') ?? 'gaps') === 'gaps';
+    const bgLight = toLight(render('', 0).data[0]);
 
+    let placed = 0;
     for (let i = 0; i < T.data.length; i += 4) {
+      // A pixel is "empty" when the target left it at the background value.
+      const empty = Math.abs(toLight(T.data[i]) - bgLight) < 0.004;
+      const allow = !gapsOnly || empty;
       for (let c = 0; c < 3; c++) {
         const lt = toLight(T.data[i + c]);
-        const d = toLight(F.data[i + c]) - lt;
+        const raw = toLight(F.data[i + c]) - lt;
+        const d = allow ? raw : 0;
         const reach = d === 0 ? 0 : Math.min(1, Math.min(lt, 1 - lt) / Math.abs(d));
         a[i + c] = toCode(lt + reach * d);
         b[i + c] = toCode(lt - reach * d);
+        if (c === 0 && reach > 0.1) placed++;
       }
       a[i + 3] = b[i + 3] = 255;
+    }
+
+    // Nowhere to put it: showing the target unchanged is honest, and better
+    // than smearing a decoy over the glyphs and making the value unreadable.
+    if (gapsOnly && placed < T.width) {
+      this.#lastDecoy = null;
+      if (!this.#gapWarned) {
+        this.#gapWarned = true;
+        console.warn(
+          '[nocap-secret] fake: no empty space to place a decoy in, so none was ' +
+            'inserted. Use a shorter value, a wider element, or ' +
+            'fake-placement="overlay" to replace glyphs instead (harder to read).'
+        );
+      }
+      return this.#flicker.setText(this.#secret, { font, color, background });
     }
 
     await this.#flicker.setPlanes([
