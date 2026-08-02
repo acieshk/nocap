@@ -259,6 +259,14 @@
       <span>Masking strength <em id="strengthV">98</em></span>
       <input type="range" id="strength" min="30" max="127" step="1" value="98">
     </label>
+    <label>
+      <span>Noise colour <em id="chromaV">grey</em></span>
+      <input type="range" id="chroma" min="0" max="1" step="0.05" value="0">
+    </label>
+    <label>
+      <span>Noise hardness <em id="hardV">0.50</em></span>
+      <input type="range" id="hard" min="0.1" max="1" step="0.05" value="0.5">
+    </label>
     <div class="presets">
       <button class="ghost" data-bg="#08080a" data-fg="#d8d8e0">Dark</button>
       <button class="ghost" data-bg="#ffffff" data-fg="#111827">Light</button>
@@ -373,7 +381,8 @@ const denoiseCtx = denoiseCv.getContext('2d', { alpha: false });
 // frequencies the strokes occupy and a radius-4 blur pulls the number back out:
 // measured leak 0.13 raw against 0.46 denoised. At a block size at or above the
 // stroke width there is no radius that helps.
-const hero = new Flicker(liveCv, { amplitude: 96, contrast: 2.6, frames: 2, noiseScale: 3 });
+const hero = new Flicker(liveCv,
+  { amplitude: 96, contrast: 2.6, frames: 2, noiseScale: 3, chroma: 0, hardness: 0.5 });
 const H = 76;
 const ATTACK_RADIUS = 4;
 
@@ -488,11 +497,15 @@ function restyle() {
     background,
     color,
     amplitude: +$('strength').value,
+    chroma: +$('chroma').value,
+    hardness: +$('hard').value,
     fontSize: 34 * devicePixelRatio * 0.46,
   });
 
   chip.setAttribute('amplitude', cfg.amplitude);
   chip.setAttribute('noise-scale', cfg.noiseScale);
+  chip.setAttribute('chroma', cfg.chroma);
+  chip.setAttribute('hardness', cfg.hardness);
   chip.setAttribute('color', cfg.color);
   chip.setAttribute('background', cfg.background);
 
@@ -522,6 +535,15 @@ $('pageBg').oninput = restyle;
 $('pageFg').oninput = restyle;
 $('strength').oninput = () => {
   $('strengthV').textContent = $('strength').value;
+  restyle();
+};
+$('chroma').oninput = () => {
+  const v = +$('chroma').value;
+  $('chromaV').textContent = v === 0 ? 'grey' : v === 1 ? 'per-channel' : v.toFixed(2);
+  restyle();
+};
+$('hard').oninput = () => {
+  $('hardV').textContent = (+$('hard').value).toFixed(2);
   restyle();
 };
 for (const b of document.querySelectorAll('.presets button')) {

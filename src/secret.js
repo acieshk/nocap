@@ -18,8 +18,17 @@ const TEXT_DEFAULTS = {
   // through a live 30Hz alternation. 96 gives 63 levels for a modest leak cost.
   amplitude: 96,
   contrast: 2.6,
-  hardness: 1,
-  chroma: 1,
+  // Noise magnitude spread. 1 slams every pixel to +/-amplitude, which is the
+  // strongest mask but reads as harsh confetti. 0.5 clusters deviations near the
+  // background — same measured leak as chroma:1/hardness:1 used to give, about a
+  // quarter less visually loud.
+  hardness: 0.5,
+  // Grey noise, not per-channel. This is a free win rather than a compromise:
+  // sharing one sign across R/G/B puts the whole noise budget into luminance,
+  // which is what leakScore and the eye both key on for text. Measured 0.262
+  // denoised leak versus 0.346 for independent per-channel noise, at identical
+  // visual loudness — and it looks like grey static instead of rainbow static.
+  chroma: 0,
   // Deliberately small, and this is a real trade-off rather than an oversight.
   //
   // Coarse noise resists a blur attack far better: per-pixel noise is white, so
@@ -66,6 +75,8 @@ export class NocapSecret extends HTMLElement {
     'frames',
     'contrast',
     'noise-scale',
+    'chroma',
+    'hardness',
     'color',
     'background',
     'adaptive',
@@ -299,6 +310,8 @@ export class NocapSecret extends HTMLElement {
       frames: num('frames', TEXT_DEFAULTS.frames),
       contrast: num('contrast', TEXT_DEFAULTS.contrast),
       noiseScale: num('noise-scale', TEXT_DEFAULTS.noiseScale),
+      chroma: num('chroma', TEXT_DEFAULTS.chroma),
+      hardness: num('hardness', TEXT_DEFAULTS.hardness),
       adaptive: this.hasAttribute('adaptive'),
     };
   }

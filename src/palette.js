@@ -145,6 +145,10 @@ export function suggestConfig(design) {
   return {
     amplitude,
     noiseScale,
+    // Grey noise masks better than per-channel and looks far calmer; 0.5
+    // hardness keeps deviations near the background instead of at the extremes.
+    chroma: design.chroma ?? 0,
+    hardness: design.hardness ?? 0.5,
     // What to author — full range. The splitter compresses these.
     color: outFgHex,
     background: outBgHex,

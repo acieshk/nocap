@@ -112,6 +112,16 @@ Two knobs matter, and both are trade-offs rather than settings with a right answ
 **Amplitude** buys masking with perceived contrast. The source is remapped into
 `[amplitude, 255-amplitude]`, so that band *is* your contrast budget.
 
+**Noise colour** (`chroma`) is not a trade-off — grey wins outright. Sharing one
+sign across R/G/B puts the whole budget into luminance, which is what both
+`leakScore` and the eye key on for text: 0.262 denoised leak versus 0.346 for
+independent per-channel noise, at identical visual loudness, and it looks like
+grey static rather than rainbow confetti.
+
+**Hardness** trades masking for calm. At `chroma: 0`, hardness 1 gives leak
+0.262 at loudness 96; hardness 0.5 gives 0.349 at loudness 72 — the same masking
+the old per-channel default gave, a quarter less visually loud.
+
 **Block size** (`noise-scale`) buys blur resistance with flicker fusion. Per-pixel
 noise is *white* — it sits above the spatial frequencies text strokes occupy, so
 a small blur separates them. Coarse noise shares the band with the content, where
@@ -180,6 +190,8 @@ inset field and the difference reads as a form input rather than a mistake.
 | `noise-scale` | `3` | Noise block in px. |
 | `frames` | `2` | Planes per cycle. 2 is almost always right. |
 | `contrast` | `2.6` | Pre-emphasis to claw back the band compression. |
+| `chroma` | `0` | 0 = grey noise, 1 = independent per channel. |
+| `hardness` | `0.5` | 1 slams every pixel to ±amplitude; lower keeps noise near the background. |
 | `color` / `background` | `#e8e8f0` / `#14141a` | Authored palette. |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom. |
 | `width` / `height` | `260` / `56` | CSS pixels. |
