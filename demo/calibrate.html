@@ -46,6 +46,12 @@
   block. Sit at your normal viewing distance and don't lean in; this is a
   whole-field match, not a pixel-peeping task.
 </p>
+<div class="note">
+  <b>Three of the 18 trials do not flicker at all.</b> That is deliberate — they
+  are controls that measure your matching precision, which gets subtracted from
+  the result as bias. If a trial looks like two solid blocks, nothing is broken:
+  just match it as usual and carry on.
+</div>
 <p class="muted">
   <kbd>←</kbd> <kbd>→</kbd> adjust · <kbd>Shift</kbd> + arrows for fine steps ·
   <kbd>Enter</kbd> to accept · <kbd>Space</kbd> to skip a trial you can't null.
@@ -88,9 +94,12 @@ import { Flicker } from '../src/index.js';
    error should be largest at mid-grey and at high amplitude, and near zero at
    amplitude 0 — which is the control that checks your matching accuracy. */
 const BASES = [64, 96, 128, 160, 192];
-const AMPS = [0, 48, 96];
 const TRIALS = [];
-for (const amplitude of AMPS) for (const base of BASES) TRIALS.push({ base, amplitude });
+for (const amplitude of [48, 96]) for (const base of BASES) TRIALS.push({ base, amplitude });
+// Controls: no flicker at all. They measure YOUR matching precision, which is
+// then subtracted as bias so it does not get mistaken for a real effect. Three
+// is enough; five wasted trials and made the page look broken.
+for (const base of [64, 128, 192]) TRIALS.push({ base, amplitude: 0 });
 
 // Grey alone cannot reveal a per-channel error, and phosphors do not share one
 // gamma exactly. These match a single channel at a time: you adjust only that
@@ -101,11 +110,16 @@ const HUES = [
   { name: 'blue', rgb: [60, 90, 210], channel: 2 },
 ];
 for (const h of HUES) for (const amplitude of [96]) TRIALS.push({ ...h, amplitude });
-// Interleave so fatigue and drift don't correlate with one condition.
+
+// Spread conditions so fatigue does not correlate with one of them, then force
+// a strong-flicker trial to the front. Landing on a static control first makes
+// the whole page look broken, which is exactly what happened.
 TRIALS.sort((a, b) => ((a.base * 7 + a.amplitude * 13) % 11) - ((b.base * 7 + b.amplitude * 13) % 11));
+const lead = TRIALS.findIndex((t) => t.amplitude === 96 && t.rgb == null);
+if (lead > 0) TRIALS.unshift(...TRIALS.splice(lead, 1));
 
 const $ = (id) => document.getElementById(id);
-const flick = new Flicker($('flick'), { frames: 2, chroma: 0, hardness: 1, noiseScale: 3, contrast: 1 });
+const flick = new Flicker($("flick"), { frames: 2, chroma: 0, hardness: 1, noiseScale: 3, contrast: 1, willReadFrequently: true });
 flick.resize(190, 190);
 
 let i = 0;
@@ -145,6 +159,22 @@ async function load() {
   $('match').value = start;
   paint();
   $('progress').textContent = `trial ${i + 1} of ${TRIALS.length}`;
+  // Measure the actual frame-to-frame delta rather than trusting the config, so
+  // a real failure to flicker is distinguishable from a control trial.
+  requestAnimationFrame(() => {
+    const c = $('flick');
+    const ctx = c.getContext('2d');
+    const a = ctx.getImageData(0, 0, c.width, c.height).data;
+    requestAnimationFrame(() => {
+      const b = ctx.getImageData(0, 0, c.width, c.height).data;
+      let d = 0;
+      for (let k = 0; k < a.length; k += 4) d += Math.abs(a[k] - b[k]);
+      const delta = Math.round(d / (a.length / 4));
+      $('progress').textContent =
+        `trial ${i + 1} of ${TRIALS.length} · ` +
+        (delta > 2 ? `flickering (Δ${delta})` : 'control — no flicker, match it anyway');
+    });
+  });
 }
 
 function paint() {
