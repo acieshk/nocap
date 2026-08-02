@@ -1,6 +1,7 @@
 export { Flicker } from './flicker.js';
 export { NocapSecret } from './secret.js';
 export { suggestConfig, placeInBand, luma, toRgb, toHex } from './palette.js';
+export { encryptSecret, decryptSecret } from './vault.js';
 export {
   splitFrames,
   averageFrames,

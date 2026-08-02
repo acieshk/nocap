@@ -6,7 +6,7 @@
 
 Splits content into frames that alternate at your display's refresh rate. Each
 frame is noise; their *mean* is the content. Your visual system does the
-averaging, so you read it — a single screenshot does not.
+averaging, so you read it — a single screenshot does not, and passphrase payloads round-trip while a wrong passphrase throws.
 
 The text never enters the DOM, so page-reading AI agents and scrapers get
 nothing at all.
@@ -79,6 +79,31 @@ catches nothing and makes the default look safe when it is not.
 
 The real line is **automated pipeline vs. targeted attacker**. nocap defeats the
 pipeline and never the person who has decided to come after the value.
+
+## Passphrase gating
+
+`encryptSecret` / `decryptSecret` are AES-GCM over a PBKDF2-derived key
+(310k iterations, WebCrypto, no dependencies). `el.unlock(payload, passphrase)`
+decrypts straight into the element so the caller never holds the plaintext.
+
+```js
+const payload = await encryptSecret('4471-0092-8834', passphrase);  // store/serve this
+await el.unlock(payload, passphrase);
+```
+
+**Fixes:** anyone holding the page, the JSON, a CDN copy, a backup or a
+forwarded link has ciphertext and nothing else. That is the host, a shared
+machine, and the network tab.
+
+**Does not fix:** the person who just typed the passphrase. After `decrypt`
+returns, the value is in memory and on a canvas — `crypto.subtle.decrypt` can be
+wrapped in one line without ever finding the key. If the viewer is your
+adversary, encryption is the wrong tool; make the value short-lived or
+single-use so extracting it is worth little.
+
+Never ship the key with the page. A typed passphrase, a key in the URL fragment
+(never sent to the server), or a key issued after auth are all fine. A constant
+in the bundle is obfuscation, not encryption.
 
 ## Tuning
 
@@ -154,7 +179,7 @@ inset field and the difference reads as a form input rather than a mistake.
 | `placeholder` | `hold to reveal` | Cover text. |
 
 Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.reveal()`,
-`.hide()`, `.measureLeak()`. Events: `reveal`, `hide`. It auto-hides on tab
+`.hide()`, `.unlock(payload, passphrase)`, `.measureLeak()`. Events: `reveal`, `hide`. It auto-hides on tab
 switch and window blur — the moment a screen share usually starts.
 
 **Set `.secret` from JS.** Putting the text in markup works — it is read once and
@@ -167,6 +192,7 @@ defeats the point.
 import {
   Flicker, splitFrames, averageFrames, boxBlur, denoisedLeak,
   leakScore, planeRange, maxAmplitudeFor, suggestConfig,
+  encryptSecret, decryptSecret,
 } from 'nocap';
 ```
 
@@ -230,10 +256,10 @@ Live: **<https://acieshk.github.io/nocap/>** — or `npm run demo`, then
 npm test
 ```
 
-39 tests: the planes average back to the source at every amplitude and mode, no
+41 tests: the planes average back to the source at every amplitude and mode, no
 plane leaks, clipping never breaks the zero-sum property, the leak ordering
 holds, adaptive colour is exact, and coarse blocks resist a blur that fine noise
-does not.
+does not, and passphrase payloads round-trip while a wrong passphrase throws.
 
 ## License
 
