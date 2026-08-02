@@ -110,7 +110,7 @@
     <button data-p="balanced" class="on">Balanced</button>
     <button data-p="strong">Max masking</button>
     <button data-p="readable">Most readable</button>
-    <button data-p="decoy">Fake value</button>
+    <button data-p="decoy">Fake value <span style="opacity:.55">· exp</span></button>
     <button data-p="broken">Unmaskable</button>
   </div>
 
@@ -141,7 +141,7 @@
       <input type="range" id="chr" min="0" max="1" step="0.05" value="0"></label>
     <label class="f"><span>Gamma <em id="gamV">2.40</em></span>
       <input type="range" id="gam" min="1.8" max="3.0" step="0.01" value="2.4"></label>
-    <label class="f"><span>Fake value</span>
+    <label class="f"><span>Fake value <span style="color:#c2a15c">experimental</span></span>
       <select id="fake"><option value="">off</option><option value="auto">auto — match the format</option>
         <option value="number">number</option><option value="text">text</option>
         <option value="random">random</option></select></label>
@@ -159,6 +159,14 @@
 </div>
 
 <ul id="advice"></ul>
+<div class="note" id="fakeNote" style="display:none">
+  <b>Fake value is experimental.</b> The decoy's contrast is capped by the
+  headroom the noise leaves — push it harder and it clips, stops cancelling, and
+  ghosts into the mean where you would see it. That cap also makes it subtle in a
+  capture. A decoy that blends and never reaches your eye is hard to read in a
+  screenshot; one that is boldly legible leaks. No setting gives both, so treat
+  this as a demonstration rather than something to ship.
+</div>
 <pre id="snippet">…</pre>
 
 <h2>It is not in the page</h2>
@@ -347,6 +355,7 @@ function apply() {
   $('rBlur').className = grade(blur.leak);
   $('rFmt').textContent = detectFormat(v.txt).describe;
 
+  $('fakeNote').style.display = v.fake ? '' : 'none';
   const tips = [...pal.warnings];
   if (v.fake && pal.ratio < 1)
     tips.push('Fake mode needs a masking ratio of 1.0+, or the real value ghosts through both frames.');

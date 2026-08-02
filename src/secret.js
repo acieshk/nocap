@@ -300,6 +300,9 @@ export class NocapSecret extends ElementBase {
    * Decoy planes: one frame carries a plausible wrong value, the other carries
    * whatever makes the pair average back to the truth.
    *
+   * EXPERIMENTAL. Sound in mechanism, narrow in useful range: see the warning
+   * emitted on first use, and the README.
+   *
    * Noise announces failure and invites another screenshot. A value in the right
    * shape does not.
    *
@@ -321,6 +324,15 @@ export class NocapSecret extends ElementBase {
   }
 
   async #drawFake(font, color, background, mode, plain) {
+    if (!this.#fakeWarned) {
+      this.#fakeWarned = true;
+      console.warn(
+        '[nocap-secret] fake mode is EXPERIMENTAL. The decoy is capped by the ' +
+          'headroom the noise leaves — larger clips and stops cancelling — so it ' +
+          'is subtle in a capture. Blending and legibility are in direct tension ' +
+          'and no setting gives both. Do not rely on it in production.'
+      );
+    }
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
     // Full headroom. At half, the decoy competed with the noise and read as a

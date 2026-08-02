@@ -141,7 +141,12 @@ lets you check one interactively.
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
 noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
-## Fake values
+## Fake values — experimental
+
+> **Experimental, and not recommended for production yet.** It works, but the
+> useful range is narrow enough that it may not be worth the complexity. Read
+> the trade below before enabling it.
+
 
 Noise tells an attacker the capture failed, so they take another. A value in the
 right shape does not.
@@ -159,6 +164,20 @@ subtracted on the other. Two consequences:
 - **A capture freezes one.** A screenshot cannot average, so it catches a single
   frame and a single decoy, in the right format, at full contrast. The rotation
   holds eight, so a burst lands on different ones.
+
+### Why it is marked experimental
+
+The decoy's push is bounded by the headroom the noise leaves, because anything
+larger clips — and a clipped push is no longer equal and opposite, so the decoy
+stops cancelling and ghosts into the mean where the viewer sees it. That bound
+also makes the decoy subtle in a capture: it shares the noise's grain and
+contrast rather than standing out from it.
+
+So the two things you want are in direct tension. A decoy that blends and never
+reaches the eye is hard to read in a screenshot; one that is boldly legible
+leaks. There is no setting that gives both, and the honest summary is that fake
+mode currently buys less than its complexity costs. It is kept because the
+mechanism is sound and a larger decoy font may widen the window later.
 
 **The pair has to sit inside one cycle**, and this is the subtle part. An earlier
 version split each pair one cycle apart, which cancels only over the full
@@ -194,7 +213,7 @@ copies still land on exactly the same pixels and cancel.
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `scramble` | off | Store glyphs shuffled; see the DevTools table. |
-| `fake` | off | `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
+| `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+. |
 | `amplitude` | `96` | Fraction of the headroom the colours allow. |
 | `noise-scale` | `3` | Noise block in px. Higher resists blur, strobes below 120Hz. |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo. |
