@@ -653,11 +653,26 @@ test('the rendering modes are additive, not alternatives', async () => {
   // And every path that builds a source has to paint it. Match the definition,
   // not the first occurrence: the call site comes earlier in the file and
   // slicing from there reads the dispatch instead of the method.
+  //
+  // Take the method's real extent by matching braces. A fixed window was the
+  // first version and it failed on a comment: #paintWatermark sat 24 characters
+  // past a 4000 character slice, so adding an explanation to #drawFake broke a
+  // test about something else entirely.
+  const methodBody = (name) => {
+    const at = src.indexOf(`async ${name}(`);
+    if (at < 0) return null;
+    const open = src.indexOf('{', at);
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === '{') depth++;
+      else if (src[i] === '}' && --depth === 0) return src.slice(at, i + 1);
+    }
+    return null;
+  };
   for (const fn of ['#drawPlain', '#drawScrambled', '#drawFake']) {
-    const at = src.indexOf(`async ${fn}(`);
-    assert.ok(at > 0, `${fn} not found`);
-    assert.ok(src.slice(at, at + 4000).includes('#paintWatermark'),
-      `${fn} never paints the mark`);
+    const body = methodBody(fn);
+    assert.ok(body, `${fn} not found`);
+    assert.ok(body.includes('#paintWatermark'), `${fn} never paints the mark`);
   }
 });
 
@@ -742,4 +757,61 @@ test('a scratch trail lasts the same wall-clock time at any frame rate', async (
     assert.equal(scratchLingerKeep(0.016, bad), 0, `linger=${bad} must clear`);
   }
   assert.equal(scratchLingerKeep(0, 30), 1, 'no elapsed time, no decay');
+});
+
+test('resolveText defaults match what the element drew before it was configurable', async () => {
+  const { resolveText } = await import('../src/secret.js');
+  // The old hardcoded string was `600 ${round(height * 0.46)}px ui-monospace, monospace`.
+  for (const h of [56, 80, 90, 110]) {
+    assert.equal(resolveText({}, h).font,
+      `600 ${Math.round(h * 0.46)}px ui-monospace, monospace`, `height ${h}`);
+  }
+  const d = resolveText({}, 56);
+  assert.equal(d.align, 'center');
+  assert.equal(d.letterSpacing, '0px');
+  assert.equal(d.padX, 0);
+});
+
+test('resolveText takes the styling attributes', async () => {
+  const { resolveText } = await import('../src/secret.js');
+  const t = resolveText({
+    'font-family': 'Inter, sans-serif', 'font-weight': '700',
+    'font-size': '30', 'text-align': 'left', 'padding-x': '12',
+  }, 90);
+  assert.equal(t.font, '700 30px Inter, sans-serif');
+  assert.equal(t.sizePx, 30);
+  assert.equal(t.align, 'left');
+  assert.equal(t.padX, 12);
+  // An explicit size wins over the scale.
+  assert.equal(resolveText({ 'font-size': '20', 'font-scale': '0.9' }, 100).sizePx, 20);
+  // A junk alignment falls back rather than reaching the canvas.
+  assert.equal(resolveText({ 'text-align': 'justify' }, 56).align, 'center');
+});
+
+test('letter-spacing without a unit still reaches the canvas', async () => {
+  const { resolveText } = await import('../src/secret.js');
+  // `ctx.letterSpacing = '2'` is a silent no-op, which is the whole trap.
+  assert.equal(resolveText({ 'letter-spacing': '2' }, 56).letterSpacing, '2px');
+  assert.equal(resolveText({ 'letter-spacing': '0.1em' }, 56).letterSpacing, '0.1em');
+});
+
+test('the noise block ceiling follows the real font size, not the old assumption', async () => {
+  const { resolveOptions, resolveText } = await import('../src/secret.js');
+  // Small text with a block sized for large text is where a blur wins, so the
+  // ceiling has to move when the font does.
+  // The ceiling only ever trims a dpr-scaled block, so the font size can lower
+  // the block and never raise it. That makes dpr 2 the case that matters, and
+  // it is also the case that is real: high-refresh hardware is high-dpr.
+  const big = resolveOptions({}, 2, 90, resolveText({}, 90).sizePx * 2).noiseScale;
+  const small = resolveOptions({}, 2, 90, resolveText({ 'font-size': '12' }, 90).sizePx).noiseScale;
+  assert.ok(small < big,
+    `a 12px font must not carry the block of a 41px one: ${small} vs ${big}`);
+
+  // At dpr 1 the ceiling is floored at the preset's own block, so the font size
+  // does not reach it. Asserted so the limitation is recorded rather than
+  // discovered: see the note in resolveOptions.
+  const base1 = resolveOptions({}, 1, 90).noiseScale;
+  assert.equal(resolveOptions({}, 1, 90, 12).noiseScale, base1);
+  // Passing nothing keeps the previous behaviour exactly.
+  assert.equal(resolveOptions({}, 1, 56).noiseScale, resolveOptions({}, 1, 56, 56 * 0.46).noiseScale);
 });

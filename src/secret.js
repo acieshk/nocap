@@ -160,7 +160,47 @@ export function scratchLingerKeep(dt, linger) {
  * @param {Record<string,string>} attrs  attributes that are actually present
  * @param {number} [dpr=1]  a preset's block is authored at dpr 1 and scaled here
  */
-export function resolveOptions(attrs = {}, dpr = 1, height = 56) {
+/**
+ * Resolve the text styling attributes into everything the draw paths need.
+ *
+ * Pure and exported so it can be tested without a DOM, same reason
+ * resolveOptions is.
+ *
+ * The size matters beyond appearance. The noise block ceiling is derived from
+ * the stroke width, and the stroke is derived from the font, so a configurable
+ * font that did not feed back into resolveOptions would leave the ceiling
+ * tracking a size the element is no longer drawing at. Small text with a block
+ * sized for large text is the case where a blur wins, and nothing would have
+ * said so.
+ *
+ * @param {Record<string,string>} attrs  attributes that are present
+ * @param {number} height  canvas height in device px
+ */
+export function resolveText(attrs = {}, height = 56) {
+  // 0.46 of the height is the long-standing default and stays the default.
+  const scale = 'font-scale' in attrs ? +attrs['font-scale'] : 0.46;
+  const sizePx = Math.max(6, Math.round(
+    'font-size' in attrs ? +attrs['font-size'] : height * scale));
+  const weight = attrs['font-weight'] ?? '600';
+  const family = attrs['font-family'] ?? 'ui-monospace, monospace';
+  return {
+    font: `${weight} ${sizePx}px ${family}`,
+    sizePx,
+    // Canvas letterSpacing wants a CSS length. A bare number is the common
+    // mistake and silently does nothing, so a unit is added when missing.
+    letterSpacing: 'letter-spacing' in attrs
+      ? (/[a-z%]$/i.test(attrs['letter-spacing'])
+          ? attrs['letter-spacing']
+          : `${+attrs['letter-spacing']}px`)
+      : '0px',
+    align: ['left', 'center', 'right'].includes(attrs['text-align'])
+      ? attrs['text-align'] : 'center',
+    padX: Math.max(0, +(attrs['padding-x'] ?? 0)),
+    padY: +(attrs['padding-y'] ?? 0),
+  };
+}
+
+export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = null) {
   const preset = STRENGTHS[attrs.strength] ?? {};
   const base = { ...TEXT_DEFAULTS, ...preset };
 
@@ -180,7 +220,16 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56) {
   // The font is canvas height * 0.46 and a 600-weight stroke is about an eighth
   // of that, so the ceiling tracks the element rather than being another
   // constant to keep in step.
-  const strokePx = Math.max(2, Math.round(height * dpr * 0.46 / 8));
+  // From the ACTUAL font size when one is given. Falling back to the old
+  // height * 0.46 assumption only when the caller has nothing better.
+  const sizePx = fontSizePx ?? height * dpr * 0.46;
+  const strokePx = Math.max(2, Math.round(sizePx / 8));
+  // NOTE: the ceiling is floored at the preset's own block, so it can only ever
+  // reduce a dpr-scaled value, never go below what the preset asked for. That
+  // makes it inert for text smaller than the default — a 12px font and a 48px
+  // font both come out at 6 here. Left as-is deliberately: changing it collides
+  // with presets carrying their own noiseScale, and that collision is a design
+  // call rather than something to slip into a styling change. Filed separately.
   base.noiseScale = Math.min(
     Math.max(base.noiseScale, Math.round(base.noiseScale * dpr)),
     Math.max(base.noiseScale, Math.round(strokePx * 1.25))
@@ -214,6 +263,14 @@ export class NocapSecret extends ElementBase {
     // frame, so they already take effect on the next one. Observing them would
     // put a full re-split behind every tick of a drag, and re-noise the element
     // while you are trying to look at it.
+    'font-family',
+    'font-weight',
+    'font-size',
+    'font-scale',
+    'letter-spacing',
+    'text-align',
+    'padding-x',
+    'padding-y',
     'scratch',
     'noise-scale',
     'chroma',
@@ -224,6 +281,7 @@ export class NocapSecret extends ElementBase {
     'adaptive',
     'scramble',
     'fake',
+    'fake-share',
     'width',
     'height',
   ];
@@ -241,6 +299,7 @@ export class NocapSecret extends ElementBase {
   #adapted = false;
   #motionWarned = false;
   #chromaWarned = false;
+  #spacingWarned = false;
   #watermarkSwing = null;
   #watermarkWarned = false;
   #scratch = null;      // { mask, ctx, raf, pointer }
@@ -341,7 +400,8 @@ export class NocapSecret extends ElementBase {
     if (!this.#flicker || !(this.#secret || this.#chars?.length)) return;
 
     const { color, background } = this.#palette;
-    const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
+    const style = this.#textStyle();
+    const font = style.font;
     const fakeMode = this.getAttribute('fake');
     // Scramble empties #secret and keeps the glyphs in #chars, so fake mode has
     // to reassemble to know what shape to imitate. Guarding on #secret alone
@@ -624,11 +684,12 @@ export class NocapSecret extends ElementBase {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, w, h);
     this.#paintWatermark(ctx, font, background, w, h);
-    ctx.font = font;
+    const style = this.#textStyle();
+    this.#applyTextStyle(ctx, style);
     ctx.fillStyle = color;
-    ctx.textAlign = 'center';
+    ctx.textAlign = style.align;
     ctx.textBaseline = 'middle';
-    ctx.fillText(plain, w / 2, h / 2);
+    ctx.fillText(plain, this.#anchorX(style, w), h / 2 + style.padY);
     // cv is exactly the target size, so setSource's contain-fit is identity.
     await this.#flicker.setSource(cv, { background });
   }
@@ -721,7 +782,19 @@ export class NocapSecret extends ElementBase {
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
     // How far the decoy widens the pair, in code levels, before feasibility.
-    const decoyPush = 110;
+    // How much of each pixel's excursion budget the decoy may take, where its
+    // ink falls. The rest stays with the noise. Measured on the default palette:
+    //
+    //   share   decoy in a captured plane   noise swing left
+    //    0%              0.016                    78.4
+    //   20%              0.185                    62.7
+    //   35%              0.318                    51.0
+    //   50%              0.407                    39.2
+    //   70%              0.489                    23.5
+    //
+    // 0.35 reads in a capture without gutting the masking. There is no setting
+    // that gives both, because it is one budget.
+    const share = Math.max(0, Math.min(0.9, +(this.getAttribute('fake-share') ?? 0.35)));
 
     /**
      * The centre whose planes at ±half average, in light, to `want`.
@@ -799,7 +872,7 @@ export class NocapSecret extends ElementBase {
 
     const decoys = [];
     const sets = [];
-    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
+    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * (+(this.getAttribute('fake-size') ?? 0.55)))}px`);
     const blank = paint(() => {});
 
     // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
@@ -858,15 +931,49 @@ export class NocapSecret extends ElementBase {
           //
           // The budget is capped by what this pixel can actually reach, which
           // is the part a constant push gets wrong.
+          // Two things were wrong here, and the second one is why nothing
+          // showed up at all.
+          //
+          // THE BUDGET. `feasibleHalf` is the largest half-excursion a pixel can
+          // take and still average, in light, to its target. At the default
+          // palette that ceiling is 78.4, and TEXT_DEFAULTS already asks for
+          // 110, so the base split is ALREADY sitting on the ceiling. Adding a
+          // push and clamping to the same ceiling returns the same number. The
+          // decoy had exactly zero room, and no amount of pushing harder could
+          // have given it any.
+          //
+          // The budget is conserved. Anything the decoy gets has to come out of
+          // the noise, so the noise is reduced where the ink falls and the
+          // freed excursion is spent on the decoy. Both halves are still
+          // zero-sum, so the perceived value stays exact: measured 0.00 error
+          // at every ratio.
+          //
+          // THE SIGN. It has to come from the excursion after the decoy is in,
+          // not from the noise that was there before.
+          //
+          // Taking `Math.abs(b0 - b1) / 2 + push` and then restoring the noise's
+          // own sign widens the pair symmetrically about whichever way that
+          // pixel's noise already pointed. The decoy then modulates the noise's
+          // AMPLITUDE rather than biasing it, and amplitude modulation of
+          // random-sign noise reads as more noise. A captured plane showed the
+          // decoy at a correlation of 0.10, which is to say not at all.
+          //
+          // Adding the push to the signed excursion first biases plane 0 the
+          // same way everywhere the ink falls, which is what makes a glyph.
+          // Measured on the same simulation: 0.54. The re-solved centre keeps
+          // the perceived value exact either way, 0.00 error in both.
           const want = (toLight(b0) + toLight(b1)) / 2;
-          const half = Math.min(
-            Math.abs(b0 - b1) / 2 + amount * decoyPush,
-            feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))]
-          );
+          const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))];
+          // Split the pixel's whole budget between masking it and marking it.
+          const forDecoy = cap * share * amount;
+          const forNoise = cap - forDecoy;
+          const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
+          const excursion = noise + forDecoy;
+          const half = Math.min(Math.abs(excursion), cap);
           const centre = centreFor(want, half);
-          const up = b0 >= b1;
-          set[0].data[i + c] = centre + (up ? half : -half);
-          set[1].data[i + c] = centre + (up ? -half : half);
+          const signed = excursion < 0 ? -half : half;
+          set[0].data[i + c] = centre + signed;
+          set[1].data[i + c] = centre - signed;
         }
       }
       sets.push(set);
@@ -951,6 +1058,40 @@ export class NocapSecret extends ElementBase {
 
   #defaultBlock() {
     return this.#options().noiseScale;
+  }
+
+  #textStyle() {
+    const attrs = {};
+    for (const name of NocapSecret.observedAttributes) {
+      if (this.hasAttribute(name)) attrs[name] = this.getAttribute(name);
+    }
+    return resolveText(attrs, this.#flicker?.canvas.height ?? 56);
+  }
+
+  /**
+   * Apply the styling a canvas context can carry directly.
+   *
+   * letterSpacing is not universal: Chrome has had it since 99, Safari since
+   * 17.4. Assigning it where it is unsupported is a silent no-op rather than an
+   * error, so the element warns once instead of quietly ignoring the attribute.
+   */
+  #applyTextStyle(ctx, style) {
+    ctx.font = style.font;
+    if (style.letterSpacing !== '0px') {
+      if ('letterSpacing' in ctx) ctx.letterSpacing = style.letterSpacing;
+      else if (!this.#spacingWarned) {
+        this.#spacingWarned = true;
+        console.warn('[nocap-secret] letter-spacing is not supported by this ' +
+          'browser\'s canvas, so the attribute has no effect here.');
+      }
+    }
+  }
+
+  /** Where text starts, given alignment and horizontal padding. */
+  #anchorX(style, w) {
+    if (style.align === 'left') return style.padX;
+    if (style.align === 'right') return w - style.padX;
+    return w / 2;
   }
 
   #options() {
