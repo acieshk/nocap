@@ -285,23 +285,46 @@ function fillInterleave(planes, target, cfg) {
  */
 function randomDraws(w, h, cfg) {
   const scale = cfg.noiseScale;
-  // Jitter the lattice origin per split.
+  // Stagger the lattice so it has no straight seams.
   //
-  // Anchored at (0, 0) every cell boundary lands on the same pixel in every
-  // bank entry, so rotating the noise never moves the edges and the eye locks
-  // onto a static grid. It is invisible at a 1px cell and unmistakable at 6.
-  // Both planes of a cycle come from one call and share the offset, so the
-  // cancellation is untouched: only where the seams fall changes.
-  const ox = (cfg.rng() * scale) | 0;
-  const oy = (cfg.rng() * scale) | 0;
-  const nw = Math.ceil((w + scale) / scale);
-  const nh = Math.ceil((h + scale) / scale);
+  // A square lattice puts every cell boundary on a line spanning the whole
+  // canvas, and at a 6px cell those lines read as a grid however the noise
+  // inside them is drawn. Moving the origin per split was not enough: it slides
+  // the grid, it does not break it.
+  //
+  // Each row of cells gets its own horizontal offset and each column its own
+  // vertical one, so seams are staggered like brickwork in both directions and
+  // no edge runs more than one cell. Costs two lookups per pixel.
+  //
+  // Both planes of a cycle come from one call and share the offsets, so the
+  // cancellation is untouched. Only where the seams fall changes.
+  const nw = Math.ceil((w + scale * 2) / scale) + 1;
+  const nh = Math.ceil((h + scale * 2) / scale) + 1;
+  const rowShift = new Int32Array(nh + 2);
+  const colShift = new Int32Array(nw + 2);
+  // Never repeat the previous shift. With a 6px cell there are only 6 offsets
+  // to choose from, so neighbours collide about one time in six and two cells
+  // line up into a 12px seam. Forcing a change caps every run at one cell.
+  const shifts = (arr) => {
+    for (let i = 0; i < arr.length; i++) {
+      let s = (cfg.rng() * scale) | 0;
+      if (i && s === arr[i - 1]) s = (s + 1 + ((cfg.rng() * (scale - 1)) | 0)) % scale;
+      arr[i] = s;
+    }
+  };
+  shifts(rowShift);
+  shifts(colShift);
+
   const lat = new Float32Array(nw * nh * 9);
   for (let i = 0; i < lat.length; i++) lat[i] = cfg.rng();
 
   const chroma = cfg.chroma;
   return (x, y, c) => {
-    const base = ((((y + oy) / scale) | 0) * nw + (((x + ox) / scale) | 0)) * 9;
+    const row = (y / scale) | 0;
+    const col = (x / scale) | 0;
+    const cy = ((y + colShift[col]) / scale) | 0;
+    const cx = ((x + rowShift[row]) / scale) | 0;
+    const base = (cy * nw + cx) * 9;
     const sc = lat[base + c * 3 + 2] < chroma ? c : 0;
     return { phase: lat[base + sc * 3], mag: lat[base + sc * 3 + 1] };
   };
