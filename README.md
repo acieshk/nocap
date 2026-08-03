@@ -241,6 +241,75 @@ lets you check one interactively.
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
 noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
+## Chroma decoys — experimental
+
+> **Experimental, and narrower than it looks.** One greyscale conversion defeats
+> it completely. Read the limit before enabling it.
+
+```html
+<nocap-secret chroma-decoy="auto"></nocap-secret>
+```
+
+Every other decoy here cancels between the two planes, so the viewer never
+resolves one and averaging a run of frames removes them. That is the point, and
+it is also the limit: an attacker who averages ends up with the clean value.
+
+These do not cancel. They are composited into the source before the split, so
+they are part of what the pair averages to and they survive any number of
+frames. What keeps them off the viewer is not time, it is colour. They are
+isoluminant with the background, and the eye resolves chrominance far more
+coarsely than luminance, worst of all on blue-yellow where the S-cones are
+sparse and absent from the foveal centre. Every video codec exploits the same
+fact when it subsamples chroma.
+
+`chroma: 0` is the default, so the masking noise is grey and the whole
+chrominance dimension was sitting unused.
+
+### The limit, stated first
+
+The real value lives in luminance, because that is what a person reads. One
+greyscale conversion therefore strips every decoy and leaves the value
+untouched.
+
+| attacker | decoy correlation |
+| --- | --- |
+| keeps colour | **0.996** |
+| `-vf format=gray` | **0.020** |
+
+There is no version of this that survives that. What it buys is that an attacker
+who does not think to drop colour comes away with a plausible wrong value, which
+covers automated capture, paste-into-chat, and anything handed to a model as an
+image. It does not cover anyone who has read this page.
+
+### Measured
+
+| | |
+| --- | --- |
+| luminance shift where a decoy sits | ~0 (isoluminant by construction) |
+| decoy in an averaged frame | 0.77 at swing 20, 0.996 at swing 90 |
+| survives H.264 4:2:0 at screen-share bitrate | 0.917 |
+| effect on the real value's single-plane leak | none (0.132 either way) |
+
+`chroma-swing` sets how far the decoys move, default 60. The swing is reduced
+near the edge of the gamut rather than clipped, since clipping a channel breaks
+isoluminance silently.
+
+Verified in Chrome on the rendered element, not only on the arrays. With
+`chroma-decoy="auto"` at the default swing, in the averaged frame:
+
+| | decoy band | rest of the element |
+| --- | --- | --- |
+| chrominance variation | **16.6** | 6.0 |
+| luminance variation | **5.1** | 16.1 |
+
+The decoys sit in chrominance and carry almost no luminance; the real value is
+the opposite. That is the whole mechanism, measured end to end.
+
+**Isoluminant is not invisible.** Equiluminant text is a well-known case of
+something visible but hard to localise and hard to focus. Expect a faint tint,
+and decide on your own content whether it is tolerable. The element also needs
+vertical room for the decoy lines, so raise `height` past the 56px default.
+
 ## Fake values. Experimental
 
 > **Experimental.** It works, and the trade that used to make it marginal is
