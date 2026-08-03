@@ -185,6 +185,9 @@ export class NocapSecret extends ElementBase {
     'chroma-swing',
     'chroma-count',
     'chroma-spread',
+    'scratch',
+    'scratch-radius',
+    'scratch-fade',
     'noise-scale',
     'chroma',
     'hardness',
@@ -212,6 +215,7 @@ export class NocapSecret extends ElementBase {
   #motionWarned = false;
   #chromaWarned = false;
   #chromaDecoys = null;
+  #scratch = null;      // { mask, ctx, raf, pointer }
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -246,6 +250,10 @@ export class NocapSecret extends ElementBase {
   }
 
   disconnectedCallback() {
+    if (this.#scratch) {
+      cancelAnimationFrame(this.#scratch.raf);
+      this.#scratch = null;
+    }
     this.#flicker?.destroy();
     this.#flicker = null;
     this.#canvas = null;
@@ -323,6 +331,7 @@ export class NocapSecret extends ElementBase {
       await this.#flicker.setText(this.#secret, { font, color, background });
     }
     this.#warnPalette();
+    this.#syncScratch();
     this.#revealed = true;
     this.#flicker.start();
     this.#adaptBlock();
@@ -341,6 +350,98 @@ export class NocapSecret extends ElementBase {
     this.#revealed = false;
     this.dispatchEvent(new CustomEvent('stop'));
   };
+
+  /**
+   * Scratch-to-reveal: the planes show only where the pointer has been.
+   *
+   * Everything else in this library leaves the value on screen for as long as
+   * it is revealed, which is why two captured frames average to it exactly.
+   * There is no arrangement of noise that changes that, because the pixel is
+   * there the whole time.
+   *
+   * This changes the thing the arithmetic depends on. A pixel carries content
+   * only while it is inside the trail, so over a capture of any length it
+   * averages to roughly `duty * content + (1 - duty) * background`, while the
+   * noise keeps its amplitude throughout. Signal falls with the duty cycle and
+   * noise does not, so the attacker's SNR falls with it.
+   *
+   * It is still a cost rather than a defence. Sweep the whole value and a long
+   * enough recording holds the whole value, just faint; contrast normalisation
+   * brings it back with more noise on it. Lower duty is safer and harder to
+   * read, which is the same single knob as everything else here.
+   *
+   * Three costs that are not negotiable, so they are stated rather than
+   * discovered:
+   *
+   *   Accessibility. It needs a pointer. Keyboard and screen reader users
+   *   cannot scrub, so an integration MUST offer them another route. This is a
+   *   hard blocker, not a rough edge.
+   *
+   *   Touch. There is no hover, so a drag is required, and a drag competes with
+   *   scrolling.
+   *
+   *   Reading a long value by sweeping is slow. Opt in, never a default.
+   */
+  #syncScratch() {
+    const on = this.hasAttribute('scratch');
+    if (!on) {
+      if (this.#scratch) {
+        cancelAnimationFrame(this.#scratch.raf);
+        this.#flicker?.setRevealMask(null);
+        this.#scratch = null;
+      }
+      return;
+    }
+    if (this.#scratch) return;
+
+    const { width: w, height: h } = this.#flicker.canvas;
+    const mask = makeCanvas(w, h);
+    const ctx = mask.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    this.#flicker.setRevealMask(mask, this.#perceived(this.#palette.background));
+
+    const state = { mask, ctx, raf: 0, x: -1, y: -1, down: false };
+    this.#scratch = state;
+
+    const radius = () => +(this.getAttribute('scratch-radius') ?? 34);
+    // Per-frame alpha kept after a fade. 0.94 clears a stroke in about a
+    // second at 60Hz, which is long enough to read a few glyphs at once.
+    const fade = () => Math.min(0.999, Math.max(0.5, +(this.getAttribute('scratch-fade') ?? 0.94)));
+
+    const step = () => {
+      state.raf = requestAnimationFrame(step);
+      // Decay: punch the existing mask down by a constant factor. Painting a
+      // translucent black with destination-out multiplies alpha, which is the
+      // cheap way to get an exponential trail.
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = `rgba(0,0,0,${1 - fade()})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+
+      if (state.x >= 0) {
+        const r = radius();
+        const g = ctx.createRadialGradient(state.x, state.y, 0, state.x, state.y, r);
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(state.x, state.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    state.raf = requestAnimationFrame(step);
+
+    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    const track = (e) => {
+      const rect = this.getBoundingClientRect();
+      state.x = (e.clientX - rect.left) * dpr;
+      state.y = (e.clientY - rect.top) * dpr;
+    };
+    this.addEventListener('pointermove', track);
+    this.addEventListener('pointerdown', track);
+    this.addEventListener('pointerleave', () => { state.x = state.y = -1; });
+  }
 
   /** Measured single-plane leak for the current settings, for tuning. */
   measureLeak() {

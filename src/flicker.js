@@ -57,6 +57,10 @@ export class Flicker {
     this._last = 0;
     this._interval = 0;
     this._warned = false;
+    this._reveal = null;
+    this._maskBuf = null;
+    this._maskCtx = null;
+    this._revealBackground = '#000';
     this._tick = this._tick.bind(this);
   }
 
@@ -271,6 +275,7 @@ export class Flicker {
 
     const set = this._bank[this._bankIdx];
     this.ctx.drawImage(set[this._phase], 0, 0);
+    if (this._reveal) this._applyReveal();
     this.stats.presented++;
 
     if (++this._held < this.opts.planeHold) return;
@@ -279,6 +284,57 @@ export class Flicker {
       this._phase = 0;
       this._bankIdx = (this._bankIdx + 1) % this._bank.length;
     }
+  }
+
+  /**
+   * Show the planes only where a reveal mask is opaque, and the plain
+   * background everywhere else.
+   *
+   * The mask is an alpha stencil owned by the caller. Two composites do the
+   * work: `destination-in` keeps only the pixels the mask covers, then
+   * `destination-over` paints the background beneath what is left.
+   *
+   * Why this matters beyond looking like a scratch card: every pixel in the
+   * normal mode is on screen the whole time, so two captured frames average to
+   * the content exactly. Under a mask a pixel only carries content while it is
+   * revealed, so a long capture averages to `duty * content`, while the noise
+   * keeps its full amplitude. The signal falls with the duty cycle and the
+   * noise does not.
+   */
+  _applyReveal() {
+    const { ctx, canvas } = this;
+    const { width: w, height: h } = canvas;
+
+    // The visible canvas is created with `alpha: false`, so its backing store
+    // has no alpha and `destination-over` has nothing to paint underneath.
+    // Compositing has to happen somewhere that does have alpha, then get
+    // blitted across. Doing it in place looked plausible and rendered the
+    // hidden region as black rather than as the background.
+    if (!this._maskBuf || this._maskBuf.width !== w || this._maskBuf.height !== h) {
+      this._maskBuf = makeScratchCanvas(w, h);
+      this._maskCtx = this._maskBuf.getContext('2d');
+    }
+    const mc = this._maskCtx;
+    mc.globalCompositeOperation = 'source-over';
+    mc.clearRect(0, 0, w, h);
+    mc.drawImage(canvas, 0, 0);
+    mc.globalCompositeOperation = 'destination-in';
+    mc.drawImage(this._reveal, 0, 0);
+
+    ctx.fillStyle = this._revealBackground;
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(this._maskBuf, 0, 0);
+  }
+
+  /**
+   * Supply an alpha stencil, or null to show everything.
+   * @param {HTMLCanvasElement|OffscreenCanvas|null} mask  canvas-sized
+   * @param {string} [background='#000']  what shows where the mask is clear
+   */
+  setRevealMask(mask, background = '#000') {
+    this._reveal = mask ?? null;
+    this._revealBackground = background;
+    return this;
   }
 
   _maybeWarn() {
@@ -291,6 +347,12 @@ export class Flicker {
         `visible and uncomfortable for some viewers. Consider not engaging here.`
     );
   }
+}
+
+function makeScratchCanvas(w, h) {
+  return typeof OffscreenCanvas === 'function'
+    ? new OffscreenCanvas(w, h)
+    : Object.assign(document.createElement('canvas'), { width: w, height: h });
 }
 
 function scratch(w, h, background) {
