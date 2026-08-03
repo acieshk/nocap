@@ -637,3 +637,22 @@ test('isoluminantPartner reduces the swing rather than clipping a channel', asyn
   // A colour with room keeps what it asked for.
   assert.equal(isoluminantPartner('#6b7280', 40).swing, 40);
 });
+
+test('the rendering modes are additive, not alternatives', async () => {
+  // Twice now an if/else chain has made two enabled modes silently pick one:
+  // fake vs scramble, then watermark vs both. The dispatch is the cause, so
+  // this asserts the shape rather than any single pairing.
+  const src = await (await import('node:fs/promises')).readFile(
+    new URL('../src/secret.js', import.meta.url), 'utf8');
+  const render = src.slice(src.indexOf('  render = async'), src.indexOf('  /** Stop the alternation'));
+
+  // The mark composes into whichever path draws the value, so it must not be
+  // one of the branches.
+  assert.ok(!/if\s*\([^)]*watermark/.test(render),
+    'watermark must not be a branch: it is painted by every draw path');
+  // And every path that builds a source has to paint it.
+  for (const fn of ['#drawPlain', '#drawScrambled', '#drawFake']) {
+    const body = src.slice(src.indexOf(fn + '('), src.indexOf(fn + '(') + 3000);
+    assert.ok(body.includes('#paintWatermark'), `${fn} never paints the mark`);
+  }
+});

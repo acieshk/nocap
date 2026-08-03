@@ -214,6 +214,7 @@ export class NocapSecret extends ElementBase {
   #motionWarned = false;
   #chromaWarned = false;
   #watermarkSwing = null;
+  #watermarkWarned = false;
   #scratch = null;      // { mask, ctx, raf, pointer }
 
   connectedCallback() {
@@ -319,15 +320,17 @@ export class NocapSecret extends ElementBase {
     // meant enabling both silently dropped the decoy. The mode looked on and
     // did nothing.
     const plain = this.#secret || this.#reassemble();
-    const chromaMode = this.getAttribute('watermark');
-    if (chromaMode && chromaMode !== 'off' && plain && !this.#chars) {
-      await this.#drawWatermark(font, color, background, chromaMode, plain);
-    } else if (fakeMode && fakeMode !== 'off' && plain) {
+    // The mark is composited under whichever mode draws the value, rather than
+    // being a fourth branch. It was one, and an if/else made `watermark` with
+    // `fake` drop the decoys and `watermark` with `scramble` drop the mark, both
+    // silently. Same shape as the fake/scramble clash fixed earlier: modes that
+    // add to each other cannot be selected between.
+    if (fakeMode && fakeMode !== 'off' && plain) {
       await this.#drawFake(font, color, background, fakeMode, plain);
     } else if (this.#chars) {
       await this.#drawScrambled(font, color, background);
     } else {
-      await this.#flicker.setText(this.#secret, { font, color, background });
+      await this.#drawPlain(font, color, background, plain);
     }
     this.#warnPalette();
     this.#syncScratch();
@@ -513,18 +516,15 @@ export class NocapSecret extends ElementBase {
    * something visible but hard to localise and hard to focus. Expect to see a
    * faint tint and decide whether it is tolerable on your own content.
    */
-  async #drawWatermark(font, color, background, mode, plain) {
-    if (!this.#chromaWarned) {
-      this.#chromaWarned = true;
-      console.warn(
-        '[nocap-secret] watermark marks a capture for attribution, it does not ' +
-          'protect the value. It survives frame averaging, but one greyscale ' +
-          'conversion removes it: 0.996 correlation with colour, 0.020 after ' +
-          '`-vf format=gray`. Casual leaks, not a determined one.'
-      );
-    }
+  /**
+   * Paint the isoluminant mark, if one is set. Called by every path that draws
+   * the value, so it composes with all of them instead of replacing one.
+   */
+  #paintWatermark(ctx, font, background, w, h) {
+    const mark = this.getAttribute('watermark');
+    if (!mark || mark === 'off') return;
+    this.#warnWatermark();
 
-    const { width: w, height: h } = this.#flicker.canvas;
     const swing = this.hasAttribute('watermark-swing')
       ? +this.getAttribute('watermark-swing')
       : 60;
@@ -533,26 +533,8 @@ export class NocapSecret extends ElementBase {
     const up = isoluminantPartner(background, swing);
     const down = isoluminantPartner(background, -swing);
     const pick = Math.abs(up.swing) >= Math.abs(down.swing) ? up : down;
+    this.#watermarkSwing = pick.swing;
 
-    const scratch = makeCanvas(w, h);
-    const ctx = scratch.getContext('2d', { alpha: false });
-    ctx.fillStyle = background;
-    ctx.fillRect(0, 0, w, h);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // The mark first, so the real glyphs win any overlap.
-    //
-    // It carries whatever you put in the attribute, which is the whole point:
-    // a recipient id, an account, a short code. This started out generating a
-    // plausible fake value instead, and that could not work. A decoy has to be
-    // confusable with the value, and it never can be, because the value must
-    // carry luminance contrast for a person to read it while the mark must not
-    // or the viewer sees it. The two always render differently.
-    //
-    // Attribution has no such requirement. A mark does not need to be mistaken
-    // for the content, only to be present and to identify who received it.
-    const mark = mode;
     const repeat = Math.max(1, Math.min(8, +(this.getAttribute('watermark-repeat') ?? 3)));
     const rand = () => {
       if (typeof crypto?.getRandomValues === 'function') {
@@ -562,31 +544,52 @@ export class NocapSecret extends ElementBase {
       }
       return Math.random();
     };
+    ctx.save();
     ctx.font = font;
     ctx.fillStyle = pick.color;
-    this.#watermarkSwing = pick.swing;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     for (let i = 0; i < repeat; i++) {
-      // Scattered and overlaid rather than parked on its own row. A mark on a
-      // clear row is trivially cropped out of a screenshot, and cropping is the
-      // cheapest removal there is. Across the value it comes with any crop that
-      // keeps the value.
+      // Scattered and overlaid rather than on a clear row: a mark on its own
+      // row is trivially cropped out, and cropping is the cheapest removal.
       const spread = 0.35;
       ctx.fillText(mark, w / 2 + (rand() - 0.5) * w * spread,
                    h / 2 + (rand() - 0.5) * h * spread);
     }
-
-    ctx.font = font;
-    ctx.fillStyle = color;
-    ctx.fillText(plain, w / 2, h / 2);
-
-    // scratch is exactly the target size, so setSource's contain-fit is
-    // identity and nothing is resampled.
-    await this.#flicker.setSource(scratch, { background });
+    ctx.restore();
   }
 
-  /** Achieved chroma swing of the mark, for checking it is actually carried. */
+  #warnWatermark() {
+    if (this.#watermarkWarned) return;
+    this.#watermarkWarned = true;
+    console.warn(
+      '[nocap-secret] watermark marks a capture for attribution, it does not ' +
+        'protect the value. It survives frame averaging, but one greyscale ' +
+        'conversion removes it: 0.996 correlation with colour, 0.020 after ' +
+        '`-vf format=gray`. Casual leaks, not a determined one.'
+    );
+  }
+
+  /** Achieved chroma swing of the mark, 0 if none is set. */
   get watermarkSwing() {
     return this.#watermarkSwing ?? 0;
+  }
+
+  /** The value on its own, with the mark under it if one is set. */
+  async #drawPlain(font, color, background, plain) {
+    const { width: w, height: h } = this.#flicker.canvas;
+    const cv = makeCanvas(w, h);
+    const ctx = cv.getContext('2d', { alpha: false });
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, w, h);
+    this.#paintWatermark(ctx, font, background, w, h);
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(plain, w / 2, h / 2);
+    // cv is exactly the target size, so setSource's contain-fit is identity.
+    await this.#flicker.setSource(cv, { background });
   }
 
   async #drawScrambled(font, color, background) {
@@ -614,6 +617,11 @@ export class NocapSecret extends ElementBase {
       cellCtx.fillText(this.#chars[i], cell.width / 2, h / 2);
       ctx.drawImage(cell, originX + this.#slots[i] * advance - cell.width / 2 + advance / 2, 0);
     }
+
+    // After the glyphs, not before: each glyph is blitted as an opaque cell
+    // filled with the background, so a mark painted first is erased by them.
+    // Isoluminant either way, so sitting on top costs nothing.
+    this.#paintWatermark(ctx, font, background, w, h);
 
     // scratch is exactly the target size, so setSource's contain-fit is identity
     // and the noise is never resampled.
@@ -736,8 +744,11 @@ export class NocapSecret extends ElementBase {
     };
     const paint = (draw) => paintOn(background, draw);
 
-    // The real value, split normally: its mean is what the eye resolves.
+    // The real value, split normally: its mean is what the eye resolves. The
+    // mark goes in here rather than into the decoy planes, so it lands in the
+    // mean and survives averaging, which is the point of it.
     const base = splitFrames(paint((ctx) => {
+      this.#paintWatermark(ctx, font, background, w, h);
       ctx.font = font;
       ctx.fillStyle = color;
       ctx.textAlign = 'center';
