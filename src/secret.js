@@ -181,10 +181,9 @@ export class NocapSecret extends ElementBase {
     'frames',
     'contrast',
     'strength',
-    'chroma-decoy',
-    'chroma-swing',
-    'chroma-count',
-    'chroma-spread',
+    'watermark',
+    'watermark-swing',
+    'watermark-repeat',
     'scratch',
     'scratch-radius',
     'scratch-fade',
@@ -214,7 +213,7 @@ export class NocapSecret extends ElementBase {
   #adapted = false;
   #motionWarned = false;
   #chromaWarned = false;
-  #chromaDecoys = null;
+  #watermarkSwing = null;
   #scratch = null;      // { mask, ctx, raf, pointer }
 
   connectedCallback() {
@@ -320,9 +319,9 @@ export class NocapSecret extends ElementBase {
     // meant enabling both silently dropped the decoy. The mode looked on and
     // did nothing.
     const plain = this.#secret || this.#reassemble();
-    const chromaMode = this.getAttribute('chroma-decoy');
+    const chromaMode = this.getAttribute('watermark');
     if (chromaMode && chromaMode !== 'off' && plain && !this.#chars) {
-      await this.#drawChromaDecoys(font, color, background, chromaMode, plain);
+      await this.#drawWatermark(font, color, background, chromaMode, plain);
     } else if (fakeMode && fakeMode !== 'off' && plain) {
       await this.#drawFake(font, color, background, fakeMode, plain);
     } else if (this.#chars) {
@@ -514,20 +513,20 @@ export class NocapSecret extends ElementBase {
    * something visible but hard to localise and hard to focus. Expect to see a
    * faint tint and decide whether it is tolerable on your own content.
    */
-  async #drawChromaDecoys(font, color, background, mode, plain) {
+  async #drawWatermark(font, color, background, mode, plain) {
     if (!this.#chromaWarned) {
       this.#chromaWarned = true;
       console.warn(
-        '[nocap-secret] chroma-decoy is EXPERIMENTAL. The decoys survive frame ' +
-          'averaging but a single greyscale conversion removes all of them and ' +
-          'leaves the real value intact. It raises the cost of an automated ' +
-          'capture. It does not protect the value.'
+        '[nocap-secret] watermark marks a capture for attribution, it does not ' +
+          'protect the value. It survives frame averaging, but one greyscale ' +
+          'conversion removes it: 0.996 correlation with colour, 0.020 after ' +
+          '`-vf format=gray`. Casual leaks, not a determined one.'
       );
     }
 
     const { width: w, height: h } = this.#flicker.canvas;
-    const swing = this.hasAttribute('chroma-swing')
-      ? +this.getAttribute('chroma-swing')
+    const swing = this.hasAttribute('watermark-swing')
+      ? +this.getAttribute('watermark-swing')
       : 60;
     // Pick the direction with room in it, so a blue-heavy background moves
     // toward yellow instead of quietly getting a reduced swing.
@@ -542,16 +541,19 @@ export class NocapSecret extends ElementBase {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Decoys first, so the real glyphs win any overlap.
+    // The mark first, so the real glyphs win any overlap.
     //
-    // Scattered rather than parked above and below, and at the SAME size as the
-    // value. Fixed rows and a smaller face were both tells: they told a reader
-    // which line was the real one before colour even came into it. Position and
-    // size are cheap to fix, so they are fixed.
+    // It carries whatever you put in the attribute, which is the whole point:
+    // a recipient id, an account, a short code. This started out generating a
+    // plausible fake value instead, and that could not work. A decoy has to be
+    // confusable with the value, and it never can be, because the value must
+    // carry luminance contrast for a person to read it while the mark must not
+    // or the viewer sees it. The two always render differently.
     //
-    // What this does NOT fix is the tell that matters, and that one is
-    // structural. See the note above about luminance.
-    const count = Math.max(1, Math.min(8, +(this.getAttribute('chroma-count') ?? 3)));
+    // Attribution has no such requirement. A mark does not need to be mistaken
+    // for the content, only to be present and to identify who received it.
+    const mark = mode;
+    const repeat = Math.max(1, Math.min(8, +(this.getAttribute('watermark-repeat') ?? 3)));
     const rand = () => {
       if (typeof crypto?.getRandomValues === 'function') {
         const buf = new Uint32Array(1);
@@ -562,21 +564,15 @@ export class NocapSecret extends ElementBase {
     };
     ctx.font = font;
     ctx.fillStyle = pick.color;
-    this.#chromaDecoys = [];
-    for (let i = 0; i < count; i++) {
-      const text = fakeLike(plain, { mode });
-      this.#chromaDecoys.push(text);
-      // Overlaid on the value rather than kept clear of it. Sitting in the
-      // empty space around the value was itself a tell: anything on its own row
-      // is not the row being read. Landing on top means a reader cannot
-      // separate the two by position, only by colour.
-      //
-      // The cost lands on the person the library exists for. A mark drawn
-      // across the value competes with the value, and at a swing high enough
-      // for a capture to carry it, that competition is visible.
-      const spread = +(this.getAttribute('chroma-spread') ?? 0.35);
-      const y = h / 2 + (rand() - 0.5) * h * spread;
-      ctx.fillText(text, w / 2 + (rand() - 0.5) * w * spread, y);
+    this.#watermarkSwing = pick.swing;
+    for (let i = 0; i < repeat; i++) {
+      // Scattered and overlaid rather than parked on its own row. A mark on a
+      // clear row is trivially cropped out of a screenshot, and cropping is the
+      // cheapest removal there is. Across the value it comes with any crop that
+      // keeps the value.
+      const spread = 0.35;
+      ctx.fillText(mark, w / 2 + (rand() - 0.5) * w * spread,
+                   h / 2 + (rand() - 0.5) * h * spread);
     }
 
     ctx.font = font;
@@ -588,9 +584,9 @@ export class NocapSecret extends ElementBase {
     await this.#flicker.setSource(scratch, { background });
   }
 
-  /** The chroma decoys in play, for demos. Never exposes the real value. */
-  get chromaDecoys() {
-    return this.#chromaDecoys ?? [];
+  /** Achieved chroma swing of the mark, for checking it is actually carried. */
+  get watermarkSwing() {
+    return this.#watermarkSwing ?? 0;
   }
 
   async #drawScrambled(font, color, background) {

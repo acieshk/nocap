@@ -241,74 +241,89 @@ lets you check one interactively.
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
 noise resists a blur far better but strobes below 120Hz, so 3 is the default.
 
-## Chroma decoys — experimental
+## Watermarking, experimental
 
-> **Experimental, and narrower than it looks.** One greyscale conversion defeats
-> it completely. Read the limit before enabling it.
+> **Experimental, and narrower than it looks.** It marks a capture for
+> attribution. It does not protect the value, and one greyscale conversion
+> removes it. Read the limit before enabling it.
 
 ```html
-<nocap-secret chroma-decoy="auto"></nocap-secret>
+<nocap-secret watermark="user-8841"></nocap-secret>
 ```
 
-Every other decoy here cancels between the two planes, so the viewer never
-resolves one and averaging a run of frames removes them. That is the point, and
-it is also the limit: an attacker who averages ends up with the clean value.
+Every other mark in this library cancels between the two planes, so the viewer
+never resolves one and averaging a run of frames removes it. That is the point
+there, and also the limit: an attacker who averages ends up with the clean value.
 
-These do not cancel. They are composited into the source before the split, so
-they are part of what the pair averages to and they survive any number of
-frames. What keeps them off the viewer is not time, it is colour. They are
-isoluminant with the background, and the eye resolves chrominance far more
-coarsely than luminance, worst of all on blue-yellow where the S-cones are
-sparse and absent from the foveal centre. Every video codec exploits the same
-fact when it subsamples chroma.
+This one does not cancel. It is composited into the source before the split, so
+it is part of what the pair averages to and it survives any number of frames.
+**The operation that defeats nocap is the operation that recovers the mark.**
+What keeps it off the viewer is not time, it is colour: the mark is isoluminant
+with the background, and the eye resolves chrominance far more coarsely than
+luminance, worst of all on blue-yellow where the S-cones are sparse and absent
+from the foveal centre. Every video codec exploits the same fact when it
+subsamples chroma. `chroma: 0` is the default, so the masking noise is grey and
+the chrominance dimension was sitting unused.
 
-`chroma: 0` is the default, so the masking noise is grey and the whole
-chrominance dimension was sitting unused.
+Put a recipient id in it. A leaked screenshot then says who it came from.
 
 ### The limit, stated first
 
-The real value lives in luminance, because that is what a person reads. One
-greyscale conversion therefore strips every decoy and leaves the value
-untouched.
-
-| attacker | decoy correlation |
+| attacker | mark correlation |
 | --- | --- |
 | keeps colour | **0.996** |
 | `-vf format=gray` | **0.020** |
 
-There is no version of this that survives that. What it buys is that an attacker
-who does not think to drop colour comes away with a plausible wrong value, which
-covers automated capture, paste-into-chat, and anything handed to a model as an
-image. It does not cover anyone who has read this page.
+One filter and it is gone. So this is a **casual-leak watermark, not a forensic
+one**: it survives a screenshot into chat, a paste into a doc, an image handed
+to a model. It does not survive anyone who knows it is there. If you need
+attribution that holds against a determined leaker, that is DCT-domain spread
+spectrum and a different project.
+
+Same line the rest of the library draws. Beat the pipeline, never the person.
+
+### It was a decoy first, and that could not work
+
+The original version generated a plausible fake value rather than carrying an
+identifier. That cannot work, for a structural reason worth recording: the real
+value **must** carry luminance contrast, because a person has to read it, and
+the mark **must not**, or the viewer sees it. So the two always render
+differently and nobody is confused for a moment. A decoy has to be mistakable
+for the content. A watermark only has to be present and attributable, which is a
+requirement this mechanism can actually meet.
 
 ### Measured
 
 | | |
 | --- | --- |
-| luminance shift where a decoy sits | ~0 (isoluminant by construction) |
-| decoy in an averaged frame | 0.77 at swing 20, 0.996 at swing 90 |
+| luminance shift where the mark sits | ~0, isoluminant by construction |
+| mark in an averaged frame | 0.77 at swing 20, 0.996 at swing 90 |
 | survives H.264 4:2:0 at screen-share bitrate | 0.917 |
-| effect on the real value's single-plane leak | none (0.132 either way) |
+| effect on the real value's single-plane leak | none, 0.132 either way |
 
-`chroma-swing` sets how far the decoys move, default 60. The swing is reduced
+The codec result is the surprising one. 4:2:0 subsamples chroma 2x2 and a
+chroma-only payload is the first thing an encoder discards, so it should not
+survive. The glyphs are coarse enough that it does.
+
+`watermark-swing` sets how far the mark moves, default 60. The swing is reduced
 near the edge of the gamut rather than clipped, since clipping a channel breaks
-isoluminance silently.
+isoluminance silently. `watermark-repeat` sets how many times it is drawn,
+default 3, scattered across the value rather than on a clear row, because a mark
+on its own row is trivially cropped out.
 
-Verified in Chrome on the rendered element, not only on the arrays. With
-`chroma-decoy="auto"` at the default swing, in the averaged frame:
+Verified in Chrome on the rendered element, not only on the arrays:
 
-| | decoy band | rest of the element |
+| | mark band | rest of the element |
 | --- | --- | --- |
 | chrominance variation | **16.6** | 6.0 |
 | luminance variation | **5.1** | 16.1 |
 
-The decoys sit in chrominance and carry almost no luminance; the real value is
+The mark sits in chrominance and carries almost no luminance. The real value is
 the opposite. That is the whole mechanism, measured end to end.
 
 **Isoluminant is not invisible.** Equiluminant text is a well-known case of
 something visible but hard to localise and hard to focus. Expect a faint tint,
-and decide on your own content whether it is tolerable. The element also needs
-vertical room for the decoy lines, so raise `height` past the 56px default.
+and decide on your own content whether it is tolerable.
 
 ## Fake values. Experimental
 
