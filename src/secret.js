@@ -123,6 +123,31 @@ const TEXT_DEFAULTS = {
 const ElementBase = typeof HTMLElement === 'function' ? HTMLElement : class {};
 
 /**
+ * Fraction of a scratch trail still standing after `dt` seconds.
+ *
+ * `linger` is how long a fresh stroke takes to fade to 1% of its opening
+ * strength, so it is a number you can hold a stopwatch to. It replaced a
+ * per-frame multiplier, which cleared a stroke in about a second at 60Hz and
+ * about half that at 120Hz: the same setting meant different things on
+ * different displays, and none of them meant seconds.
+ *
+ * Exponential rather than linear, because the product of the per-step factors
+ * across an interval then depends only on the total time and not on how the
+ * interval was cut into frames. That is what makes the setting hold.
+ *
+ * @param {number} dt      seconds since the previous frame
+ * @param {number} linger  seconds for a stroke to reach 1%
+ */
+export function scratchLingerKeep(dt, linger) {
+  if (!(dt > 0)) return 1;
+  // Zero means "gone at once". NaN from a malformed attribute lands here too,
+  // and clearing is the right way to fail: the other branch would leave the
+  // value standing on screen forever.
+  if (!(linger > 0)) return 0;
+  return Math.exp(-dt / (linger / Math.log(100)));
+}
+
+/**
  * Merge defaults, a strength preset and explicit attributes into split options.
  *
  * Pure and exported so it can be tested. It was inline and private, and the
@@ -184,9 +209,12 @@ export class NocapSecret extends ElementBase {
     'watermark',
     'watermark-swing',
     'watermark-repeat',
+    // `scratch` is observed because it builds or tears down the mask. Its two
+    // settings are not: the animation loop reads them with getAttribute every
+    // frame, so they already take effect on the next one. Observing them would
+    // put a full re-split behind every tick of a drag, and re-noise the element
+    // while you are trying to look at it.
     'scratch',
-    'scratch-radius',
-    'scratch-fade',
     'noise-scale',
     'chroma',
     'hardness',
@@ -405,19 +433,33 @@ export class NocapSecret extends ElementBase {
     const state = { mask, ctx, raf: 0, x: -1, y: -1, down: false };
     this.#scratch = state;
 
-    const radius = () => +(this.getAttribute('scratch-radius') ?? 34);
-    // Per-frame alpha kept after a fade. 0.94 clears a stroke in about a
-    // second at 60Hz, which is long enough to read a few glyphs at once.
-    const fade = () => Math.min(0.999, Math.max(0.5, +(this.getAttribute('scratch-fade') ?? 0.94)));
+    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
 
-    const step = () => {
+    // Brush size in CSS pixels, so it looks the same on every display. The mask
+    // is a device-pixel buffer, hence the scale. Without it the same number drew
+    // a brush half as wide on a 2x screen as on a 1x one.
+    const radius = () => Math.max(1, +(this.getAttribute('scratch-radius') ?? 34)) * dpr;
+    // Seconds a stroke stays readable. See scratchLingerKeep for what that means.
+    const linger = () => +(this.getAttribute('scratch-linger') ?? 30);
+
+    let last = 0;
+    const step = (now) => {
       state.raf = requestAnimationFrame(step);
-      // Decay: punch the existing mask down by a constant factor. Painting a
-      // translucent black with destination-out multiplies alpha, which is the
-      // cheap way to get an exponential trail.
+      // Decay by elapsed time rather than per frame. A constant per-frame factor
+      // cleared the trail twice as fast on a 120Hz display as on a 60Hz one, so
+      // no setting could honestly say how long a stroke lasts.
+      //
+      // The gap is deliberately not clamped. A backgrounded tab stops firing
+      // rAF, so the first frame back carries the whole absent interval and the
+      // trail is already gone, which is the direction to err in for a reveal.
+      const dt = last ? (now - last) / 1000 : 0;
+      last = now;
+
+      // Punch the existing mask down. Painting translucent black with
+      // destination-out multiplies alpha, the cheap way to get exponential decay.
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = `rgba(0,0,0,${1 - fade()})`;
+      ctx.fillStyle = `rgba(0,0,0,${1 - scratchLingerKeep(dt, linger())})`;
       ctx.fillRect(0, 0, w, h);
       ctx.restore();
 
@@ -434,7 +476,6 @@ export class NocapSecret extends ElementBase {
     };
     state.raf = requestAnimationFrame(step);
 
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
     const track = (e) => {
       const rect = this.getBoundingClientRect();
       state.x = (e.clientX - rect.left) * dpr;

@@ -189,6 +189,10 @@
       <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
     <label class="f"><span>Scratch to reveal <span style="color:#c2a15c">experimental</span></span>
       <select id="scratch"><option value="">off</option><option value="1">on</option></select></label>
+    <label class="f" id="lingerRow" style="display:none"><span>Trail lasts <em id="lingerV">30</em>s</span>
+      <input type="range" id="linger" min="1" max="60" step="1" value="30"></label>
+    <label class="f" id="radRow" style="display:none"><span>Brush size <em id="radV">34</em>px</span>
+      <input type="range" id="rad" min="8" max="90" step="2" value="34"></label>
   </div>
 
   <div class="readout">
@@ -204,14 +208,21 @@
 <div class="note" id="scratchNote" style="display:none">
   <b>Scratch to reveal.</b> Move the pointer across the element. Only the trail
   is unmasked, and it fades behind you.
-  Everything else here leaves the value on screen the whole time it is revealed,
-  which is why two captured frames average straight back to it. A pixel under a
-  trail carries the value only while the trail is on it, so a long capture
-  averages to roughly <code>duty x value</code> while the noise keeps its full
-  amplitude. Measured over 30 frames: leak 0.70 at full duty, 0.25 at a duty of
-  0.1. Reaching a clean 0.9 takes 4.3s of recording at full duty and 34s at 0.1,
-  and nobody leaves an account number open for 34 seconds.
-  It is still a cost rather than a defence, and it needs a pointer, so any
+  <br><br>
+  <b>The trail length is the whole trade.</b> A pixel carries the value only
+  while the trail sits on it, so with a short trail a long capture averages to
+  roughly <code>duty x value</code> while the noise keeps its full amplitude.
+  Measured over 30 frames: leak 0.70 at full duty and 0.25 at a duty of 0.1. At
+  that duty a clean 0.9 needs 34s of recording rather than 4.3s, and nobody
+  leaves an account number open for 34 seconds.
+  <br><br>
+  <b>A 30s trail gives most of that back.</b> A trail that outlasts the reading
+  is close to full duty, so treat the default as a gate on when the value is
+  revealed rather than as a defence against capture. Drag the trail down to a
+  second or two to buy the duty benefit back, at the price of reading only a few
+  glyphs at a time. That is the setting to reach for if capture is the threat.
+  <br><br>
+  Either way it is a cost rather than a defence, and it needs a pointer, so any
   integration has to offer keyboard and screen reader users another route.
 </div>
 <div class="note" id="fakeNote" style="display:none">
@@ -435,7 +446,8 @@ const schedule = () => { clearTimeout(pending); pending = setTimeout(apply, 70);
 function apply() {
   const v = { amp:+$('amp').value, blk:+$('blk').value, hard:+$('hard').value, chr:+$('chr').value,
     gam:+$('gam').value, fg:$('fg').value, bg:$('bg').value, fake:$('fake').value,
- scr:$('scr').value, scratch:$('scratch').value, txt:$('txt').value };
+ scr:$('scr').value, scratch:$('scratch').value, txt:$('txt').value,
+    linger:+$('linger').value, rad:+$('rad').value };
   $('ampV').textContent = v.amp; $('blkV').textContent = v.blk;
   $('hardV').textContent = v.hard.toFixed(2); $('chrV').textContent = v.chr.toFixed(2);
   $('gamV').textContent = v.gam.toFixed(2);
@@ -447,7 +459,11 @@ function apply() {
   v.fake ? chip.setAttribute('fake', v.fake) : chip.removeAttribute('fake');
   v.scr ? chip.setAttribute('scramble', '') : chip.removeAttribute('scramble');
   v.scratch ? chip.setAttribute('scratch', '') : chip.removeAttribute('scratch');
-  $('scratchNote').style.display = v.scratch ? '' : 'none';
+  chip.setAttribute('scratch-linger', v.linger);
+  chip.setAttribute('scratch-radius', v.rad);
+  $('lingerV').textContent = v.linger; $('radV').textContent = v.rad;
+  for (const id of ['scratchNote', 'lingerRow', 'radRow'])
+    $(id).style.display = v.scratch ? '' : 'none';
   chip.secret = v.txt;
   $('stage').style.background = v.bg;
 
@@ -498,7 +514,7 @@ function apply() {
     (v.scr ? `
   scramble` : '') +
     (v.scratch ? `
-  scratch` : '') +
+  scratch scratch-linger="${v.linger}" scratch-radius="${v.rad}"` : '') +
     (v.gam !== 2.4 ? `
   gamma="${v.gam.toFixed(2)}"` : '') +
     `
@@ -553,7 +569,7 @@ for (const id of ['amp', 'blk', 'hard']) {
   });
 }
 
-for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','fake','scr','scratch'])
+for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','fake','scr','scratch','linger','rad'])
   $(id).oninput = $(id).onchange = schedule;
 
 $('presets').onclick = (e) => {

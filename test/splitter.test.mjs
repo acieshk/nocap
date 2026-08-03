@@ -709,3 +709,37 @@ test('the noise cells are whole rectangles, laid like brickwork', () => {
     }
   }
 });
+
+test('a scratch trail lasts the same wall-clock time at any frame rate', async () => {
+  const { scratchLingerKeep } = await import('../src/secret.js');
+
+  // The setting this replaced was a per-frame multiplier, so a 120Hz display
+  // ran the fade twice as fast as a 60Hz one and no value could be stated in
+  // seconds. Cut the same 30 seconds into different frame rates and the trail
+  // that survives has to match.
+  const total = (linger, fps, seconds) => {
+    let alpha = 1;
+    for (let i = 0; i < fps * seconds; i++) alpha *= scratchLingerKeep(1 / fps, linger);
+    return alpha;
+  };
+  const at30 = total(30, 30, 10);
+  const at60 = total(30, 60, 10);
+  const at144 = total(30, 144, 10);
+  assert.ok(Math.abs(at60 - at30) < 1e-9, `30 vs 60Hz: ${at30} vs ${at60}`);
+  assert.ok(Math.abs(at144 - at60) < 1e-9, `60 vs 144Hz: ${at60} vs ${at144}`);
+
+  // And one long frame after a backgrounded tab has to land where the many
+  // short frames it replaced would have.
+  assert.ok(Math.abs(scratchLingerKeep(10, 30) - at60) < 1e-9, 'one big step must agree');
+
+  // `linger` means the time to reach 1%, which is the claim the name makes.
+  assert.ok(Math.abs(scratchLingerKeep(30, 30) - 0.01) < 1e-9, '30s trail should be at 1% after 30s');
+  assert.ok(scratchLingerKeep(15, 30) > 0.09, 'and still clearly visible halfway');
+
+  // Degenerate settings clear the trail. Leaving it standing would keep the
+  // value on screen forever, which is the wrong way for this to fail.
+  for (const bad of [0, -5, NaN, undefined]) {
+    assert.equal(scratchLingerKeep(0.016, bad), 0, `linger=${bad} must clear`);
+  }
+  assert.equal(scratchLingerKeep(0, 30), 1, 'no elapsed time, no decay');
+});

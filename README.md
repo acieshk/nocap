@@ -414,7 +414,25 @@ copies still land on exactly the same pixels and cancel.
 | `hardness` | `1` | 1 slams every pixel to ±amplitude. Lower keeps noise near the background |
 | `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable. See below |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom |
+| `scratch` | off | **Experimental.** Unmask only a trail under the pointer |
+| `scratch-linger` | `30` | Seconds for a trail to fade to 1%. See the note below |
+| `scratch-radius` | `34` | Brush radius in CSS px |
 | `width` / `height` | `260` / `56` | CSS pixels |
+
+**`scratch-linger` is the trade, not a cosmetic.** A pixel carries the value
+only while the trail sits on it, so with a short trail a long capture averages
+to about `duty × value` while the noise keeps its full amplitude. Over 30
+frames that is leak 0.70 at full duty against 0.25 at a duty of 0.1, and a
+clean 0.9 needs 34s of recording rather than 4.3s.
+
+The 30s default gives most of that up on purpose, because a trail that fades in
+a second is close to unreadable. A trail that outlasts the reading sits near
+full duty, so treat the default as a gate on when the value appears rather than
+as a defence against capture. Set it to a second or two if capture is the
+threat you care about.
+
+It also needs a pointer, so any integration has to offer keyboard and screen
+reader users another route.
 
 Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.render()`,
 `.stop()`, `.measureLeak()`. Events: `render`, `stop`.
