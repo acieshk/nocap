@@ -660,3 +660,52 @@ test('the rendering modes are additive, not alternatives', async () => {
       `${fn} never paints the mark`);
   }
 });
+
+test('the noise cells are whole rectangles, laid like brickwork', () => {
+  // What "blocky but no grid" means, in two measurable parts.
+  //
+  // This exists because a previous attempt at breaking the seams offset x by
+  // the row and y by the column at the same time. Those two bands are
+  // independent, so a cell's horizontal offset changed partway down it: the
+  // cells stopped being rectangles and the noise lost the blocky look. Nothing
+  // caught it, because seams had no test at all.
+  const w = 240, h = 600, S = 6;
+  const src = { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+  for (let i = 0; i < w * h; i++) src.data.set([128, 128, 128, 255], i * 4);
+
+  let seed = 7;
+  const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const [p] = splitFrames(src, { mode: 'amplitude', amplitude: 110, noiseScale: S, rng });
+  const at = (x, y) => p.data[(y * w + x) * 4];
+
+  // On a flat field every edge in the plane is a cell seam. Bin their energy by
+  // position mod S: a lattice that puts all of them on one phase scores S, and
+  // that concentration is exactly what reads as a ruled line.
+  const phase = (fn, n, m) => {
+    const bin = new Float64Array(S);
+    for (let a = 1; a < n; a++) for (let b = 0; b < m; b++) bin[a % S] += fn(a, b);
+    const mean = bin.reduce((s, v) => s + v, 0) / S;
+    return { ratio: Math.max(...bin) / mean, arg: bin.indexOf(Math.max(...bin)) };
+  };
+  const vert = phase((x, y) => Math.abs(at(x, y) - at(x - 1, y)), w, h);
+  const horz = phase((y, x) => Math.abs(at(x, y) - at(x, y - 1)), h, w);
+
+  // Rows are offset, so vertical seams stop after one cell and spread across
+  // every phase. The horizontal family is deliberately left alone, and its 6.00
+  // is the control: it is what an unbroken grid line scores on this same
+  // measure. Equal squares cannot tile with both families broken, which is why
+  // a brick wall has continuous mortar one way and not the other.
+  assert.ok(vert.ratio < 2, `vertical seams still ruled: ${vert.ratio.toFixed(2)}`);
+  assert.ok(horz.ratio > 4, 'horizontal seams should be the untouched control');
+
+  // Cells are whole. Row bands begin wherever the origin landed, which is the
+  // phase the horizontal edges concentrate at, so align to that before walking.
+  for (let y0 = horz.arg + S; y0 + S < h; y0 += S) {
+    for (let x = 0; x < w; x++) {
+      for (let dy = 1; dy < S; dy++) {
+        assert.equal(at(x, y0 + dy), at(x, y0),
+          `cell broken at x=${x} y=${y0}: not a rectangle`);
+      }
+    }
+  }
+});
