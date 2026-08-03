@@ -225,8 +225,12 @@ function fillInterleave(planes, target, cfg) {
   const n = planes.length;
   const { width: w, height: h, data: t } = target;
   const scale = cfg.noiseScale;
-  const nw = Math.ceil(w / scale);
-  const nh = Math.ceil(h / scale);
+  // Same jitter as the noise lattice, so the carrier grid does not sit still
+  // either.
+  const ox = (cfg.rng() * scale) | 0;
+  const oy = (cfg.rng() * scale) | 0;
+  const nw = Math.ceil((w + scale) / scale);
+  const nh = Math.ceil((h + scale) / scale);
 
   // Which plane carries each cell, shared across channels: this splits the
   // pixel, not the channel. In 'channels' mode the owner is the channel index
@@ -239,9 +243,9 @@ function fillInterleave(planes, target, cfg) {
   const off = new Float64Array(n);
 
   for (let y = 0; y < h; y++) {
-    const ly = (y / scale) | 0;
+    const ly = ((y + oy) / scale) | 0;
     for (let x = 0; x < w; x++) {
-      const cell = owner[ly * nw + ((x / scale) | 0)];
+      const cell = owner[ly * nw + (((x + ox) / scale) | 0)];
       const p = (y * w + x) * 4;
 
       for (let c = 0; c < 3; c++) {
@@ -281,14 +285,23 @@ function fillInterleave(planes, target, cfg) {
  */
 function randomDraws(w, h, cfg) {
   const scale = cfg.noiseScale;
-  const nw = Math.ceil(w / scale);
-  const nh = Math.ceil(h / scale);
+  // Jitter the lattice origin per split.
+  //
+  // Anchored at (0, 0) every cell boundary lands on the same pixel in every
+  // bank entry, so rotating the noise never moves the edges and the eye locks
+  // onto a static grid. It is invisible at a 1px cell and unmistakable at 6.
+  // Both planes of a cycle come from one call and share the offset, so the
+  // cancellation is untouched: only where the seams fall changes.
+  const ox = (cfg.rng() * scale) | 0;
+  const oy = (cfg.rng() * scale) | 0;
+  const nw = Math.ceil((w + scale) / scale);
+  const nh = Math.ceil((h + scale) / scale);
   const lat = new Float32Array(nw * nh * 9);
   for (let i = 0; i < lat.length; i++) lat[i] = cfg.rng();
 
   const chroma = cfg.chroma;
   return (x, y, c) => {
-    const base = (((y / scale) | 0) * nw + ((x / scale) | 0)) * 9;
+    const base = ((((y + oy) / scale) | 0) * nw + (((x + ox) / scale) | 0)) * 9;
     const sc = lat[base + c * 3 + 2] < chroma ? c : 0;
     return { phase: lat[base + sc * 3], mag: lat[base + sc * 3 + 1] };
   };
