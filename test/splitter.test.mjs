@@ -650,9 +650,13 @@ test('the rendering modes are additive, not alternatives', async () => {
   // one of the branches.
   assert.ok(!/if\s*\([^)]*watermark/.test(render),
     'watermark must not be a branch: it is painted by every draw path');
-  // And every path that builds a source has to paint it.
+  // And every path that builds a source has to paint it. Match the definition,
+  // not the first occurrence: the call site comes earlier in the file and
+  // slicing from there reads the dispatch instead of the method.
   for (const fn of ['#drawPlain', '#drawScrambled', '#drawFake']) {
-    const body = src.slice(src.indexOf(fn + '('), src.indexOf(fn + '(') + 3000);
-    assert.ok(body.includes('#paintWatermark'), `${fn} never paints the mark`);
+    const at = src.indexOf(`async ${fn}(`);
+    assert.ok(at > 0, `${fn} not found`);
+    assert.ok(src.slice(at, at + 4000).includes('#paintWatermark'),
+      `${fn} never paints the mark`);
   }
 });
