@@ -160,7 +160,92 @@ export function scratchLingerKeep(dt, linger) {
  * @param {Record<string,string>} attrs  attributes that are actually present
  * @param {number} [dpr=1]  a preset's block is authored at dpr 1 and scaled here
  */
-export function resolveOptions(attrs = {}, dpr = 1, height = 56) {
+/**
+ * Attributes arrive as strings, and a malformed one used to reach the canvas.
+ *
+ * `padding-y="qq"` became NaN, and a non-finite coordinate makes fillText skip
+ * the draw entirely without throwing, so the element rendered a blank noise
+ * field and nothing said why. `font-size="abc"` produced `600 NaNpx monospace`,
+ * an invalid font string, and assigning one of those is a silent no-op that
+ * leaves whatever font happened to be set before.
+ *
+ * Both are the same failure: garbage in, nothing drawn, no error. Every numeric
+ * attribute goes through here instead — coerce, check, fall back to the
+ * documented default, and say so once.
+ */
+/** Deliberately odd so a real font string cannot collide with it. */
+const FONT_SENTINEL = '7.31px serif';
+
+const warned = new Set();
+function warnOnce(key, message) {
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(`[nocap-secret] ${message}`);
+}
+
+function num(attrs, name, fallback) {
+  if (!(name in attrs)) return fallback;
+  const v = +attrs[name];
+  if (Number.isFinite(v)) return v;
+  warnOnce(`${name}=${attrs[name]}`,
+    `${name}="${attrs[name]}" is not a number. Using ${fallback}.`);
+  return fallback;
+}
+
+/**
+ * Canvas letterSpacing wants a CSS length. A bare number and an unparseable
+ * string are both silent no-ops, so the unit is added when missing and anything
+ * that is not a length falls back rather than being passed through.
+ */
+function spacing(raw) {
+  if (raw == null) return '0px';
+  // No space between the number and the unit: CSS does not allow one, and
+  // quietly repairing `10 px` would be guessing at intent rather than checking.
+  const m = /^\s*(-?(?:\d+\.?\d*|\.\d+))([a-z%]*)\s*$/i.exec(raw);
+  if (!m) {
+    warnOnce(`letter-spacing=${raw}`,
+      `letter-spacing="${raw}" is not a CSS length. Using 0px.`);
+    return '0px';
+  }
+  return m[2] ? `${m[1]}${m[2]}` : `${m[1]}px`;
+}
+
+/**
+ * Resolve the text styling attributes into everything the draw paths need.
+ *
+ * Pure and exported so it can be tested without a DOM, same reason
+ * resolveOptions is.
+ *
+ * The size matters beyond appearance. The noise block ceiling is derived from
+ * the stroke width, and the stroke is derived from the font, so a configurable
+ * font that did not feed back into resolveOptions would leave the ceiling
+ * tracking a size the element is no longer drawing at. Small text with a block
+ * sized for large text is the case where a blur wins, and nothing would have
+ * said so.
+ *
+ * @param {Record<string,string>} attrs  attributes that are present
+ * @param {number} height  canvas height in device px
+ */
+export function resolveText(attrs = {}, height = 56) {
+  // 0.46 of the height is the long-standing default and stays the default.
+  const scale = num(attrs, 'font-scale', 0.46);
+  // The 6px floor cannot double as the guard here, because Math.max(6, NaN)
+  // is NaN. The value has to be finite before it gets this far.
+  const sizePx = Math.max(6, Math.round(num(attrs, 'font-size', height * scale)));
+  const weight = attrs['font-weight'] ?? '600';
+  const family = attrs['font-family'] ?? 'ui-monospace, monospace';
+  return {
+    font: `${weight} ${sizePx}px ${family}`,
+    sizePx,
+    letterSpacing: spacing(attrs['letter-spacing']),
+    align: ['left', 'center', 'right'].includes(attrs['text-align'])
+      ? attrs['text-align'] : 'center',
+    padX: Math.max(0, num(attrs, 'padding-x', 0)),
+    padY: num(attrs, 'padding-y', 0),
+  };
+}
+
+export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = null) {
   const preset = STRENGTHS[attrs.strength] ?? {};
   const base = { ...TEXT_DEFAULTS, ...preset };
 
@@ -180,7 +265,16 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56) {
   // The font is canvas height * 0.46 and a 600-weight stroke is about an eighth
   // of that, so the ceiling tracks the element rather than being another
   // constant to keep in step.
-  const strokePx = Math.max(2, Math.round(height * dpr * 0.46 / 8));
+  // From the ACTUAL font size when one is given. Falling back to the old
+  // height * 0.46 assumption only when the caller has nothing better.
+  const sizePx = fontSizePx ?? height * dpr * 0.46;
+  const strokePx = Math.max(2, Math.round(sizePx / 8));
+  // NOTE: the ceiling is floored at the preset's own block, so it can only ever
+  // reduce a dpr-scaled value, never go below what the preset asked for. That
+  // makes it inert for text smaller than the default — a 12px font and a 48px
+  // font both come out at 6 here. Left as-is deliberately: changing it collides
+  // with presets carrying their own noiseScale, and that collision is a design
+  // call rather than something to slip into a styling change. Filed separately.
   base.noiseScale = Math.min(
     Math.max(base.noiseScale, Math.round(base.noiseScale * dpr)),
     Math.max(base.noiseScale, Math.round(strokePx * 1.25))
@@ -214,6 +308,14 @@ export class NocapSecret extends ElementBase {
     // frame, so they already take effect on the next one. Observing them would
     // put a full re-split behind every tick of a drag, and re-noise the element
     // while you are trying to look at it.
+    'font-family',
+    'font-weight',
+    'font-size',
+    'font-scale',
+    'letter-spacing',
+    'text-align',
+    'padding-x',
+    'padding-y',
     'scratch',
     'noise-scale',
     'chroma',
@@ -241,6 +343,7 @@ export class NocapSecret extends ElementBase {
   #adapted = false;
   #motionWarned = false;
   #chromaWarned = false;
+  #spacingWarned = false;
   #watermarkSwing = null;
   #watermarkWarned = false;
   #scratch = null;      // { mask, ctx, raf, pointer }
@@ -341,7 +444,8 @@ export class NocapSecret extends ElementBase {
     if (!this.#flicker || !(this.#secret || this.#chars?.length)) return;
 
     const { color, background } = this.#palette;
-    const font = `600 ${Math.round(this.#flicker.canvas.height * 0.46)}px ui-monospace, monospace`;
+    const style = this.#textStyle();
+    const font = style.font;
     const fakeMode = this.getAttribute('fake');
     // Scramble empties #secret and keeps the glyphs in #chars, so fake mode has
     // to reassemble to know what shape to imitate. Guarding on #secret alone
@@ -624,11 +728,12 @@ export class NocapSecret extends ElementBase {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, w, h);
     this.#paintWatermark(ctx, font, background, w, h);
-    ctx.font = font;
+    const style = this.#textStyle();
+    this.#applyTextStyle(ctx, style);
     ctx.fillStyle = color;
-    ctx.textAlign = 'center';
+    ctx.textAlign = style.align;
     ctx.textBaseline = 'middle';
-    ctx.fillText(plain, w / 2, h / 2);
+    ctx.fillText(plain, this.#anchorX(style, w), h / 2 + style.padY);
     // cv is exactly the target size, so setSource's contain-fit is identity.
     await this.#flicker.setSource(cv, { background });
   }
@@ -951,6 +1056,51 @@ export class NocapSecret extends ElementBase {
 
   #defaultBlock() {
     return this.#options().noiseScale;
+  }
+
+  #textStyle() {
+    const attrs = {};
+    for (const name of NocapSecret.observedAttributes) {
+      if (this.hasAttribute(name)) attrs[name] = this.getAttribute(name);
+    }
+    return resolveText(attrs, this.#flicker?.canvas.height ?? 56);
+  }
+
+  /**
+   * Apply the styling a canvas context can carry directly.
+   *
+   * letterSpacing is not universal: Chrome has had it since 99, Safari since
+   * 17.4. Assigning it where it is unsupported is a silent no-op rather than an
+   * error, so the element warns once instead of quietly ignoring the attribute.
+   */
+  #applyTextStyle(ctx, style) {
+    // An invalid font string is a silent no-op, and font-family and font-weight
+    // are free text that resolveText cannot check without a DOM. Assigning over
+    // a sentinel makes the rejection observable: if the string was refused, the
+    // sentinel is still there afterwards.
+    ctx.font = FONT_SENTINEL;
+    ctx.font = style.font;
+    if (ctx.font === FONT_SENTINEL && style.font !== FONT_SENTINEL) {
+      warnOnce(`font=${style.font}`,
+        `font "${style.font}" was rejected by the canvas, so the text is drawn ` +
+        'in the default font. Check font-family and font-weight.');
+      ctx.font = resolveText({}, style.sizePx / 0.46).font;
+    }
+    if (style.letterSpacing !== '0px') {
+      if ('letterSpacing' in ctx) ctx.letterSpacing = style.letterSpacing;
+      else if (!this.#spacingWarned) {
+        this.#spacingWarned = true;
+        console.warn('[nocap-secret] letter-spacing is not supported by this ' +
+          'browser\'s canvas, so the attribute has no effect here.');
+      }
+    }
+  }
+
+  /** Where text starts, given alignment and horizontal padding. */
+  #anchorX(style, w) {
+    if (style.align === 'left') return style.padX;
+    if (style.align === 'right') return w - style.padX;
+    return w / 2;
   }
 
   #options() {
