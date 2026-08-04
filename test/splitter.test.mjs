@@ -815,3 +815,4 @@ test('the noise block ceiling follows the real font size, not the old assumption
   // Passing nothing keeps the previous behaviour exactly.
   assert.equal(resolveOptions({}, 1, 56).noiseScale, resolveOptions({}, 1, 56, 56 * 0.46).noiseScale);
 });
+

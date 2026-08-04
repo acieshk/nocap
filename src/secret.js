@@ -281,7 +281,6 @@ export class NocapSecret extends ElementBase {
     'adaptive',
     'scramble',
     'fake',
-    'fake-share',
     'width',
     'height',
   ];
@@ -782,19 +781,7 @@ export class NocapSecret extends ElementBase {
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
     // How far the decoy widens the pair, in code levels, before feasibility.
-    // How much of each pixel's excursion budget the decoy may take, where its
-    // ink falls. The rest stays with the noise. Measured on the default palette:
-    //
-    //   share   decoy in a captured plane   noise swing left
-    //    0%              0.016                    78.4
-    //   20%              0.185                    62.7
-    //   35%              0.318                    51.0
-    //   50%              0.407                    39.2
-    //   70%              0.489                    23.5
-    //
-    // 0.35 reads in a capture without gutting the masking. There is no setting
-    // that gives both, because it is one budget.
-    const share = Math.max(0, Math.min(0.9, +(this.getAttribute('fake-share') ?? 0.35)));
+    const decoyPush = 110;
 
     /**
      * The centre whose planes at ±half average, in light, to `want`.
@@ -872,7 +859,7 @@ export class NocapSecret extends ElementBase {
 
     const decoys = [];
     const sets = [];
-    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * (+(this.getAttribute('fake-size') ?? 0.55)))}px`);
+    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
     const blank = paint(() => {});
 
     // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
@@ -931,49 +918,15 @@ export class NocapSecret extends ElementBase {
           //
           // The budget is capped by what this pixel can actually reach, which
           // is the part a constant push gets wrong.
-          // Two things were wrong here, and the second one is why nothing
-          // showed up at all.
-          //
-          // THE BUDGET. `feasibleHalf` is the largest half-excursion a pixel can
-          // take and still average, in light, to its target. At the default
-          // palette that ceiling is 78.4, and TEXT_DEFAULTS already asks for
-          // 110, so the base split is ALREADY sitting on the ceiling. Adding a
-          // push and clamping to the same ceiling returns the same number. The
-          // decoy had exactly zero room, and no amount of pushing harder could
-          // have given it any.
-          //
-          // The budget is conserved. Anything the decoy gets has to come out of
-          // the noise, so the noise is reduced where the ink falls and the
-          // freed excursion is spent on the decoy. Both halves are still
-          // zero-sum, so the perceived value stays exact: measured 0.00 error
-          // at every ratio.
-          //
-          // THE SIGN. It has to come from the excursion after the decoy is in,
-          // not from the noise that was there before.
-          //
-          // Taking `Math.abs(b0 - b1) / 2 + push` and then restoring the noise's
-          // own sign widens the pair symmetrically about whichever way that
-          // pixel's noise already pointed. The decoy then modulates the noise's
-          // AMPLITUDE rather than biasing it, and amplitude modulation of
-          // random-sign noise reads as more noise. A captured plane showed the
-          // decoy at a correlation of 0.10, which is to say not at all.
-          //
-          // Adding the push to the signed excursion first biases plane 0 the
-          // same way everywhere the ink falls, which is what makes a glyph.
-          // Measured on the same simulation: 0.54. The re-solved centre keeps
-          // the perceived value exact either way, 0.00 error in both.
           const want = (toLight(b0) + toLight(b1)) / 2;
-          const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))];
-          // Split the pixel's whole budget between masking it and marking it.
-          const forDecoy = cap * share * amount;
-          const forNoise = cap - forDecoy;
-          const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
-          const excursion = noise + forDecoy;
-          const half = Math.min(Math.abs(excursion), cap);
+          const half = Math.min(
+            Math.abs(b0 - b1) / 2 + amount * decoyPush,
+            feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))]
+          );
           const centre = centreFor(want, half);
-          const signed = excursion < 0 ? -half : half;
-          set[0].data[i + c] = centre + signed;
-          set[1].data[i + c] = centre - signed;
+          const up = b0 >= b1;
+          set[0].data[i + c] = centre + (up ? half : -half);
+          set[1].data[i + c] = centre + (up ? -half : half);
         }
       }
       sets.push(set);
