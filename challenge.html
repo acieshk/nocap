@@ -55,7 +55,8 @@
   </div>
   <div class="wrap-scroll">
     <table class="ledger">
-      <thead><tr><th>Customer</th><th>Card</th><th>Phone</th><th>Balance</th>
+      <thead><tr><th style="width:44%">Value</th><th style="width:34%">Your answer</th>
+        <th style="width:8%"></th>
         <th style="color:var(--faint)">protected by</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -69,27 +70,22 @@
 
 <h2>Claim it</h2>
 <p>
-  The table is generated from the seed above, so it is the same table for
-  everyone who loads that seed. Read the values however you like and type them
-  back. The page holds the truth as a JavaScript local, never as DOM, so it can
-  check your answer without ever having published it.
+  The table comes from the seed above, so it is the same table for everyone who
+  opens that link. Read each value however you can and type it into the box
+  beside it. The truth is held as a JavaScript local and never enters the
+  document, so the page can mark your answer without ever having published it.
 </p>
 <div class="rig">
-  <div class="bar" style="display:block">
-    <textarea id="answer" rows="7" spellcheck="false" placeholder="One row per line, in table order:&#10;card, phone, balance&#10;&#10;4111 1111 1111 1111, +1 (555) 010-0199, 12,480.55"
-      style="width:100%;background:#2b2b2b;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px;font:12.5px/1.6 ui-monospace,monospace"></textarea>
-  </div>
   <div class="bar btm">
-    <button id="check">Check my answer</button>
+    <button id="check">Check my answers</button>
     <span id="verdict" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
   </div>
-  <table class="checks" id="marks"></table>
 </div>
 <div class="note">
   Punctuation and spacing are ignored, so <code>4111111111118842</code> counts
-  the same as <code>4111 1111 1111 8842</code>. Only the digits and letters have
-  to match, because getting the separators wrong is not the interesting part of
-  the problem.
+  the same as <code>4111 1111 1111 8842</code>. For the two multi-line rows, type
+  both lines separated by anything you like: only the letters and digits are
+  compared. Getting the separators right is not the interesting part.
 </div>
 
 <h2>What a scraper actually receives</h2>
@@ -188,12 +184,18 @@ const SHAPES = { card: '4111 1111 1111 1111', phone: '+1 (555) 010-0199', money:
  * nothing about what it contains. A per-pixel choice would trace the glyphs.
  */
 const ROWS = [
-  { label: 'amplitude, default', attrs: {} },
-  { label: 'amplitude, strong', attrs: { strength: 'strong' } },
-  { label: 'interleave, deliberately weak', attrs: { mode: 'interleave' } },
-  { label: 'fitted from white', attrs: { color: '#ffffff', background: '#000000' } },
-  { label: 'scratch to reveal', attrs: { scratch: '', 'scratch-linger': '8' } },
-  { label: 'ink-bias 0.2', attrs: { 'ink-bias': '0.2' } },
+  { label: 'amplitude, default', kind: 'card', attrs: {} },
+  { label: 'amplitude, strong', kind: 'phone', attrs: { strength: 'strong' } },
+  { label: 'interleave, deliberately weak', kind: 'card', attrs: { mode: 'interleave' } },
+  { label: 'fitted from white', kind: 'money', attrs: { color: '#ffffff', background: '#000000' } },
+  { label: 'scratch to reveal', kind: 'card', attrs: { scratch: '', 'scratch-linger': '8' } },
+  { label: 'ink-bias 0.2', kind: 'phone', attrs: { 'ink-bias': '0.2' } },
+  // Multi-line. The element draws ONE line, so an address is one element per
+  // line, and the answer is joined with a slash. Worth having in the challenge
+  // because it is the shape real records come in, and because it is the case
+  // where a caller is most likely to size a cell too small.
+  { label: 'multi-line, amplitude', kind: 'address', attrs: {} },
+  { label: 'multi-line, aperture', kind: 'address', attrs: { mode: 'aperture' } },
 ];
 
 // Module scope, never a DOM property, never written as text. The table takes
@@ -232,59 +234,71 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function build() {
   const rng = seeded($('seed').value || 'nocap');
-  records = [];
-  const used = new Set();
-  let guard = 0;
-  while (records.length < 6 && guard++ < 200) {
-    const name = NAMES[(rng() * NAMES.length) | 0];
-    if (used.has(name)) continue;
-    used.add(name);
-    records.push({
-      name,
-      card: fakeLike(SHAPES.card, { mode: 'auto', rng }),
-      phone: fakeLike(SHAPES.phone, { mode: 'auto', rng }),
-      money: fakeLike(SHAPES.money, { mode: 'auto', rng }),
-    });
-  }
-  $('marks').innerHTML = '';
-  $('verdict').textContent = '';
+  const streets = ['Marlowe', 'Ashgrove', 'Pinehurst', 'Calder', 'Rookwood'];
+  const towns = ['Brentford', 'Kelso', 'Ashford', 'Marbury', 'Deniston'];
+  const make = (kind) => {
+    if (kind === 'address') {
+      return [`${(rng() * 89 + 10) | 0} ${streets[(rng() * streets.length) | 0]} Road`,
+              `${towns[(rng() * towns.length) | 0]} ${
+                'ABCDEFGHJKLMNPQRSTUVWXYZ'[(rng() * 24) | 0]}${(rng() * 9 + 1) | 0} ${
+                (rng() * 9) | 0}${'ABDEFGHJLNPQRSTUWXYZ'[(rng() * 20) | 0]}${
+                'ABDEFGHJLNPQRSTUWXYZ'[(rng() * 20) | 0]}`];
+    }
+    return [fakeLike(SHAPES[kind], { mode: 'auto', rng })];
+  };
+  records = ROWS.map((cfg) => ({ cfg, lines: make(cfg.kind) }));
 
   $('rows').innerHTML = '';
   let chars = 0;
-  for (const r of records) {
+  records.forEach((r, i) => {
     const tr = document.createElement('tr');
-    // The customer name is ordinary text on purpose. A table where every cell is
-    // protected is unusable, and the interesting claim is that the sensitive
-    // columns can be hidden while the page still works as a page.
-    const nameCell = document.createElement('td');
-    nameCell.textContent = r.name;
-    tr.appendChild(nameCell);
-    const cfg = ROWS[records.indexOf(r) % ROWS.length];
-    for (const [key, w] of [['card', 190], ['phone', 150], ['money', 110]]) {
-      const td = document.createElement('td');
+
+    // One value per row. Three narrow columns were both unreadable and
+    // unanswerable: the phone cells needed 174px in a 150px element so 2.4
+    // characters were never drawn, and a comma-separated answer split the money
+    // value in half. One wide cell fixes both at once.
+    const td = document.createElement('td');
+    for (const line of r.lines) {
       const el = document.createElement('nocap-secret');
-      el.setAttribute('width', String(w));
-      el.setAttribute('height', cfg.attrs.scratch ? '34' : '30');
+      el.setAttribute('width', '400');
+      el.setAttribute('height', r.cfg.attrs.scratch ? '38' : '32');
       el.setAttribute('strength', 'medium');
       el.setAttribute('color', '#6d6d6d');
       el.setAttribute('background', '#404040');
-      el.setAttribute('font-scale', '0.58');
+      el.setAttribute('font-scale', '0.5');
       el.setAttribute('text-align', 'left');
-      // Row config last, so it wins over the shared defaults above.
-      for (const [k, v] of Object.entries(cfg.attrs)) el.setAttribute(k, v);
-      el.secret = r[key];
-      chars += r[key].length;
+      el.setAttribute('padding-x', '10');
+      for (const [k, v] of Object.entries(r.cfg.attrs)) el.setAttribute(k, v);
+      el.secret = line;
+      chars += line.length;
       td.appendChild(el);
-      tr.appendChild(td);
     }
+    tr.appendChild(td);
+
+    const ansTd = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.spellcheck = false;
+    input.id = `ans${i}`;
+    input.placeholder = r.lines.length > 1 ? 'line one / line two' : 'what you read';
+    ansTd.appendChild(input);
+    tr.appendChild(ansTd);
+
+    const mark = document.createElement('td');
+    mark.id = `mark${i}`;
+    mark.style.cssText = 'font-weight:700;font-size:15px';
+    tr.appendChild(mark);
+
     const how = document.createElement('td');
     how.style.cssText = 'color:var(--faint);font-size:12px';
-    how.textContent = cfg.label;
+    how.textContent = r.cfg.label;
     tr.appendChild(how);
+
     $('rows').appendChild(tr);
-  }
-  $('cells').textContent = records.length * 3;
+  });
+  $('cells').textContent = records.reduce((n, r) => n + r.lines.length, 0);
   $('chars').textContent = chars;
+  $('verdict').textContent = '';
   showInnerText();
 }
 
@@ -301,7 +315,10 @@ async function run() {
   await new Promise((r) => requestAnimationFrame(r));
   // Search for one real value from the table. If any surface holds it, the whole
   // claim on this page is false, so this is the check that matters.
-  const needle = records[0].card;
+  // records changed shape when the table went to one value per row. This read
+  // records[0].card, which no longer exists, so auditPage was handed undefined
+  // and threw before rendering a single check.
+  const needle = records[0].lines[0];
   const { surfaces, found } = await auditPage(needle);
   const LABEL = {
     htmlSource: 'HTML source (View Source, curl, scrapers)',
@@ -327,27 +344,26 @@ async function run() {
   $('found').className = found.length ? 'bad' : 'ok';
   $('out').textContent = found.length
     ? `leaked in ${found.join(', ')}`
-    : `a card number from row 1 is in none of the ${dom} DOM surfaces`;
+    : `row 1's value is in none of the ${dom} DOM surfaces`;
   $('out').className = found.length ? 'bad' : 'ok';
 }
 
 $('check').onclick = () => {
-  // Compare in memory. The truth never enters the document, which is the same
-  // property the rest of the page is demonstrating.
-  const lines = $('answer').value.split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean);
+  // Compared in memory, the same property the rest of the page demonstrates.
+  // Multi-line answers join on a slash, and normalising to letters and digits
+  // means the separator does not have to be guessed either.
   let right = 0;
-  const total = records.length * 3;
-  $('marks').innerHTML = records.map((r, i) => {
-    const got = (lines[i] ?? '').split(',').map(norm);
-    const want = [r.card, r.phone, r.money].map(norm);
-    const hits = want.map((v, k) => v && got[k] === v);
-    right += hits.filter(Boolean).length;
-    const cells = hits.map((h) => `<span class="${h ? 'safe' : 'leak'}">${h ? '✓' : '✗'}</span>`).join(' ');
-    return `<tr><td>${cells}</td><td>row ${i + 1}, ${r.name}</td>` +
-      `<td>${hits.filter(Boolean).length} of 3</td></tr>`;
-  }).join('');
-  $('verdict').textContent = `${right} of ${total} values correct`;
-  $('verdict').className = right === total ? 'ok' : right ? 'warn' : 'bad';
+  records.forEach((r, i) => {
+    const want = norm(r.lines.join(''));
+    const got = norm(($(`ans${i}`) || {}).value ?? '');
+    const hit = want && got === want;
+    if (hit) right++;
+    const mark = $(`mark${i}`);
+    mark.textContent = hit ? '✓' : got ? '✗' : '';
+    mark.className = hit ? 'safe' : got ? 'leak' : '';
+  });
+  $('verdict').textContent = `${right} of ${records.length} rows correct`;
+  $('verdict').className = right === records.length ? 'ok' : right ? 'warn' : 'bad';
 };
 
 $('regen').onclick = async () => {

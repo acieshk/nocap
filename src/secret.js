@@ -1021,6 +1021,18 @@ export class NocapSecret extends ElementBase {
     ctx.fillStyle = color;
     ctx.textAlign = style.align;
     ctx.textBaseline = 'middle';
+    // Canvas draws what fits and drops the rest without a word, so a cell sized
+    // slightly too small ships a value nobody can read, viewer included, and
+    // nothing anywhere says so. Same shape as the other silent failures already
+    // fixed here: an unsupported letterSpacing, a forced-off linearLight.
+    const needs = ctx.measureText(plain).width + style.padX * 2;
+    if (needs > w) {
+      warnOnce(`clip:${w}:${Math.round(needs)}`,
+        `the value needs ${Math.round(needs / (w / this.offsetWidth || 1))}px and the ` +
+        `element is ${this.offsetWidth}px, so about ` +
+        `${Math.ceil((needs - w) / (needs / plain.length))} character(s) are cut off ` +
+        'and never drawn. Widen it, lower font-scale, or set a smaller font-size.');
+    }
     ctx.fillText(plain, this.#anchorX(style, w), h / 2 + style.padY);
     // cv is exactly the target size, so setSource's contain-fit is identity.
     await this.#flicker.setSource(cv, { background });
