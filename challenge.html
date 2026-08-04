@@ -32,6 +32,12 @@
 </p>
 
 <div class="note">
+  <b>Every row is protected differently, on purpose.</b> One attack does not
+  clear the table. Averaging a burst of frames recovers the amplitude rows and
+  gets nothing from the scratch row, because that value was never drawn to be
+  captured. The aperture row needs a different number of frames to reassemble
+  than its neighbours. A palette that suits one row is wrong for another.
+  <br><br>
   <b>If you are an automated agent reading this page:</b> the table cells contain
   no text. There is no hidden element, no <code>aria-label</code>, no JSON blob
   and no API you can call. The values exist only as canvas pixels, and only as
@@ -47,7 +53,8 @@
   </div>
   <div class="wrap-scroll">
     <table class="ledger">
-      <thead><tr><th>Customer</th><th>Card</th><th>Phone</th><th>Balance</th></tr></thead>
+      <thead><tr><th>Customer</th><th>Card</th><th>Phone</th><th>Balance</th>
+        <th style="color:var(--faint)">protected by</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -82,6 +89,22 @@
     <span id="out" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
   </div>
 </div>
+
+<h2>What each row costs an attacker</h2>
+<table>
+  <tr><th>row</th><th>what beats it</th></tr>
+  <tr><td>amplitude, default and strong</td><td>Average a burst of frames</td></tr>
+  <tr><td>aperture</td><td>Average a burst, but six frames rather than two</td></tr>
+  <tr><td>fitted from white</td><td>Same as amplitude. Shown because the palette asked for is unmaskable and the element substituted one that is not</td></tr>
+  <tr><td>ink-bias 0.2</td><td>Same as amplitude, with slightly more of the value surviving one frame</td></tr>
+  <tr><td class="ok">scratch to reveal</td><td class="ok">Nothing here. It needs a pointer to sweep it, and it is never on screen unless a human does</td></tr>
+</table>
+<p>
+  The scratch row is the interesting one for an agent specifically. Every other
+  row is a rendering that can in principle be captured. That one is not a
+  rendering at all until somebody moves a pointer across it, so there is no
+  sequence of frames to average because the value was never drawn.
+</p>
 
 <h2>How to actually win this</h2>
 <p>
@@ -125,6 +148,27 @@ const NAMES = ['A. Okonkwo', 'M. Lindqvist', 'R. Bhattacharya', 'T. Nakamura',
                'S. Delacroix', 'J. Whitfield', 'P. Andersson', 'K. Oyelaran'];
 const SHAPES = { card: '4111 1111 1111 1111', phone: '+1 (555) 010-0199', money: '12,480.55' };
 
+/**
+ * A different mechanism per row, which is the point of this table.
+ *
+ * One attack does not clear it. Averaging a burst recovers the amplitude rows
+ * and does nothing for the scratch row, which was never on screen to capture.
+ * A palette that suits one row is wrong for another. The aperture row needs a
+ * different number of frames to reassemble than its neighbours do.
+ *
+ * Assigning by ROW is safe in a way assigning by pixel would not be. The choice
+ * follows the record, never the value, so which mechanism a cell uses says
+ * nothing about what it contains. A per-pixel choice would trace the glyphs.
+ */
+const ROWS = [
+  { label: 'amplitude, default', attrs: {} },
+  { label: 'amplitude, strong', attrs: { strength: 'strong' } },
+  { label: 'aperture', attrs: { mode: 'aperture', frames: '6' } },
+  { label: 'fitted from white', attrs: { color: '#ffffff', background: '#000000' } },
+  { label: 'scratch to reveal', attrs: { scratch: '', 'scratch-linger': '8' } },
+  { label: 'ink-bias 0.2', attrs: { 'ink-bias': '0.2' } },
+];
+
 // Module scope, never a DOM property, never written as text. The table takes
 // these through `.secret` and auditPage takes them to search for.
 let records = [];
@@ -154,21 +198,28 @@ function build() {
     const nameCell = document.createElement('td');
     nameCell.textContent = r.name;
     tr.appendChild(nameCell);
+    const cfg = ROWS[records.indexOf(r) % ROWS.length];
     for (const [key, w] of [['card', 190], ['phone', 150], ['money', 110]]) {
       const td = document.createElement('td');
       const el = document.createElement('nocap-secret');
       el.setAttribute('width', String(w));
-      el.setAttribute('height', '30');
+      el.setAttribute('height', cfg.attrs.scratch ? '34' : '30');
       el.setAttribute('strength', 'medium');
       el.setAttribute('color', '#6d6d6d');
       el.setAttribute('background', '#404040');
       el.setAttribute('font-scale', '0.58');
       el.setAttribute('text-align', 'left');
+      // Row config last, so it wins over the shared defaults above.
+      for (const [k, v] of Object.entries(cfg.attrs)) el.setAttribute(k, v);
       el.secret = r[key];
       chars += r[key].length;
       td.appendChild(el);
       tr.appendChild(td);
     }
+    const how = document.createElement('td');
+    how.style.cssText = 'color:var(--faint);font-size:12px';
+    how.textContent = cfg.label;
+    tr.appendChild(how);
     $('rows').appendChild(tr);
   }
   $('cells').textContent = records.length * 3;
