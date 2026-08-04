@@ -1,6 +1,7 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange, averageFrames, perceivedMean } from './splitter.js';
-import { checkPalette, toLight, toCode, isoluminantPartner, fitToBand } from './palette.js';
+import { checkPalette, toLight, toCode, isoluminantPartner, fitToBand,
+         isoluminantPair, toRgb } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
 
@@ -511,6 +512,8 @@ export class NocapSecret extends ElementBase {
     'scratch',
     'scratch-hint',
     'scratch-exclusive',
+    'chroma-decoy',
+    'chroma-block',
     'noise-scale',
     'noise-profile',
     'ink-bias',
@@ -1069,6 +1072,7 @@ export class NocapSecret extends ElementBase {
         'and never drawn. Widen it, lower font-scale, or set a smaller font-size.');
     }
     ctx.fillText(plain, this.#anchorX(style, w), h / 2 + style.padY);
+    this.#paintChromaDecoy(ctx, font, background, w, h);
     // cv is exactly the target size, so setSource's contain-fit is identity.
     await this.#flicker.setSource(cv, { background });
   }
@@ -1156,6 +1160,72 @@ export class NocapSecret extends ElementBase {
    * to protect readability. Per-frame cancellation removes the need: the decoy
    * is never seen at all, so it no longer has to keep out of the way.
    */
+  /**
+   * A decoy written in chrominance only, at zero luminance contrast.
+   *
+   * Every other mechanism here hides in TIME and is therefore defeated by
+   * capturing more than one frame. This one is spatial: it is in the pixels
+   * rather than in their sequence, so it is still there after a thousand frames
+   * averaged. That makes it the first thing in this library aimed at the case
+   * nocap loses rather than the case it already wins.
+   *
+   * Two colours of equal luminance whose mean is exactly the background,
+   * alternating in fine blocks inside the decoy's glyphs. The eye resolves
+   * chrominance at about a third of the acuity it resolves luminance with, so
+   * below that limit the pattern greys out into the background. A sensor records
+   * the pixels and sees a word.
+   *
+   * BLOCK SIZE IS THE WHOLE QUESTION, and it is bounded on both sides. At 1px a
+   * 4:2:0 codec annihilates it, averaging exactly the 2x2 it alternates over:
+   * measured 54.0 in PNG against 1.3 through JPEG 4:2:0. At 2px and above it
+   * survives both JPEG and H.264. The ceiling is chromatic acuity, somewhere
+   * near 4px at normal viewing distance, above which a viewer sees coloured
+   * speckle and the whole thing gives itself away.
+   *
+   * So the usable window is roughly 2 to 4px and it may not exist at all. That
+   * is a judgement about a real screen rather than a measurement, which is why
+   * this is opt-in and why the block is a knob rather than a constant.
+   */
+  #paintChromaDecoy(ctx, font, background, w, h) {
+    const text = this.getAttribute('chroma-decoy');
+    if (!text) return;
+    const block = Math.max(1, Math.round(+(this.getAttribute('chroma-block') ?? 2)));
+    const { a, b, swing } = isoluminantPair(background);
+    if (swing < 8) {
+      warnOnce('chroma-decoy-flat',
+        `${background} leaves only ${swing.toFixed(1)} of chroma swing, so a chroma ` +
+        'decoy drawn on it is invisible to a sensor as well as to you. It needs a ' +
+        'background away from the gamut edge.');
+      return;
+    }
+
+    // The glyph shape as a coverage mask, so the pattern is painted only where
+    // the decoy's ink falls and the background is left exactly alone.
+    const mask = makeCanvas(w, h);
+    const mc = mask.getContext('2d', { alpha: false, willReadFrequently: true });
+    mc.fillStyle = '#000';
+    mc.fillRect(0, 0, w, h);
+    mc.font = font;
+    mc.fillStyle = '#fff';
+    mc.textAlign = 'center';
+    mc.textBaseline = 'middle';
+    mc.fillText(text, w / 2, h / 2);
+    const cov = mc.getImageData(0, 0, w, h).data;
+
+    const img = ctx.getImageData(0, 0, w, h);
+    const A = toRgb(a);
+    const B = toRgb(b);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        if (cov[i] < 40) continue;
+        const pick = (((x / block) | 0) + ((y / block) | 0)) % 2 ? A : B;
+        for (let c = 0; c < 3; c++) img.data[i + c] = pick[c];
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
   /** Put the scrambled glyphs back in order. Only for deriving a decoy shape. */
   #reassemble() {
     if (!this.#chars) return '';

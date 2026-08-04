@@ -196,6 +196,11 @@ const ROWS = [
   // where a caller is most likely to size a cell too small.
   { label: 'multi-line, amplitude', kind: 'address', attrs: {} },
   { label: 'multi-line, aperture', kind: 'address', attrs: { mode: 'aperture' } },
+  // The only row that is still there after a thousand frames averaged, because
+  // it hides in chroma rather than in time. Break it by pulling the chroma
+  // channel and reading the pattern, which is the point of it being here.
+  { label: 'chroma decoy, spatial', kind: 'card', decoy: '5555-0000-1111-2222',
+    attrs: { 'chroma-decoy': '5555-0000-1111-2222', 'chroma-block': '2' } },
 ];
 
 // Module scope, never a DOM property, never written as text. The table takes

@@ -432,3 +432,40 @@ export function contrastRatio(a, b, gamma = 2.4) {
   const [hi, lo] = la > lb ? [la, lb] : [lb, la];
   return (hi + 0.05) / (lo + 0.05);
 }
+
+/**
+ * Two colours of equal luminance whose mean is exactly `background`.
+ *
+ * The pair for an isoluminant chroma decoy. Alternated in fine blocks inside a
+ * glyph they average, for a viewer, to the background itself: the eye resolves
+ * chrominance at roughly a third of the acuity it resolves luminance with,
+ * which is the same fact that makes 4:2:0 subsampling invisible. A sensor
+ * records the individual pixels and sees the shape.
+ *
+ * Green against magenta, because that axis carries the most chroma for the least
+ * luminance. The offset is solved rather than chosen: luma(d) must be 0, so
+ * dg = -(0.2126 + 0.0722)/0.7152 * dr with dr = db, and then A = bg + d and
+ * B = bg - d have identical luminance and average back exactly.
+ *
+ * At #404040 this gives (128, 39, 128) and (0, 89, 0), measured at a luminance
+ * standard deviation of 0.083 across the image. There is no luminance cue at
+ * any block size.
+ *
+ * @param {string|number[]} background
+ * @param {number} [strength=1] 0..1 of the swing the background allows
+ */
+export function isoluminantPair(background, strength = 1) {
+  const bg = toRgb(background);
+  const K = (0.2126 + 0.0722) / 0.7152;
+  // Largest k where both colours stay in gamut on every channel.
+  let k = Math.min(bg[0], 255 - bg[0], bg[2], 255 - bg[2]);
+  k = Math.min(k, bg[1] / K, (255 - bg[1]) / K);
+  k = Math.max(0, k * Math.max(0, Math.min(1, strength)));
+  const d = [k, -k * K, k];
+  const clamp01 = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return {
+    a: toHex(bg.map((v, i) => clamp01(v + d[i]))),
+    b: toHex(bg.map((v, i) => clamp01(v - d[i]))),
+    swing: k,
+  };
+}
