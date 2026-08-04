@@ -12,13 +12,13 @@ export interface Pixels {
   data: Uint8ClampedArray;
 }
 
-export type SplitMode = 'amplitude' | 'aperture' | 'interleave' | 'channels' | 'decoy';
+export type SplitMode = 'amplitude' | 'aperture' | 'interleave' | 'decoy';
 
 export interface SplitOptions {
   /**
    * `amplitude` degrades every pixel and needs colour headroom. `aperture`
    * shows one slice per frame and needs none, so it works at pure white.
-   * `interleave` and `channels` exist to show why they do not work.
+   * `interleave` exists to show why splitting WHERE pixels are does not work.
    */
   mode?: SplitMode;
   /** Planes per cycle. 2 is almost always right. */
@@ -33,7 +33,7 @@ export interface SplitOptions {
   chroma?: number;
   /** Noise block in px. Derived as 2x the stroke unless set. Strobes below 120Hz. */
   noiseScale?: number;
-  /** `interleave` / `channels`: value shown by the non-carrying planes. */
+  /** `interleave` / `aperture`: value shown by the non-carrying planes. */
   fill?: number;
   /** `decoy`: the second image, same size. */
   decoy?: Pixels | null;

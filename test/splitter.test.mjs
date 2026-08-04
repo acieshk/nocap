@@ -192,27 +192,30 @@ test('contrast pre-emphasis steepens the perceived image', () => {
   assert.ok(stddev(boosted) > stddev(flat) * 1.1, 'contrast boost did not steepen');
 });
 
-test('only value randomization actually masks a single plane', () => {
-  // The claim under test: splits that partition a dimension the eye does not
-  // need for recognition (colour, sampling density) leave the picture legible
-  // in one plane. Only randomizing pixel *values* removes it.
+test('splitting a dimension the eye does not need leaves the picture legible', () => {
+  // The claim under test: partitioning WHERE the pixels are leaves the ones
+  // that remain untouched, and a subsampled picture reads fine. Removing the
+  // signal takes either randomising the values or withholding most of the image.
+  //
+  // This used to assert a three-way ordering that included 'channels'. That mode
+  // is gone, and the test kept passing after it was removed, because an unknown
+  // mode falls through to the modulated path and at amplitude 0 that also leaks
+  // 1.0. A test that passes for a reason unrelated to its name is worse than no
+  // test, so the dead branch is out rather than left to pass by accident.
   const src = sceneImage(96, 96);
   const worst = (cfg) =>
     Math.max(...splitFrames(src, { rng: lcg(21), ...cfg }).map((p) => leakScore(p, src)));
 
-  const channels = worst({ mode: 'channels', amplitude: 0 });
   const interleave = worst({ mode: 'interleave', frames: 2, amplitude: 0 });
   const amplitude = worst({ mode: 'amplitude', frames: 2, amplitude: 127 });
 
-  // A channel plane keeps full spatial resolution and is a linear function of
-  // source luma, so it correlates perfectly. Splitting colour hides nothing.
-  assert.ok(channels > 0.95, `channels leak ${channels.toFixed(3)} should be ~1`);
   // Interleaving drops pixels, but the ones that remain are untouched.
   assert.ok(interleave > 0.5, `interleave leak ${interleave.toFixed(3)} should be high`);
-  // Value randomization is the only split that actually removes the signal.
+  // Value randomisation removes the signal from every pixel it keeps.
   assert.ok(amplitude < 0.05, `amplitude leak ${amplitude.toFixed(3)} should be ~0`);
-  assert.ok(amplitude < interleave && interleave < channels, 'ordering should hold');
+  assert.ok(amplitude < interleave, 'randomising values must beat dropping pixels');
 });
+
 
 test('amplitude is the only lever that moves the leak', () => {
   // Correlation falls off steeply with amplitude and barely responds to

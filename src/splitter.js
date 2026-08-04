@@ -21,12 +21,9 @@
  *                subsampling does not destroy legibility. Stack noise on top
  *                (amplitude > 0) if you want a single plane to be unreadable.
  *
- *   'channels'   Interleave along the colour axis: plane 0 carries R, plane 1
- *                G, plane 2 B. This is field-sequential colour, the technique
- *                DLP projectors use. And it is a *display* technique, not a
- *                masking one. A single plane keeps full spatial resolution, so
- *                it is a legible monochrome version of the picture. Included so
- *                leakScore() can show you that. Do not ship it.
+ *   'aperture'   A band sweeps down and each frame carries one slice. Hides by
+ *                TIME rather than by value, so it needs no colour headroom and
+ *                works where amplitude cannot. A burst of N frames has the lot.
  *
  *   'decoy'      The modulator is a second image instead of noise: plane 0 is
  *                target+decoy, plane 1 is target-decoy. Alternating two real
@@ -68,7 +65,7 @@ export function planeRange(opts = {}) {
 
 /** Modes where exactly one plane holds each pixel and the rest show `fill`. */
 function carriesOnePlane(mode) {
-  return mode === 'interleave' || mode === 'channels' || mode === 'aperture';
+  return mode === 'interleave' || mode === 'aperture';
 }
 
 /**
@@ -82,19 +79,17 @@ function resolveCfg(opts = {}) {
   const amplitude = clamp(opts.amplitude ?? 64, 0, MAX_AMP);
   return {
     mode,
-    // 'channels' is R/G/B by definition, so the frame count is not a free knob.
     // 'aperture' hides by showing 1/N of the image per frame, so N IS the
     // protection and 2 would reveal half the content in one capture. 6 is the
     // most a 60Hz panel can cycle inside the ~100ms the eye integrates over.
-    frames: mode === 'channels' ? 3
-      : mode === 'aperture' ? Math.max(3, opts.frames ?? 6)
+    frames: mode === 'aperture' ? Math.max(3, opts.frames ?? 6)
       : Math.max(2, opts.frames ?? 2),
     amplitude,
     // The fill needs the same noise headroom the carrier does. A fill of 0 with
     // amplitude 24 would clip the negative half of every offset on the
     // non-carrier planes, silently breaking the zero-sum property and darkening
     // the perceived image. Pure black fill is only available at amplitude 0.
-    fill: clamp(opts.fill ?? (mode === 'channels' ? 0 : 128), amplitude, 255 - amplitude),
+    fill: clamp(opts.fill ?? 128, amplitude, 255 - amplitude),
     contrast: opts.contrast ?? 1,
     // Keep authored colours exact by capping amplitude per pixel to its own
     // headroom, instead of compressing everything into [amp, 255-amp].
@@ -105,9 +100,9 @@ function resolveCfg(opts = {}) {
     // ~163. Splitting in linear light makes the perceived colour exactly the
     // authored one, which is the only way "set the perceived background" can
     // mean anything.
-    // Only the modulated modes implement it. 'interleave' and 'channels' exist
-    // solely so leakScore can demonstrate that they do not work (they leak 0.69
-    // and 1.00), so implementing linear light for them would be wasted effort.
+    // Only the modulated modes implement it. 'interleave' exists solely so
+    // leakScore can demonstrate that it does not work (it leaks 0.69), so
+    // implementing linear light for it would be wasted effort.
     // but silently ignoring the flag would be worse. Forced off, and said so.
     linearLight: carriesOnePlane(mode) ? false : opts.linearLight ?? false,
     gamma: opts.gamma ?? 2.4,
@@ -304,9 +299,7 @@ function fillInterleave(planes, target, cfg) {
   const nh = Math.ceil((h + scale) / scale);
 
   // Which plane carries each cell, shared across channels: this splits the
-  // pixel, not the channel. In 'channels' mode the owner is the channel index
-  // instead, which is the whole difference between the two modes.
-  const byChannel = cfg.mode === 'channels';
+  // pixel, not the channel.
   // 'aperture' assigns by horizontal band rather than by random cell, so each
   // frame carries one contiguous slice and the slice sweeps down the image.
   //
@@ -322,7 +315,7 @@ function fillInterleave(planes, target, cfg) {
   const byBand = cfg.mode === 'aperture';
   const bandH = Math.max(1, h / n);
   const bandPhase = (cfg.rng() * n) | 0;
-  const owner = new Uint8Array(byChannel || byBand ? 0 : nw * nh);
+  const owner = new Uint8Array(byBand ? 0 : nw * nh);
   for (let i = 0; i < owner.length; i++) owner[i] = (cfg.rng() * n) | 0;
 
   const noise = cfg.amplitude > 0 ? randomDraws(w, h, cfg) : null;
@@ -337,7 +330,7 @@ function fillInterleave(planes, target, cfg) {
       const p = (y * w + x) * 4;
 
       for (let c = 0; c < 3; c++) {
-        const own = byChannel ? c : cell;
+        const own = cell;
         const carrier = n * t[p + c] - (n - 1) * cfg.fill;
 
         off.fill(0);

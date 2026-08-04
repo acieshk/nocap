@@ -54,6 +54,19 @@
 
 <div id="out"></div>
 
+<div class="note">
+  <b>Looked at on a real panel, and the verdict changed what this page is for.</b>
+  aperture reads as genuinely usable rather than as a curiosity, which its 21.6
+  modulation against amplitude's 94.2 predicted but could not establish. It is
+  the backup to reach for when the palette has no headroom or the flicker is too
+  much. The high-passed profile reads much like plain amplitude, which matches
+  the measurements: the spectrum shift is real and small, and it was never going
+  to be visible the way a change of mechanism is.
+  <br><br>
+  That judgement is the one thing on this page no measurement could produce, and
+  it is why the live panels sit above every number.
+</div>
+
 <h2>Both axes, on one page</h2>
 <p>
   These used to be two pages, which was a mistake: they measure different things
@@ -124,8 +137,8 @@
   every frame it appears in.
 </p>
 <p>
-  Note also that aperture and channels have within-pair equal to across-cycle.
-  Their frame content is deterministic rather than redrawn, so consecutive frames
+  Note also that aperture has within-pair equal to across-cycle. Its frame
+  content is deterministic rather than redrawn each cycle, so consecutive frames
   differ by the same amount whether or not a cycle boundary sits between them.
   amplitude is the only mode here where the two numbers come apart, and that gap
   is the churn worth attacking.
@@ -251,11 +264,6 @@ const ALGOS = [
        + 'carried perfectly. It does not degrade the content, it withholds it. '
        + 'A burst of six frames reassembles the lot.',
     metricLies: true },
-  { mode: 'channels', name: 'channels', ownAmplitude: 0,
-    sub: 'red, green and blue on separate frames',
-    why: 'Field-sequential colour, the technique DLP projectors use. It is a display '
-       + 'method, not a masking one: one frame is a full-resolution greyscale copy, '
-       + 'and greyscale is what OCR converts to first anyway.' },
 ];
 
 const ATTACKS = [
