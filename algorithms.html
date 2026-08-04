@@ -54,6 +54,53 @@
 
 <div id="out"></div>
 
+<h2>Both axes, on one page</h2>
+<p>
+  These used to be two pages, which was a mistake: they measure different things
+  about the same object. <b>Leak</b> is what an attacker gets.
+  <b>Modulation</b> is what a viewer pays. Every mode has both, and a mode is only
+  worth shipping if you have looked at both.
+</p>
+<p>
+  <b>Within-pair</b> modulation is the flicker between the two frames of a cycle.
+  It carries the masking and cannot be lowered without lowering the protection.
+  <b>Across-cycle</b> is the flicker between one cycle and the next. It carries
+  <b>nothing</b>, and every code level of it is churn for no security at all.
+</p>
+<div class="note">
+  <b>No comfort score, deliberately.</b> Producing one means inventing
+  coefficients for a spatiotemporal contrast sensitivity function, and an
+  invented coefficient inside a metric is worse than no metric because it
+  survives review by looking quantitative. Modulation is mechanical. Whether a
+  given amount is tolerable needs your eyes on a real panel, which is what the
+  live panels are for.
+</div>
+
+<h2>The first thing merging the pages showed</h2>
+<p>
+  <b>aperture is far calmer than amplitude</b>, and neither page could have told
+  you that on its own. Measured on the panels above at the shipped block:
+</p>
+<table>
+  <tr><th>mode</th><th>leak</th><th>within-pair</th><th>across-cycle</th></tr>
+  <tr><td>amplitude</td><td>0.248</td><td>94.2</td><td>47.6</td></tr>
+  <tr><td>aperture</td><td>0.148</td><td><b>21.6</b></td><td><b>21.6</b></td></tr>
+</table>
+<p>
+  About a quarter of the modulation. That is the trade stated properly at last:
+  amplitude throws every pixel around every frame and you feel all of it, while
+  aperture moves a band and leaves the rest still. What aperture gives up is that
+  a burst of N frames reassembles the value exactly, where amplitude degrades
+  every frame it appears in.
+</p>
+<p>
+  Note also that aperture and channels have within-pair equal to across-cycle.
+  Their frame content is deterministic rather than redrawn, so consecutive frames
+  differ by the same amount whether or not a cycle boundary sits between them.
+  amplitude is the only mode here where the two numbers come apart, and that gap
+  is the churn worth attacking.
+</p>
+
 <h2>Two mechanisms, not one</h2>
 <p>
   <code>amplitude</code> and <code>aperture</code> hide in genuinely different
@@ -138,6 +185,7 @@
 
 <script src="demo/nav.js"></script>
 <script type="module">
+import './src/secret.js';
 import { splitFrames, averageFrames, leakScore, boxBlur, gaussianBlur,
          medianFilter } from './src/index.js';
 
@@ -233,6 +281,21 @@ function render() {
     // Calibrated against what text actually reaches rather than against zero.
     // A working config on real glyphs lands near 0.25, so a 0.2 cut-off would
     // mark the shipped default as a failure.
+    // Modulation, the comfort axis. within-pair carries the masking and cannot
+    // be reduced without reducing protection. across-cycle carries nothing: it
+    // is churn between one cycle and the next, paid for and returning no
+    // security. A second cycle from the same stream is what makes it visible.
+    const cycle2 = splitFrames(src, { mode: algo.mode, amplitude: useAmp, hardness: 1,
+      noiseScale: blk, chroma: 0, linearLight: algo.mode === 'amplitude',
+      frames: algo.frames, gamma: 2.4, rng });
+    const modulation = (a, b) => {
+      let s = 0;
+      for (let i = 0; i < a.data.length; i += 4) s += Math.abs(a.data[i] - b.data[i]);
+      return s / (a.data.length / 4);
+    };
+    const wp = modulation(planes[0], planes[1]);
+    const ac = modulation(planes[planes.length - 1], cycle2[0]);
+
     const grade = (n) => (n < 0.32 ? 'ok' : n < 0.55 ? 'warn' : 'bad');
     const verdict = algo.metricLies ? ['see frames', 'bad']
       : best.leak < 0.32 ? ['masks', 'ok']
@@ -249,12 +312,31 @@ function render() {
         + 'understates this mode, for the reason given above. It is shown because '
         + 'hiding a number that disagrees with the picture would be worse than '
         + 'explaining it.</div>' : ''}
-      <table class="atk"><tr><th>amplitude used</th><th>strongest attack</th>
-        <th>leak on one frame</th></tr>
-        <tr><td>${useAmp}${algo.ownAmplitude !== undefined
-          ? ' <span style="color:var(--faint)">its own mechanism only</span>' : ''}</td>
-        <td>${best.name}${best.param ? ` (${best.param})` : ''}</td>
-        <td class="${grade(best.leak)}">${best.leak.toFixed(3)}</td></tr></table>`;
+      <table class="atk">
+        <tr><th>what an attacker gets</th><th></th><th>what a viewer pays</th><th></th></tr>
+        <tr><td>strongest attack</td><td>${best.name}${best.param ? ` (${best.param})` : ''}</td>
+            <td>within-pair, buys masking</td><td>${wp.toFixed(1)}</td></tr>
+        <tr><td>leak on one frame</td>
+            <td class="${grade(best.leak)}">${best.leak.toFixed(3)}</td>
+            <td>across-cycle, buys nothing</td><td class="${ac > wp * 0.75 ? 'warn' : ''}">${ac.toFixed(1)}</td></tr>
+      </table>`;
+
+    // A live element per mode. The frames below are stills of the same thing,
+    // and the whole point of comfort is that a still cannot show it.
+    const live = document.createElement('div');
+    live.style.cssText = 'padding:16px 15px 0;display:grid;place-items:center;gap:7px';
+    const el = document.createElement('nocap-secret');
+    el.setAttribute('width', '260'); el.setAttribute('height', '54');
+    el.setAttribute('color', '#6d6d6d'); el.setAttribute('background', '#404040');
+    el.setAttribute('mode', algo.mode);
+    if (algo.frames) el.setAttribute('frames', algo.frames);
+    el.setAttribute('amplitude', useAmp);
+    el.setAttribute('noise-scale', blk);
+    const cap = document.createElement('span');
+    cap.className = 'lbl'; cap.textContent = 'live, at your refresh rate';
+    live.append(el, cap);
+    box.insertBefore(live, box.querySelector('.frames'));
+    el.secret = txt;
 
     const frames = box.querySelector('.frames');
     const show = (img, label) => {
