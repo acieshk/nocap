@@ -68,7 +68,7 @@ export function planeRange(opts = {}) {
 
 /** Modes where exactly one plane holds each pixel and the rest show `fill`. */
 function carriesOnePlane(mode) {
-  return mode === 'interleave' || mode === 'channels';
+  return mode === 'interleave' || mode === 'channels' || mode === 'aperture';
 }
 
 /**
@@ -83,7 +83,12 @@ function resolveCfg(opts = {}) {
   return {
     mode,
     // 'channels' is R/G/B by definition, so the frame count is not a free knob.
-    frames: mode === 'channels' ? 3 : Math.max(2, opts.frames ?? 2),
+    // 'aperture' hides by showing 1/N of the image per frame, so N IS the
+    // protection and 2 would reveal half the content in one capture. 6 is the
+    // most a 60Hz panel can cycle inside the ~100ms the eye integrates over.
+    frames: mode === 'channels' ? 3
+      : mode === 'aperture' ? Math.max(3, opts.frames ?? 6)
+      : Math.max(2, opts.frames ?? 2),
     amplitude,
     // The fill needs the same noise headroom the carrier does. A fill of 0 with
     // amplitude 24 would clip the negative half of every offset on the
@@ -236,7 +241,22 @@ function fillInterleave(planes, target, cfg) {
   // pixel, not the channel. In 'channels' mode the owner is the channel index
   // instead, which is the whole difference between the two modes.
   const byChannel = cfg.mode === 'channels';
-  const owner = new Uint8Array(byChannel ? 0 : nw * nh);
+  // 'aperture' assigns by horizontal band rather than by random cell, so each
+  // frame carries one contiguous slice and the slice sweeps down the image.
+  //
+  // A band rather than scattered cells is the whole point: scattered cells give
+  // an attacker 1/N of the pixels spread over the WHOLE image, which is a
+  // subsampled copy and reads fine. A band gives them 1/N of the image and
+  // nothing at all of the rest, so what one frame withholds is genuinely absent
+  // rather than merely thinned.
+  //
+  // Horizontal rather than vertical, so a frame holds a slice across every
+  // glyph instead of a few whole ones. Partial strokes are far harder to
+  // identify than complete characters, and no character is ever fully revealed.
+  const byBand = cfg.mode === 'aperture';
+  const bandH = Math.max(1, h / n);
+  const bandPhase = (cfg.rng() * n) | 0;
+  const owner = new Uint8Array(byChannel || byBand ? 0 : nw * nh);
   for (let i = 0; i < owner.length; i++) owner[i] = (cfg.rng() * n) | 0;
 
   const noise = cfg.amplitude > 0 ? randomDraws(w, h, cfg) : null;
@@ -245,7 +265,9 @@ function fillInterleave(planes, target, cfg) {
   for (let y = 0; y < h; y++) {
     const ly = ((y + oy) / scale) | 0;
     for (let x = 0; x < w; x++) {
-      const cell = owner[ly * nw + (((x + ox) / scale) | 0)];
+      const cell = byBand
+        ? (((y / bandH) | 0) + bandPhase) % n
+        : owner[ly * nw + (((x + ox) / scale) | 0)];
       const p = (y * w + x) * 4;
 
       for (let c = 0; c < 3; c++) {

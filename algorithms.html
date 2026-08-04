@@ -32,8 +32,9 @@
 <h1>Algorithms</h1>
 <p class="lede">
   Every way this library knows of splitting one image across frames, run on the
-  same content, and scored against three different denoisers. Three of the four
-  fail, and they are kept so the failure can be run rather than asserted.
+  same content and scored against three different denoisers. Two of them work by
+  different mechanisms, two fail, and the failures are kept so they can be run
+  rather than asserted.
 </p>
 
 <div class="rig">
@@ -53,7 +54,29 @@
 
 <div id="out"></div>
 
-<h2>Why only one of them works</h2>
+<h2>Two mechanisms, not one</h2>
+<p>
+  <code>amplitude</code> and <code>aperture</code> hide in genuinely different
+  ways, and the difference decides which one you want.
+</p>
+<p>
+  <b>amplitude degrades everything.</b> Every pixel is in every frame at the
+  wrong value. Nothing is missing and nothing is right, and how wrong it can be
+  depends on how much headroom the colours have. White has none, which is why
+  <code>fit</code> exists.
+</p>
+<p>
+  <b>aperture withholds most of it.</b> One slice per frame, carried perfectly,
+  the rest genuinely absent from the file. It does not care about colour at all,
+  so it works at pure white where amplitude cannot. The cost is that what it does
+  show, it shows exactly, and a burst of N frames has everything.
+</p>
+<p>
+  So: amplitude against a single screenshot on a palette with room, aperture when
+  the palette has none and you can accept the flicker of a sweeping band.
+</p>
+
+<h2>Why the other two fail</h2>
 <p>
   The three that fail all split a dimension the eye does not need in order to
   recognise something. Recognition survives losing colour, losing most of the
@@ -137,6 +160,19 @@ const ALGOS = [
        + 'with nothing to do with the content, and it dilutes the correlation until the '
        + 'number looks good. On the pixels it actually carries, this leaks about 1.0.',
     metricLies: true },
+  { mode: 'aperture', name: 'aperture', ownAmplitude: 0, frames: 6,
+    sub: 'a band sweeps down, one slice per frame',
+    why: 'The only mechanism here that does not care about colour at all, so it works '
+       + 'at any palette including pure white where the noise has no headroom to use. '
+       + 'It hides by TIME rather than by value: a frame carries one horizontal slice '
+       + 'and genuinely does not contain the rest, which is an information limit rather '
+       + 'than a perceptual one. Horizontal so a frame holds a slice across every glyph '
+       + 'instead of a few whole ones. '
+       + '<b>The score understates it in the other direction.</b> Most of the frame is '
+       + 'flat fill, which dilutes the correlation, but the slice it does carry is '
+       + 'carried perfectly. It does not degrade the content, it withholds it. '
+       + 'A burst of six frames reassembles the lot.',
+    metricLies: true },
   { mode: 'channels', name: 'channels', ownAmplitude: 0,
     sub: 'red, green and blue on separate frames',
     why: 'Field-sequential colour, the technique DLP projectors use. It is a display '
@@ -178,7 +214,7 @@ function render() {
     const useAmp = algo.ownAmplitude ?? amp;
     const planes = splitFrames(src, { mode: algo.mode, amplitude: useAmp, hardness: 1,
       noiseScale: blk, chroma: 0, linearLight: algo.mode === 'amplitude',
-      gamma: 2.4, rng });
+      frames: algo.frames, gamma: 2.4, rng });
 
     // Score the WORST plane, because an attacker picks which frame to keep.
     let worst = { leak: -1 };
@@ -210,8 +246,9 @@ function render() {
       <div class="frames"></div>
       <div class="why">${algo.why}</div>
       ${algo.metricLies ? '<div class="why" style="color:#d9bd80">The score below '
-        + 'understates this mode. It is shown because hiding a number that disagrees '
-        + 'with the picture would be worse than explaining it.</div>' : ''}
+        + 'understates this mode, for the reason given above. It is shown because '
+        + 'hiding a number that disagrees with the picture would be worse than '
+        + 'explaining it.</div>' : ''}
       <table class="atk"><tr><th>amplitude used</th><th>strongest attack</th>
         <th>leak on one frame</th></tr>
         <tr><td>${useAmp}${algo.ownAmplitude !== undefined

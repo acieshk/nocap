@@ -12,10 +12,14 @@ export interface Pixels {
   data: Uint8ClampedArray;
 }
 
-export type SplitMode = 'amplitude' | 'interleave' | 'channels' | 'decoy';
+export type SplitMode = 'amplitude' | 'aperture' | 'interleave' | 'channels' | 'decoy';
 
 export interface SplitOptions {
-  /** `amplitude` is the only one that masks. The others exist to show why. */
+  /**
+   * `amplitude` degrades every pixel and needs colour headroom. `aperture`
+   * shows one slice per frame and needs none, so it works at pure white.
+   * `interleave` and `channels` exist to show why they do not work.
+   */
   mode?: SplitMode;
   /** Planes per cycle. 2 is almost always right. */
   frames?: number;
