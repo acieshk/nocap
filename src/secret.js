@@ -412,16 +412,36 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
   }
 
   const num = (name, fallback) => (name in attrs ? +attrs[name] : fallback);
+
+  // 'aperture' and 'interleave' carry each pixel in ONE plane and show a fill in
+  // the others. That IS their mechanism, and stacking the default amplitude on
+  // top buries it: the noise swamps the structure and the element renders
+  // something visually identical to amplitude mode, so selecting either mode
+  // appeared to do nothing at all.
+  //
+  // Exactly the error the algorithms page made and diagnosed, where every mode
+  // got amplitude 110 and interleave scored best because it was being credited
+  // for amplitude's work. It was fixed there and not carried back to here.
+  //
+  // So these modes default to no stacked noise and show their own mechanism.
+  // Setting `amplitude` explicitly still stacks it, which is a real thing to
+  // want: interleave plus noise is a genuine configuration, it is just not what
+  // `mode="interleave"` alone should silently mean.
+  // Resolve the mode BEFORE deciding the amplitude. base.mode is always the
+  // default here, since the attribute is applied in the returned object rather
+  // than merged into base, so testing base.mode never sees an override.
+  const mode = attrs.mode ?? base.mode;
+  const carrier = mode === 'aperture' || mode === 'interleave';
+  const amplitude = num('amplitude', carrier ? 0 : base.amplitude);
+
   return {
     ...base,
-    amplitude: num('amplitude', base.amplitude),
+    amplitude,
     frames: num('frames', base.frames),
     contrast: num('contrast', base.contrast),
     noiseScale: num('noise-scale', base.noiseScale),
-    // Switchable so the algorithms can be compared on the same content. Only
-    // 'amplitude' masks. The others are here because a claim that the obvious
-    // alternatives fail is worth being able to run rather than read.
-    mode: attrs.mode ?? base.mode,
+    // Switchable so the algorithms can be compared on the same content.
+    mode,
     noiseProfile: attrs['noise-profile'] ?? base.noiseProfile,
     inkBias: num('ink-bias', base.inkBias),
     chroma: num('chroma', base.chroma),
