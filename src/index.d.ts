@@ -27,7 +27,7 @@ export interface SplitOptions {
   hardness?: number;
   /** 0 = one draw shared across RGB (grey, masks better). 1 = per channel. */
   chroma?: number;
-  /** Noise block in px. Higher resists a blur, strobes below 120Hz. */
+  /** Noise block in px. Derived as 2x the stroke unless set. Strobes below 120Hz. */
   noiseScale?: number;
   /** `interleave` / `channels`: value shown by the non-carrying planes. */
   fill?: number;
@@ -221,7 +221,8 @@ export function isoluminantPartner(
 
 export const STRENGTHS: Record<Strength, {
   amplitude: number;
-  noiseScale: number;
+  /** Multiple of the stroke width. 2 is where a blur stops gaining. */
+  blockRatio: number;
   hardness: number;
 }>;
 

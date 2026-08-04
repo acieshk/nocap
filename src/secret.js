@@ -22,12 +22,13 @@ import { splitFrames } from './splitter.js';
  */
 export const STRENGTHS = {
   // Easiest to read, and the only one that fuses comfortably on a slow 60Hz
-  // panel. A single frame still leaks noticeably more.
-  weak: { amplitude: 80, noiseScale: 4, hardness: 0.5 },
-  medium: { amplitude: 110, noiseScale: 6, hardness: 1 },
+  // panel. Its block sits BELOW the saturation point on purpose, so a blur has
+  // a radius worth trying. That is the trade the name is making.
+  weak: { amplitude: 80, blockRatio: 1.33, hardness: 0.5 },
+  medium: { amplitude: 110, blockRatio: 2, hardness: 1 },
   // Coarser noise resists a blur best but sits at a low spatial frequency,
   // where the eye's temporal sensitivity peaks. Wants 120Hz+ to fuse.
-  strong: { amplitude: 127, noiseScale: 8, hardness: 1 },
+  strong: { amplitude: 127, blockRatio: 2.67, hardness: 1 },
 };
 
 const TEXT_DEFAULTS = {
@@ -63,31 +64,15 @@ const TEXT_DEFAULTS = {
   // denoised leak versus 0.346 for independent per-channel noise, at identical
   // visual loudness. And it looks like grey static instead of rainbow static.
   chroma: 0,
-  // Deliberately small, and this is a real trade-off rather than an oversight.
+  // The block is derived from the stroke, so this is a RATIO rather than a
+  // pixel count. 2 is where a blur stops gaining, measured on rasterised glyphs
+  // at five sizes. See the derivation in resolveOptions.
   //
-  // Coarse noise resists a blur attack far better: per-pixel noise is white, so
-  // it sits above the frequencies strokes occupy and a radius-4 blur lifts the
-  // leak from 0.13 to 0.46, while a block at the stroke width leaves no radius
-  // that helps. Purely on masking, block >= stroke width wins.
-  //
-  // But coarse noise is low spatial frequency, and that is exactly where the
-  // eye's temporal contrast sensitivity peaks. At 30Hz, which is any 60Hz
-  // display with two planes, big blocks strobe instead of fusing and the text
-  // is unreadable.
-  // Fine noise sits near the eye's spatial limit and fuses.
-  //
-  // 6. Block size is the single biggest lever against a blur, because a block
-  // at or above the stroke width leaves the attacker no radius that helps, and
-  // at the sizes text is actually rendered a 6px block is close to that.
-  //
-  // The cost is fusion, not legibility: coarse noise sits at a low spatial
-  // frequency, which is where the eye's temporal sensitivity peaks, so it
-  // shimmers more at 30Hz than a fine block does. Use strength="weak" if a
-  // 60Hz display is the priority.
-  //
-  // Legibility still wins over going coarser: raise noise-scale toward the full
-  // stroke width only if you know the display runs at 120Hz+.
-  noiseScale: 6,
+  // The cost of a coarser block is fusion, not legibility: coarse noise sits at
+  // a low spatial frequency, which is where the eye's temporal sensitivity
+  // peaks, so it shimmers more at 30Hz than a fine block does. strength="weak"
+  // deliberately sits under 2 for that reason and accepts the blur exposure.
+  blockRatio: 2,
   bankSize: 6,
 };
 
@@ -271,36 +256,44 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
   const preset = STRENGTHS[attrs.strength] ?? {};
   const base = { ...TEXT_DEFAULTS, ...preset };
 
-  // Block size follows the stroke, which follows devicePixelRatio. But it stops
-  // there: past the stroke width there is no radius left for a blur to exploit,
-  // so a coarser block buys nothing and still costs fusion, which is the scarce
-  // resource. Measured at stroke 8, worst plane over 6 seeds:
+  // The block is a multiple of the STROKE, and that is the whole rule.
   //
-  //   block  6   raw 0.251   blurred 0.293   attacker radius 4
-  //   block  8   raw 0.283   blurred 0.291   attacker radius 3
-  //   block 10   raw 0.257   blurred 0.257   attacker radius 0   <- saturated
-  //   block 12   raw 0.301   blurred 0.301   attacker radius 0
+  // Its only job is closing the blur gap. Measured on rasterised glyphs at five
+  // sizes, 8 seeds each, the raw leak barely moves with the block (0.17 to 0.22
+  // everywhere) while the useful blur radius collapses at a fixed ratio:
   //
-  // Scaling blindly gave 6 x dpr 2 = 12 against a real stroke of 8: nothing
-  // gained over 10, a worse raw leak, and 20% more shimmer paid for it.
+  //   stroke 3   block 6    <- radius 0
+  //   stroke 4   block 8    <- radius 0
+  //   stroke 6   block 12   <- radius 0
+  //   stroke 8   block 16   <- radius 0
   //
-  // The font is canvas height * 0.46 and a 600-weight stroke is about an eighth
-  // of that, so the ceiling tracks the element rather than being another
-  // constant to keep in step.
-  // From the ACTUAL font size when one is given. Falling back to the old
-  // height * 0.46 assumption only when the caller has nothing better.
+  // Twice the stroke, at every size. Below it the attacker gains: stroke 8 with
+  // a 6px block goes 0.187 raw to 0.266 blurred, and with a 3px block to 0.441.
+  //
+  // An earlier version of this used 1.25x, measured on synthetic vertical bars.
+  // Bars are the easy case. Real glyphs carry curves and diagonals whose local
+  // stroke runs wider than the nominal one, and they need the full 2x. That is
+  // worth stating because the bar measurement looked clean and was wrong.
+  //
+  // This used to be an absolute px value per preset, floored so it could only
+  // ever trim a dpr-scaled number and never raise it. At dpr 1 the preset value
+  // was therefore the answer at every font size, so a 96px font got the same
+  // 6px block as a 12px one, at half its stroke. A ratio cannot drift that way,
+  // because dpr already moves the stroke.
   const sizePx = fontSizePx ?? height * dpr * 0.46;
   const strokePx = Math.max(2, Math.round(sizePx / 8));
-  // NOTE: the ceiling is floored at the preset's own block, so it can only ever
-  // reduce a dpr-scaled value, never go below what the preset asked for. That
-  // makes it inert for text smaller than the default — a 12px font and a 48px
-  // font both come out at 6 here. Left as-is deliberately: changing it collides
-  // with presets carrying their own noiseScale, and that collision is a design
-  // call rather than something to slip into a styling change. Filed separately.
-  base.noiseScale = Math.min(
-    Math.max(base.noiseScale, Math.round(base.noiseScale * dpr)),
-    Math.max(base.noiseScale, Math.round(strokePx * 1.25))
-  );
+  const SATURATES = 2;
+  base.noiseScale = Math.max(2, Math.round(strokePx * (base.blockRatio ?? SATURATES)));
+  // blockRatio is how a preset is authored. It is not a split option, and
+  // leaving it in would hand splitFrames a key it does not know.
+  delete base.blockRatio;
+
+  if (base.noiseScale < strokePx * SATURATES) {
+    warnOnce(`block:${base.noiseScale}:${strokePx}`,
+      `noise block ${base.noiseScale}px is under ${SATURATES}x the ${strokePx}px stroke, ` +
+      `so a blur can recover some of the value. Use ${Math.round(strokePx * SATURATES)}px ` +
+      'to close it, at the cost of more visible shimmer.');
+  }
 
   const num = (name, fallback) => (name in attrs ? +attrs[name] : fallback);
   return {

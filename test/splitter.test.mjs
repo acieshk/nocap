@@ -516,7 +516,7 @@ test('strength presets are ordered and complete', async () => {
   const { STRENGTHS } = await import('../src/secret.js');
   const order = ['weak', 'medium', 'strong'];
   for (const name of order) {
-    for (const key of ['amplitude', 'noiseScale', 'hardness']) {
+    for (const key of ['amplitude', 'blockRatio', 'hardness']) {
       assert.ok(STRENGTHS[name][key] > 0, `${name}.${key} missing`);
     }
   }
@@ -525,7 +525,7 @@ test('strength presets are ordered and complete', async () => {
     const lo = STRENGTHS[order[i - 1]];
     const hi = STRENGTHS[order[i]];
     assert.ok(hi.amplitude > lo.amplitude, `${order[i]} must exceed ${order[i - 1]}`);
-    assert.ok(hi.noiseScale >= lo.noiseScale, `${order[i]} block must not drop`);
+    assert.ok(hi.blockRatio >= lo.blockRatio, `${order[i]} block must not drop`);
   }
 });
 
@@ -545,23 +545,22 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   // after a spread and their fallbacks still read the defaults, so `strength`
   // moved amplitude and nothing else. Untestable while it was inline.
   const { resolveOptions, STRENGTHS } = await import('../src/secret.js');
-  const TEXT_BLOCK = STRENGTHS.medium.noiseScale;
+  const strokeOf = (dpr, h) => Math.max(2, Math.round((h * dpr * 0.46) / 8));
+  const TEXT_BLOCK = Math.round(strokeOf(1, 56) * STRENGTHS.medium.blockRatio);
   for (const [name, preset] of Object.entries(STRENGTHS)) {
     const got = resolveOptions({ strength: name }, 1);
     assert.equal(got.amplitude, preset.amplitude, `${name} amplitude`);
     assert.equal(got.hardness, preset.hardness, `${name} hardness`);
-    assert.equal(got.noiseScale, preset.noiseScale, `${name} noiseScale`);
+    assert.equal(got.noiseScale, Math.round(strokeOf(1, 56) * preset.blockRatio),
+      `${name} block should be its ratio times the stroke`);
   }
-  // Presets are authored at dpr 1 and scale with dpr, but stop at the stroke
-  // width: past there no blur radius helps, so a coarser block buys nothing and
-  // still costs fusion. Blind scaling gave 12 against a real stroke of 8.
+  // The block is a multiple of the stroke, and the stroke already carries dpr,
+  // so the ratio has to hold at every density rather than being trimmed at one.
   const tall = 120;
-  const strokeAt = (dpr, h) => Math.round((h * dpr * 0.46) / 8);
   for (const dpr of [1, 2, 3]) {
     const got = resolveOptions({ strength: 'strong' }, dpr, tall).noiseScale;
-    assert.ok(got >= STRENGTHS.strong.noiseScale, `dpr ${dpr} must not shrink the preset`);
-    assert.ok(got <= Math.max(STRENGTHS.strong.noiseScale, Math.round(strokeAt(dpr, tall) * 1.25)),
-      `dpr ${dpr} overshot the stroke ceiling: ${got}`);
+    const want = Math.round(strokeOf(dpr, tall) * STRENGTHS.strong.blockRatio);
+    assert.equal(got, want, `dpr ${dpr} should give ${want}, got ${got}`);
   }
   // A taller element has a wider stroke, so it earns a coarser block.
   assert.ok(resolveOptions({}, 2, 120).noiseScale > resolveOptions({}, 2, 40).noiseScale,
@@ -570,11 +569,12 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   const override = resolveOptions({ strength: 'weak', hardness: '0.9' }, 1);
   assert.equal(override.hardness, 0.9);
   assert.equal(override.amplitude, STRENGTHS.weak.amplitude, 'the rest stays');
-  // No strength named: plain defaults, dpr-scaled.
-  // No strength named: defaults, dpr-scaled, still under the stroke ceiling.
+  // No strength named: the default ratio against the real stroke. A tall
+  // element at dpr 2 has a 14px stroke, so it earns 28 rather than the 6 the
+  // old floor pinned it to.
   const plain = resolveOptions({}, 2, 120).noiseScale;
-  assert.ok(plain >= TEXT_BLOCK && plain <= Math.round((120 * 2 * 0.46 / 8) * 1.25) + 1,
-    `plain default out of range: ${plain}`);
+  assert.equal(plain, strokeOf(2, 120) * 2, `plain default: ${plain}`);
+  assert.ok(plain > TEXT_BLOCK, 'a wide stroke must earn more than the default-size block');
 });
 
 test('the viewer-facing mean is taken in light, not in code', async () => {
@@ -795,25 +795,36 @@ test('letter-spacing without a unit still reaches the canvas', async () => {
   assert.equal(resolveText({ 'letter-spacing': '0.1em' }, 56).letterSpacing, '0.1em');
 });
 
-test('the noise block ceiling follows the real font size, not the old assumption', async () => {
-  const { resolveOptions, resolveText } = await import('../src/secret.js');
-  // Small text with a block sized for large text is where a blur wins, so the
-  // ceiling has to move when the font does.
-  // The ceiling only ever trims a dpr-scaled block, so the font size can lower
-  // the block and never raise it. That makes dpr 2 the case that matters, and
-  // it is also the case that is real: high-refresh hardware is high-dpr.
-  const big = resolveOptions({}, 2, 90, resolveText({}, 90).sizePx * 2).noiseScale;
-  const small = resolveOptions({}, 2, 90, resolveText({ 'font-size': '12' }, 90).sizePx).noiseScale;
-  assert.ok(small < big,
-    `a 12px font must not carry the block of a 41px one: ${small} vs ${big}`);
+test('the noise block is twice the stroke, at every size and density', async () => {
+  const { resolveOptions, resolveText, STRENGTHS } = await import('../src/secret.js');
 
-  // At dpr 1 the ceiling is floored at the preset's own block, so the font size
-  // does not reach it. Asserted so the limitation is recorded rather than
-  // discovered: see the note in resolveOptions.
-  const base1 = resolveOptions({}, 1, 90).noiseScale;
-  assert.equal(resolveOptions({}, 1, 90, 12).noiseScale, base1);
-  // Passing nothing keeps the previous behaviour exactly.
-  assert.equal(resolveOptions({}, 1, 56).noiseScale, resolveOptions({}, 1, 56, 56 * 0.46).noiseScale);
+  // The rule, and the reason it is a rule. Measured on rasterised glyphs at
+  // five sizes, 8 seeds each: the useful blur radius reaches 0 at exactly twice
+  // the stroke and not before. stroke 3 needs 6, stroke 8 needs 16.
+  //
+  // This replaced an absolute px value per preset, floored so it could only
+  // trim a dpr-scaled number and never raise one. At dpr 1 that made the preset
+  // the answer at every font size, so a 96px font got the same 6px block as a
+  // 12px one, at a quarter of the ratio it needed.
+  for (const [px, stroke] of [[16, 2], [24, 3], [32, 4], [48, 6], [64, 8], [96, 12]]) {
+    const got = resolveOptions({}, 1, 56, px).noiseScale;
+    assert.equal(got, Math.max(2, Math.round(stroke * 2)),
+      `font ${px}px has a ${stroke}px stroke and needs ${stroke * 2}, got ${got}`);
+  }
+
+  // Bigger font, bigger block. This is what failed before: every size gave 6.
+  const small = resolveOptions({}, 1, 90, resolveText({ 'font-size': '12' }, 90).sizePx).noiseScale;
+  const big = resolveOptions({}, 1, 90, resolveText({ 'font-size': '64' }, 90).sizePx).noiseScale;
+  assert.ok(big > small, `a 64px font must carry more than a 12px one: ${big} vs ${small}`);
+
+  // And it holds at dpr 1, which is the density the old floor made inert.
+  assert.ok(resolveOptions({}, 1, 120).noiseScale > resolveOptions({}, 1, 40).noiseScale,
+    'a taller element has a wider stroke and must earn a coarser block at dpr 1');
+
+  // weak sits under the saturation point on purpose. That is the trade its name
+  // makes, and it should be visible here rather than only in prose.
+  assert.ok(STRENGTHS.weak.blockRatio < 2, 'weak trades blur resistance for calm');
+  assert.ok(STRENGTHS.medium.blockRatio >= 2, 'medium must actually saturate');
 });
 
 // A malformed attribute used to reach the canvas and stop the draw without
