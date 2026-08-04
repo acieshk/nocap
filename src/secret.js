@@ -28,7 +28,14 @@ export const STRENGTHS = {
   weak: { amplitude: 80, blockRatio: 1.33, hardness: 0.5 },
   medium: { amplitude: 110, blockRatio: 2, hardness: 1 },
   // Coarser noise resists a blur best but sits at a low spatial frequency,
-  // where the eye's temporal sensitivity peaks. Wants 120Hz+ to fuse.
+  // where the eye's temporal sensitivity peaks.
+  //
+  // This said "wants 120Hz+ to fuse", which was reasoning rather than a
+  // reading. Looked at on a 60Hz panel at the default size it fuses fine, so
+  // the claim is gone. It remains the most visually active of the three, and
+  // the open question is LARGE text: the block is twice the stroke, so a 96px
+  // face gets 24px where the default gets 6, and coarse blocks are exactly what
+  // shimmers. Nobody has looked at that size.
   strong: { amplitude: 127, blockRatio: 2.67, hardness: 1 },
 };
 

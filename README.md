@@ -111,18 +111,32 @@ That is the whole API for most uses. It renders as soon as it has a value.
 
 | `strength` | Reads well at | Trade |
 | --- | --- | --- |
-| `weak` | 60Hz, comfortably | Easiest to read. A captured frame leaks noticeably more |
+| `weak` | 60Hz | Easiest to read. A captured frame leaks noticeably more |
 | `medium` *(default)* | 60Hz | The balanced point. Start here |
-| `strong` | 120Hz+ | Best against a blur. Visibly strobes on a 60Hz panel |
+| `strong` | 60Hz | Best against a blur, and the most visually active |
 
 Everything below is for when you need more control. You can ignore it.
 
-### What has not been measured
+### What has and has not been looked at
 
-**Nobody has established that any preset is comfortable to read on a 60Hz
-panel**, which is most panels. Every number in this repository, including all of
-the ones quoted above, is *what an attacker gets*. The readability side is
-unmeasured, and it is the product's core promise rather than a detail.
+**All three strengths were readable and comfortable at the default size on a
+60Hz panel**, judged by one person on one display: glance-and-read on first
+attempt, and still fine after sitting on screen. That includes `strong`, which
+this table used to describe as visibly strobing at 60Hz. It does not, and that
+claim was never measured. It has been removed rather than softened.
+
+That is one observer, so treat it as the floor being higher than feared rather
+than as a study. It is also the only reading anyone has done, which is why it
+changed the table.
+
+**What is still open is large text.** The noise block is derived as twice the
+stroke, so a 96px face gets a 24px block where the default gets 6. Coarse blocks
+sit at low spatial frequency, which is exactly where temporal sensitivity peaks,
+so the comfort question does not scale with the size and has to be asked again
+there. Nobody has.
+
+Every other number in this repository is *what an attacker gets*, not what a
+viewer experiences.
 
 What is known: the flicker between the two frames of a cycle carries the masking
 and cannot be reduced without reducing protection. The flicker between one cycle
