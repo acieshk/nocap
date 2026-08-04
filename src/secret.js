@@ -411,7 +411,17 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
       'to close it, at the cost of more visible shimmer.');
   }
 
-  const num = (name, fallback) => (name in attrs ? +attrs[name] : fallback);
+  // NOT a local `num`. There was one here, with the same name and the same
+  // shape as the validating helper above, and it shadowed it: every attribute
+  // resolved in this function got a bare `+attrs[name]` while everything in
+  // resolveText was guarded. A malformed value became NaN, `clamp` could not
+  // catch it because NaN fails both comparisons, and the element rendered
+  // completely black with no warning at all.
+  //
+  // #12 fixed the half of the surface it touched. The two halves had different
+  // helpers under one name, which is exactly the kind of thing a reader skims
+  // past. Use the validating one, and do not reintroduce a local.
+  const attr = (name, fallback) => num(attrs, name, fallback);
 
   // 'aperture' and 'interleave' carry each pixel in ONE plane and show a fill in
   // the others. That IS their mechanism, and stacking the default amplitude on
@@ -431,22 +441,31 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
   // default here, since the attribute is applied in the returned object rather
   // than merged into base, so testing base.mode never sees an override.
   const mode = attrs.mode ?? base.mode;
+  // Drop it from base too, or the `...base` spread in the returned object puts
+  // TEXT_DEFAULTS.frames back and the omission below achieves nothing.
+  if (!('frames' in attrs)) delete base.frames;
+
   const carrier = mode === 'aperture' || mode === 'interleave';
-  const amplitude = num('amplitude', carrier ? 0 : base.amplitude);
+  const amplitude = attr('amplitude', carrier ? 0 : base.amplitude);
 
   return {
     ...base,
     amplitude,
-    frames: num('frames', base.frames),
-    contrast: num('contrast', base.contrast),
-    noiseScale: num('noise-scale', base.noiseScale),
+    // Omitted rather than defaulted, so the splitter can pick per mode. Emitting
+    // a concrete 2 here meant aperture came out at 3 frames instead of 6, since
+    // its floor is max(3, opts.frames), and 3 frames shows a third of the image
+    // per capture: leak 0.870 against 0.629 at six. The mode looked broken
+    // because it was being handed a frame count chosen for a different one.
+    ...('frames' in attrs ? { frames: attr('frames', base.frames) } : {}),
+    contrast: attr('contrast', base.contrast),
+    noiseScale: attr('noise-scale', base.noiseScale),
     // Switchable so the algorithms can be compared on the same content.
     mode,
     noiseProfile: attrs['noise-profile'] ?? base.noiseProfile,
-    inkBias: num('ink-bias', base.inkBias),
-    chroma: num('chroma', base.chroma),
-    gamma: num('gamma', base.gamma),
-    hardness: num('hardness', base.hardness),
+    inkBias: attr('ink-bias', base.inkBias),
+    chroma: attr('chroma', base.chroma),
+    gamma: attr('gamma', base.gamma),
+    hardness: attr('hardness', base.hardness),
     adaptive: 'adaptive' in attrs,
   };
 }

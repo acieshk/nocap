@@ -1012,3 +1012,36 @@ test('an unmaskable palette is moved into one that masks', async () => {
   // Fitting costs contrast, and that is the honest trade rather than a bug.
   assert.ok(white.contrast < 4.5, 'a fitted pair cannot also be high contrast');
 });
+
+test('a malformed numeric attribute falls back instead of reaching the canvas', async () => {
+  const { resolveOptions } = await import('../src/secret.js');
+  // resolveOptions had a LOCAL `num` shadowing the validating helper, so every
+  // attribute resolved there took a bare `+attrs[name]`. NaN then survived
+  // `clamp`, because NaN fails both of its comparisons, and the element rendered
+  // completely black with no warning. Seven of eight attributes did this.
+  for (const name of ['amplitude', 'frames', 'contrast', 'noise-scale',
+                      'gamma', 'hardness', 'ink-bias', 'chroma']) {
+    const opts = resolveOptions({ [name]: 'abc' }, 1, 56);
+    for (const [k, v] of Object.entries(opts)) {
+      assert.ok(typeof v !== 'number' || Number.isFinite(v),
+        `${name}="abc" left ${k} as ${v}`);
+    }
+  }
+});
+
+test('the frame count is chosen by the mode, not pinned by the defaults', async () => {
+  const { resolveOptions } = await import('../src/secret.js');
+  const { splitFrames } = await import('../src/splitter.js');
+  const w = 64, h = 64;
+  const src = { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+  for (let i = 0; i < w * h; i++) src.data.set([109, 109, 109, 255], i * 4);
+
+  // TEXT_DEFAULTS.frames was emitted unconditionally, so aperture arrived at the
+  // splitter with a concrete 2 and came out at 3 rather than 6. Three frames
+  // shows a third of the image per capture: leak 0.870 against 0.629 at six.
+  // Omitting it lets the splitter apply the floor the mode actually needs.
+  assert.equal(splitFrames(src, resolveOptions({}, 1, 56)).length, 2);
+  assert.equal(splitFrames(src, resolveOptions({ mode: 'aperture' }, 1, 56)).length, 6);
+  // And an explicit count still wins.
+  assert.equal(splitFrames(src, resolveOptions({ mode: 'aperture', frames: '8' }, 1, 56)).length, 8);
+});
