@@ -1212,15 +1212,32 @@ export class NocapSecret extends ElementBase {
     mc.fillText(text, w / 2, h / 2);
     const cov = mc.getImageData(0, 0, w, h).data;
 
+    // ADD a zero-luminance offset, never overwrite the pixel.
+    //
+    // The first version wrote the pair's colours straight in, which discarded
+    // whatever the real value had drawn there. The pair averages to the
+    // background across the checkerboard, so those pixels became background: the
+    // real strokes were erased rather than masked, and since two centred strings
+    // of similar length overlap almost entirely, the decoy covered 85% of the
+    // real ink. The viewer read the decoy. The design was inverted.
+    //
+    // Adding instead of replacing is what makes both true at once. The offset
+    // has zero luminance by construction, so the real value's brightness is
+    // untouched and it stays exactly as readable. The offset flips sign per
+    // block, so it averages to nothing for an eye that cannot resolve chroma
+    // that finely, while a sensor records the individual pixels and sees the
+    // decoy's shape.
+    const bg = toRgb(background);
+    const d = toRgb(a).map((v, i) => v - bg[i]);
     const img = ctx.getImageData(0, 0, w, h);
-    const A = toRgb(a);
-    const B = toRgb(b);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4;
         if (cov[i] < 40) continue;
-        const pick = (((x / block) | 0) + ((y / block) | 0)) % 2 ? A : B;
-        for (let c = 0; c < 3; c++) img.data[i + c] = pick[c];
+        const sign = (((x / block) | 0) + ((y / block) | 0)) % 2 ? 1 : -1;
+        for (let c = 0; c < 3; c++) {
+          img.data[i + c] = Math.max(0, Math.min(255, img.data[i + c] + sign * d[c]));
+        }
       }
     }
     ctx.putImageData(img, 0, 0);
