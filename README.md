@@ -117,6 +117,23 @@ That is the whole API for most uses. It renders as soon as it has a value.
 
 Everything below is for when you need more control. You can ignore it.
 
+### What has not been measured
+
+**Nobody has established that any preset is comfortable to read on a 60Hz
+panel**, which is most panels. Every number in this repository, including all of
+the ones quoted above, is *what an attacker gets*. The readability side is
+unmeasured, and it is the product's core promise rather than a detail.
+
+What is known: the flicker between the two frames of a cycle carries the masking
+and cannot be reduced without reducing protection. The flicker between one cycle
+and the next carries nothing and is pure churn. Those are separated and measured
+on the [algorithms page](https://acieshk.github.io/nocap/algorithms.html).
+Turning that comparison into "this setting is comfortable" needs eyes on a real
+display, and it has not been done.
+
+Treat `strength` as three tested points on the *masking* curve, not as three
+tested points on the comfort curve.
+
 ### Three things to know before you ship
 
 1. **Check your colours.** A secret is only maskable if its two colours can carry
@@ -778,7 +795,7 @@ copies still land on exactly the same pixels and cancel.
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `scramble` | off | Store glyphs shuffled. See the DevTools table |
-| `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+ |
+| `fake` | **ignored in 0.1** | Accepted and warned about. The decoy reads fainter in a capture than the value it covers, so it convinces nobody. `fakeLike()` is still exported |
 | `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
 | `amplitude` | `110` | Fraction of the headroom the colours allow |
 | `noise-scale` | `2 × stroke` | Noise block in device px, derived from the stroke rather than fixed. 6 at the default size and dpr 1, 12 at dpr 2. Setting it under twice the stroke warns |

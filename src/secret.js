@@ -662,9 +662,28 @@ export class NocapSecret extends ElementBase {
     // `fake` drop the decoys and `watermark` with `scramble` drop the mark, both
     // silently. Same shape as the fake/scramble clash fixed earlier: modes that
     // add to each other cannot be selected between.
-    if (fakeMode && fakeMode !== 'off' && plain) {
-      await this.#drawFake(font, color, background, fakeMode, plain);
-    } else if (this.#chars) {
+    // Inert in 0.1, and this is the honest call rather than a cautious one.
+    //
+    // Fake mode does not do its job. Measured on the shipped palette at the
+    // defaults, the decoy comes out QUIETER in a captured frame than the secret
+    // it is supposed to be covering, 0.175 against 0.217 with the sizes levelled.
+    // An attacker has no reason to believe it. Blending and legibility are one
+    // budget and it is already spent, so there is no setting that gives both.
+    //
+    // "Experimental" in a doc does not survive contact with someone who switches
+    // it on and assumes it works, so the attribute is accepted, warned about,
+    // and ignored. The generator behind it is fine and stays exported: fakeLike
+    // and detectFormat are what the security and challenge pages use to make
+    // fresh values, and they do that job well. It is the decoy RENDERING that
+    // does not work.
+    if (fakeMode && fakeMode !== 'off') {
+      warnOnce('fake-disabled',
+        `fake="${fakeMode}" is ignored in this release. Measured at the defaults the ` +
+        'decoy reads fainter in a capture than the value it covers (0.175 against ' +
+        '0.217), so it misleads nobody. fakeLike() is still exported if you want ' +
+        'to generate a plausible value yourself.');
+    }
+    if (this.#chars) {
       await this.#drawScrambled(font, color, background);
     } else {
       await this.#drawPlain(font, color, background, plain);
@@ -1098,6 +1117,17 @@ export class NocapSecret extends ElementBase {
     return out.join('');
   }
 
+  /**
+   * UNREACHABLE IN 0.1. The render dispatch no longer calls this, because the
+   * decoy reads fainter in a capture than the value it covers and so convinces
+   * nobody. Kept rather than deleted because the mechanism is sound and the
+   * measurements around it are the record of why it does not pay off: the
+   * budget is shared with the noise and it is already spent.
+   *
+   * Two things follow from it being dead. The additive-modes test still asserts
+   * this method paints the watermark, which is now a check on code nobody runs.
+   * And anyone reviving it should re-measure first rather than trust the shape.
+   */
   async #drawFake(font, color, background, mode, plain) {
     if (!this.#fakeWarned) {
       this.#fakeWarned = true;
