@@ -198,6 +198,19 @@ rather than reaching the canvas, because an invalid `ctx.font` or a non-finite
 `fillText` coordinate is a silent no-op that would render the wrong thing, or
 nothing at all, without an error.
 
+**Corner rounding, and stacking.** The canvas is rounded by 4px. That lives
+inside a closed shadow root, so a selector cannot reach it, but a custom property
+crosses the boundary:
+
+```css
+nocap-secret { --nocap-radius: 0; }
+```
+
+Set it to 0 whenever elements sit flush against each other. Since the element
+draws one line and does not wrap, a paragraph is one element per line, and at the
+default rounding every seam gets a pair of notches so the block reads as separate
+strips rather than a passage of text.
+
 **The colours are not free.** See
 [Choosing colours](https://github.com/acieshk/nocap#choosing-colours). A pair
 that cannot carry noise cannot be masked at any amplitude.

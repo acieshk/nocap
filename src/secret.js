@@ -465,7 +465,12 @@ export class NocapSecret extends ElementBase {
     root.innerHTML = `<style>
       :host { display: inline-block; position: relative; line-height: 0;
               user-select: none; -webkit-user-select: none; }
-      canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
+      /* Custom properties cross a closed shadow boundary where a selector
+         cannot, so this is the one hook a page gets on the canvas itself.
+         Stacked elements need 0 or the rounded corners cut notches at every
+         seam and a wall of text reads as separate strips. */
+      canvas { display: block; image-rendering: pixelated;
+               border-radius: var(--nocap-radius, 4px); }
       /* The scratch affordance. With scratch on and nothing scratched yet the
          element is a flat rectangle, which tells a first-time user nothing at
          all. It sits over the canvas rather than in it: painted into the canvas

@@ -7,8 +7,11 @@
 <meta name="description" content="What nocap looks like on real content: a wall of text, a single value, and the same secret across palettes that mask well and badly.">
 <link rel="stylesheet" href="demo/shell.css">
 <style>
-  .wall { display:grid; gap:2px; padding:20px 16px }
-  .wall nocap-secret { display:block }
+  /* No gap and no corner rounding, so the lines butt together and the block
+     reads as one passage. The rounding lives inside a closed shadow root and
+     --nocap-radius is the only way to reach it. */
+  .wall { display:grid; gap:0; padding:20px 16px; justify-items:start }
+  .wall nocap-secret { display:block; --nocap-radius:0 }
   .swatch { border:1px solid var(--line); border-radius:10px; overflow:hidden }
   .swatch .top { padding:18px 16px; display:grid; place-items:center }
   .swatch .meta { padding:10px 13px; border-top:1px solid var(--line); background:var(--panel);
@@ -123,8 +126,12 @@ const LINES = [
 const t0 = performance.now();
 for (const line of LINES) {
   $('wall').appendChild(mk({
-    width: '560', height: '26', strength: 'medium',
-    color: '#6d6d6d', background: '#404040', 'font-scale': '0.62',
+    // height is the line height here, since the canvases stack with no gap.
+    // 24 against a 0.6 scale gives a ~14px face with a little room above and
+    // below, which is roughly normal leading for body text.
+    width: '560', height: '24', strength: 'medium',
+    color: '#6d6d6d', background: '#404040', 'font-scale': '0.6',
+    'text-align': 'left', 'padding-x': '10',
   }, line));
 }
 $('wLines').textContent = LINES.length;
