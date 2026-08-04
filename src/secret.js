@@ -367,10 +367,16 @@ export class NocapSecret extends ElementBase {
     if (this.#canvas) return;
 
     // Read inline text once, then remove it so it does not sit in the DOM.
+    //
+    // Through the setter, not the field. Assigning #secret directly skipped the
+    // scramble branch entirely, so `<nocap-secret scramble>TEXT</nocap-secret>`
+    // stored the plaintext in order and said nothing. The setter's render() is
+    // a no-op here because #flicker does not exist yet, and the explicit render
+    // below still runs.
     const inline = this.textContent.trim();
     if (inline) {
-      this.#secret = inline;
       this.textContent = '';
+      this.secret = inline;
     }
 
     const root = this.attachShadow({ mode: 'closed' });
