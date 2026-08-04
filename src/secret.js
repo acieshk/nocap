@@ -623,6 +623,14 @@ export class NocapSecret extends ElementBase {
       if (this.#scratch) {
         cancelAnimationFrame(this.#scratch.raf);
         this.#flicker?.setRevealMask(null);
+        // Undo both of the things turning it on did to the element. Leaving the
+        // listeners attached leaked a set on every toggle, and leaving
+        // touchAction pinned kept the page unscrollable over an element that is
+        // no longer scratchable.
+        for (const [type, fn] of this.#scratch.listeners ?? []) {
+          this.removeEventListener(type, fn);
+        }
+        this.style.touchAction = '';
         this.#scratch = null;
       }
       return;
@@ -643,7 +651,13 @@ export class NocapSecret extends ElementBase {
     // Brush size in CSS pixels, so it looks the same on every display. The mask
     // is a device-pixel buffer, hence the scale. Without it the same number drew
     // a brush half as wide on a 2x screen as on a 1x one.
-    const radius = () => Math.max(1, +(this.getAttribute('scratch-radius') ?? 34)) * dpr;
+    // A fingertip covers far more than a mouse cursor points at, and worse, it
+    // sits on top of the thing it is revealing. A wider default brush puts some
+    // of the trail outside the contact patch where it can actually be read.
+    const coarse = typeof matchMedia === 'function'
+      && matchMedia('(pointer: coarse)').matches;
+    const radius = () =>
+      Math.max(1, +(this.getAttribute('scratch-radius') ?? (coarse ? 52 : 34))) * dpr;
     // Seconds a stroke stays readable. See scratchLingerKeep for what that means.
     const linger = () => +(this.getAttribute('scratch-linger') ?? 30);
 
@@ -681,14 +695,39 @@ export class NocapSecret extends ElementBase {
     };
     state.raf = requestAnimationFrame(step);
 
+    // Touch has no hover, so the gesture is a drag, and a drag over an element
+    // is a scroll unless the element says otherwise. Without this, pointermove
+    // never fires on a phone and scratch mode silently does nothing at all.
+    this.style.touchAction = 'none';
+
     const track = (e) => {
       const rect = this.getBoundingClientRect();
       state.x = (e.clientX - rect.left) * dpr;
       state.y = (e.clientY - rect.top) * dpr;
     };
-    this.addEventListener('pointermove', track);
-    this.addEventListener('pointerdown', track);
-    this.addEventListener('pointerleave', () => { state.x = state.y = -1; });
+    const lift = () => { state.x = state.y = -1; };
+
+    const onDown = (e) => {
+      // Keep receiving moves when the finger strays outside the element, which
+      // it will: the target is small and a fingertip is not precise. Without
+      // capture the trail stops at the edge mid-stroke.
+      try { this.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      track(e);
+    };
+    const onUp = (e) => {
+      try { this.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
+      lift();
+    };
+
+    // pointerleave alone was enough for a mouse and wrong for touch: lifting a
+    // finger fires pointerup, not pointerleave, so the last position stayed live
+    // and every frame kept repainting the trail there. It never faded.
+    const listeners = [
+      ['pointermove', track], ['pointerdown', onDown],
+      ['pointerup', onUp], ['pointercancel', onUp], ['pointerleave', lift],
+    ];
+    for (const [type, fn] of listeners) this.addEventListener(type, fn);
+    state.listeners = listeners;
   }
 
   /** Measured single-plane leak for the current settings, for tuning. */

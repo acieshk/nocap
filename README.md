@@ -1,7 +1,12 @@
 # nocap
 
-**Prevent screenshots of text on the web.** A display layer that shows a secret
-to a human but not to a screen capture, an OCR pass, or a page-reading AI agent. And that ships the attacks against itself so you can check the claim.
+**Put text on a page that people can read and machines cannot.** A display layer
+that shows a secret to a human but not to a scraper, an LLM with a browser tool,
+an accessibility-tree reader, an OCR pass, or a screenshot. It ships the attacks
+against itself so you can check the claim rather than take it.
+
+Against machines that read the page, this is not a delay or an obfuscation. The
+text never becomes text. There is nothing in the DOM to find.
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
@@ -17,6 +22,55 @@ is what your visual system resolves. Neither is retouched. Regenerate them from
 the demo yourself.
 
 **[Live demo & playground](https://acieshk.github.io/nocap/)**
+
+## What a scraper gets
+
+Most defences against scraping are a race: obfuscate, get parsed anyway, obfuscate
+harder. This is not that, because the value is never in a form a parser can reach.
+It is rasterised to a canvas and split across frames, so the DOM holds a
+`<canvas>` and nothing else.
+
+The [scraping challenge](https://acieshk.github.io/nocap/challenge.html) is a
+table of six records with the sensitive columns protected. Here is that table's
+own `innerText`, the property nearly every extraction pipeline reaches for first:
+
+```
+CUSTOMER        CARD    PHONE   BALANCE
+P. Andersson
+	
+	
+J. Whitfield
+	
+	
+```
+
+Headers and names survive, because those are not secrets and hiding them would
+make the page useless. **Every value cell is empty.** 18 protected cells, 270
+characters, found in 0 of 8 readable surfaces.
+
+| What it stops | How completely |
+| --- | --- |
+| `fetch` + parse, `curl`, any HTML scraper | **Absolutely.** Never in the source |
+| LLM agents reading the DOM or accessibility tree | **Absolutely.** Nothing to read |
+| `innerText`, Reader mode, Save Page As | **Absolutely.** No text nodes |
+| Select All + Copy | **Absolutely.** Nothing selectable |
+| `querySelectorAll('input')`, form scrapes | **Absolutely**, if you keep it out of inputs |
+| Single-frame OCR or a vision model | **Blocked.** One frame is noise |
+| A vision model given a *video* of the page | **Defeated.** Averaging is the attack |
+| A person with DevTools | **Defeated**, and always will be |
+
+The line is **automated pipeline against targeted attacker**. A pipeline that
+visits thousands of pages will not render yours across a run of frames and
+average them. A person who has decided to come after this value will, and no
+setting in this library changes that.
+
+Verify it on your own page rather than trusting the table:
+
+```js
+import { auditPage } from 'nocap';
+const report = await auditPage(secret);
+if (!report.clean) throw new Error(`leaked in ${report.found.join(', ')}`);
+```
 
 ## Quick start
 
@@ -176,8 +230,11 @@ to reach the value.
 copy.onclick = () => navigator.clipboard.writeText(accountNumber);
 ```
 
-`scratch` mode additionally needs a pointer, so keyboard and touch users need
-that alternative even more.
+`scratch` mode works with touch as well as a mouse: it sets `touch-action: none`
+so a drag scratches rather than scrolling, captures the pointer so a stroke
+survives leaving the element, and uses a wider default brush on a coarse pointer
+because a fingertip covers what it is revealing. It still needs *a* pointer
+though, so keyboard and screen reader users need that alternative even more.
 
 ### React
 
@@ -681,8 +738,9 @@ full duty, so treat the default as a gate on when the value appears rather than
 as a defence against capture. Set it to a second or two if capture is the
 threat you care about.
 
-It also needs a pointer, so any integration has to offer keyboard and screen
-reader users another route.
+It needs a pointer of some kind. Touch is handled, including the scroll conflict
+and the fingertip-sized brush, but keyboard and screen reader users cannot scrub
+at all, so any integration has to offer them another route.
 
 Properties: `.secret` (write-only), `.revealed`, `.refreshHz`, `.render()`,
 `.stop()`, `.measureLeak()`. Events: `render`, `stop`.
