@@ -763,7 +763,10 @@ Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 | Page | What is on it |
 | --- | --- |
 | [Overview](https://acieshk.github.io/nocap/) | The live, screenshot and denoise comparison, and the threat table |
-| [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | Every setting on a real element, with masking and leak measured as you change them |
+| [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | The masking engine, with leak measured as you change it |
+| [Styling](https://acieshk.github.io/nocap/styling.html) | Text, font and colour, with the stroke and block shown side by side |
+| [Scenarios](https://acieshk.github.io/nocap/scenarios.html) | A wall of text, single values, and the same secret across five palettes |
+| [Scraping challenge](https://acieshk.github.io/nocap/challenge.html) | A table a human reads and a crawler cannot, with the page auditing itself |
 | [Security check](https://acieshk.github.io/nocap/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
 | [Scratch to reveal](https://acieshk.github.io/nocap/scratch.html) | The trail, and what its length costs |
 | [Fake value](https://acieshk.github.io/nocap/fake.html) | Decoys, and why the budget does not stretch |

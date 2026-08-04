@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: scenarios</title>
+<meta name="description" content="What nocap looks like on real content: a wall of text, a single value, and the same secret across palettes that mask well and badly.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .wall { display:grid; gap:2px; padding:20px 16px }
+  .wall nocap-secret { display:block }
+  .swatch { border:1px solid var(--line); border-radius:10px; overflow:hidden }
+  .swatch .top { padding:18px 16px; display:grid; place-items:center }
+  .swatch .meta { padding:10px 13px; border-top:1px solid var(--line); background:var(--panel);
+                  font-size:12px; display:flex; justify-content:space-between; gap:10px; align-items:baseline }
+  .swatch .meta b { font-family:ui-monospace,monospace; font-weight:500 }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:14px; margin:18px 0 0 }
+  .chipline { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  .chipline span.k { font-size:12px; color:var(--faint); min-width:120px }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Scenarios</h1>
+<p class="lede">
+  The same technique on the shapes of content people actually have, and the same
+  secret across palettes that mask well and badly. Every number here is measured
+  on the page as you load it.
+</p>
+
+<h2>A wall of text</h2>
+<p>
+  The element draws one line, because it rasterises with a single
+  <code>fillText</code> and does not wrap. A block of prose is therefore several
+  elements, one per line, which is worth knowing before you reach for it: nocap
+  suits a value you want to protect, not a document.
+</p>
+<p>
+  It also gets slower the more of it you have. Each element runs its own
+  animation loop, and the readout below is honest about what this many costs.
+</p>
+<div class="rig">
+  <div class="wall" id="wall"></div>
+  <div class="readout">
+    <span>lines <b id="wLines">…</b></span>
+    <span>elements <b id="wEls">…</b></span>
+    <span>first render <b id="wMs">…</b></span>
+    <span>display <b id="wHz">…</b></span>
+  </div>
+</div>
+<div class="note">
+  Legibility falls off with length far faster than with a short value. A card
+  number is eight glyphs your eye can settle on. A paragraph asks you to track
+  flickering text across lines, which is tiring within seconds. If you want a
+  whole document unreadable to a screenshot, this is the wrong tool.
+</div>
+
+<h2>Single values, which is what it is for</h2>
+<div class="grid2" id="values"></div>
+
+<h2>The same secret, five palettes</h2>
+<p>
+  Masking ratio is
+  <code>min(swing(text), swing(background)) / |text − background|</code>. Swing
+  is how far a colour can travel in code values before clipping, so a colour near
+  0 or 255 has almost none and cannot carry noise however hard you push. Below
+  1.0 the value starts showing through a single captured frame.
+</p>
+<div class="grid2" id="palettes"></div>
+
+<h2>Which palette is the default</h2>
+<p>
+  Two answers ship in this repo, which is one too many, so here they both are
+  measured rather than described.
+</p>
+<div class="rig">
+  <table style="margin:0;padding:4px 16px">
+    <tr><th>Where</th><th>Text on background</th><th>Ratio</th><th>Headroom</th></tr>
+    <tbody id="defaults"></tbody>
+  </table>
+</div>
+<p style="margin-top:12px">
+  <b>The element's own default is the roomier pair</b>, because a default should
+  sit at the safe end for someone who sets no colours at all. <b>The demo pages
+  deliberately run darker</b>, close to the darkest pair that still masks, so the
+  page and the secret could sit at the same level and the trade would be visible
+  rather than hidden behind a comfortable choice. Both are defensible. Quoting a
+  leak number without saying which one it came from is not, which is why this
+  table exists.
+</p>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { checkPalette, codeSwing, splitFrames, averageFrames, leakScore,
+         denoisedLeak } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const mk = (attrs, secret) => {
+  const el = document.createElement('nocap-secret');
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  el.secret = secret;
+  return el;
+};
+
+/* ------------------------------------------------------------ text wall -- */
+// Written here rather than fetched because it is filler, not a secret. A real
+// one would come from an API and never touch the markup, as on every other page.
+const LINES = [
+  'This paragraph is drawn as pixels rather than text.',
+  'Select it, copy it, or read the DOM and you get nothing,',
+  'because nothing in it exists as a character anywhere on',
+  'this page. Your eye is doing the reconstruction, one',
+  'frame at a time, at whatever rate your display refreshes.',
+  'Notice how quickly it tires you compared to a short value.',
+];
+const t0 = performance.now();
+for (const line of LINES) {
+  $('wall').appendChild(mk({
+    width: '560', height: '26', strength: 'medium',
+    color: '#6d6d6d', background: '#404040', 'font-scale': '0.62',
+  }, line));
+}
+$('wLines').textContent = LINES.length;
+$('wEls').textContent = document.querySelectorAll('#wall nocap-secret').length;
+requestAnimationFrame(() => {
+  $('wMs').textContent = `${Math.round(performance.now() - t0)}ms`;
+});
+
+/* -------------------------------------------------------- single values -- */
+const VALUES = [
+  ['Account number', '4111 1111 1111 8842'],
+  ['API key', 'sk_live_9Fk2Qw7ZpR'],
+  ['One-time code', '839 204'],
+  ['Recovery phrase', 'otter marble dusk'],
+];
+for (const [label, value] of VALUES) {
+  const box = document.createElement('div');
+  box.className = 'swatch';
+  const top = document.createElement('div');
+  top.className = 'top';
+  top.style.background = '#404040';
+  top.appendChild(mk({ width: '250', height: '52', strength: 'medium',
+    color: '#6d6d6d', background: '#404040' }, value));
+  box.appendChild(top);
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.innerHTML = `<span>${label}</span><b>${value.length} chars</b>`;
+  box.appendChild(meta);
+  $('values').appendChild(box);
+}
+
+/* -------------------------------------------------------------- palettes -- */
+const SECRET = '4111 1111 1111 8842';
+const PALETTES = [
+  ['Element default', '#9ea6b4', '#6b7280'],
+  ['These demo pages', '#6d6d6d', '#404040'],
+  ['Light theme', '#8a8f98', '#c9ccd1'],
+  ['Brand-ish blue', '#7d8fb3', '#4a5568'],
+  ['White on black', '#ffffff', '#000000'],
+];
+
+/** Measured, not asserted: split a rendering of the secret and score a plane. */
+function measure(color, background) {
+  const c = document.createElement('canvas'); c.width = 300; c.height = 54;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = background; x.fillRect(0, 0, c.width, c.height);
+  x.font = '600 26px ui-monospace, monospace'; x.fillStyle = color;
+  x.textBaseline = 'middle'; x.fillText(SECRET, 8, c.height / 2);
+  const planes = splitFrames(x.getImageData(0, 0, c.width, c.height),
+    { frames: 2, chroma: 0, hardness: 1, noiseScale: 6, amplitude: 110,
+      gamma: 2.4, linearLight: true });
+  const target = averageFrames(planes);
+  return { raw: leakScore(planes[0], target),
+           blur: denoisedLeak(planes[0], target, 5).leak };
+}
+
+for (const [label, color, background] of PALETTES) {
+  const pal = checkPalette({ color, background });
+  const m = measure(color, background);
+  const box = document.createElement('div');
+  box.className = 'swatch';
+  const top = document.createElement('div');
+  top.className = 'top';
+  top.style.background = background;
+  top.appendChild(mk({ width: '250', height: '52', strength: 'medium',
+    color, background }, SECRET));
+  box.appendChild(top);
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const cls = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
+  meta.innerHTML = `<span>${label}<br><small>${color} on ${background}</small></span>` +
+    `<span style="text-align:right">ratio <b class="${cls}">${pal.ratio.toFixed(2)}</b>` +
+    `<br><small>leak ${m.raw.toFixed(2)}, blurred ${m.blur.toFixed(2)}</small></span>`;
+  box.appendChild(meta);
+  $('palettes').appendChild(box);
+}
+
+/* ------------------------------------------------------ default palettes -- */
+for (const [where, color, background] of [
+  ["The element, with no colours set", '#9ea6b4', '#6b7280'],
+  ['Every page on this site', '#6d6d6d', '#404040'],
+]) {
+  const pal = checkPalette({ color, background });
+  const head = Math.min(codeSwing(color), codeSwing(background));
+  const tr = document.createElement('tr');
+  const cls = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
+  tr.innerHTML = `<td>${where}</td><td><code>${color}</code> on <code>${background}</code></td>` +
+    `<td class="${cls}">${pal.ratio.toFixed(2)} ${pal.grade}</td><td>${head.toFixed(1)}</td>`;
+  $('defaults').appendChild(tr);
+}
+
+setTimeout(() => {
+  const el = document.querySelector('#wall nocap-secret');
+  if (el?.refreshHz) $('wHz').textContent = `${el.refreshHz}Hz`;
+}, 1600);
+</script>
+</body>
+</html>

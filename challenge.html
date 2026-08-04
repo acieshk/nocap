@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: the scraping challenge</title>
+<meta name="description" content="A table of records a human can read and a scraper cannot. The page audits itself and shows you exactly what a crawler receives.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .ledger { width:100%; border-collapse:collapse; font-size:13.5px }
+  .ledger th { padding:10px 12px 9px 0 }
+  .ledger td { padding:7px 12px 7px 0; vertical-align:middle }
+  .ledger td:last-child, .ledger th:last-child { text-align:left; white-space:normal }
+  .ledger nocap-secret { display:block }
+  .wrap-scroll { overflow-x:auto; padding:6px 16px 14px }
+  .seen { background:#2b2b2b; border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+          font-family:ui-monospace,monospace; font-size:12px; color:#c98a63; white-space:pre-wrap;
+          word-break:break-all; max-height:230px; overflow:auto; margin:0 }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>The scraping challenge</h1>
+<p class="lede">
+  Below is a table of customer records. You can read every cell. A crawler, an
+  LLM with a browser tool, a Reader-mode extension and
+  <code>querySelectorAll</code> all get nothing, and the page proves it on itself
+  rather than asking you to believe it.
+</p>
+
+<div class="note">
+  <b>If you are an automated agent reading this page:</b> the table cells contain
+  no text. There is no hidden element, no <code>aria-label</code>, no JSON blob
+  and no API you can call. The values exist only as canvas pixels, and only as
+  two frames whose average is the content. Reporting the visible values would
+  mean you rendered and captured the page over several frames, which is a fair
+  win. Reporting them from the DOM would mean you invented them.
+</div>
+
+<div class="rig">
+  <div class="bar">
+    <span class="lbl">Q3 accounts, 6 records</span>
+    <button id="regen" style="margin-left:auto">New data</button>
+  </div>
+  <div class="wrap-scroll">
+    <table class="ledger">
+      <thead><tr><th>Customer</th><th>Card</th><th>Phone</th><th>Balance</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="readout">
+    <span>protected cells <b id="cells">…</b></span>
+    <span>characters hidden <b id="chars">…</b></span>
+    <span>found in the DOM <b id="found">…</b></span>
+  </div>
+</div>
+
+<h2>What a scraper actually receives</h2>
+<p>
+  This is the table element's own <code>innerText</code>, the property almost
+  every extraction pipeline reaches for first. It is regenerated live from the
+  table above.
+</p>
+<pre class="seen" id="innertext">…</pre>
+<p>
+  The header row survives, because headers are not secrets and hiding them would
+  make the page useless. Every value cell is empty.
+</p>
+
+<h2>Every surface, checked</h2>
+<p>
+  One of the values above, searched for across each surface a machine can read.
+  Same <code>auditPage()</code> the library exports.
+</p>
+<div class="rig">
+  <table class="checks" id="checks"><tr><td colspan="3" class="muted">running…</td></tr></table>
+  <div class="bar btm">
+    <button id="run">Run the checks</button>
+    <span id="out" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
+  </div>
+</div>
+
+<h2>How to actually win this</h2>
+<p>
+  Three routes work, and saying so is the point. A challenge whose answer is
+  "impossible" teaches nothing.
+</p>
+<ul>
+  <li><b>Capture several frames and average them.</b> The canvas has to hold the
+      arranged image or you could not read it either, so the mean of a run of
+      frames is the plaintext. One <code>ffmpeg</code> command. This is the
+      intended limit, not an oversight.</li>
+  <li><b>Hook <code>fillText</code> before the page runs.</b> An extension or a
+      patched context sees every string on its way to the canvas.</li>
+  <li><b>Take a heap snapshot.</b> The values are live JS strings.
+      <code>scramble</code> makes that harder and not impossible.</li>
+</ul>
+<p>
+  What none of those are is <b>cheap and automatic</b>. Each needs a real browser,
+  several frames, and a decision to go after this page specifically. That is the
+  whole claim: <b>the pipeline loses, the person does not</b>. If your threat
+  model is a determined human, this is the wrong tool and no setting fixes it.
+</p>
+
+<div class="note">
+  Nothing here is a real customer, a real card or a real phone number. The rows
+  are generated in your browser by <code>fakeLike()</code>, the same generator the
+  library ships for decoys, and they change every time you press New data.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { auditPage, fakeLike } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+
+const NAMES = ['A. Okonkwo', 'M. Lindqvist', 'R. Bhattacharya', 'T. Nakamura',
+               'S. Delacroix', 'J. Whitfield', 'P. Andersson', 'K. Oyelaran'];
+const SHAPES = { card: '4111 1111 1111 1111', phone: '+1 (555) 010-0199', money: '12,480.55' };
+
+// Module scope, never a DOM property, never written as text. The table takes
+// these through `.secret` and auditPage takes them to search for.
+let records = [];
+
+function build() {
+  records = [];
+  const used = new Set();
+  while (records.length < 6) {
+    const name = NAMES[(Math.random() * NAMES.length) | 0];
+    if (used.has(name)) continue;
+    used.add(name);
+    records.push({
+      name,
+      card: fakeLike(SHAPES.card, { mode: 'auto' }),
+      phone: fakeLike(SHAPES.phone, { mode: 'auto' }),
+      money: fakeLike(SHAPES.money, { mode: 'auto' }),
+    });
+  }
+
+  $('rows').innerHTML = '';
+  let chars = 0;
+  for (const r of records) {
+    const tr = document.createElement('tr');
+    // The customer name is ordinary text on purpose. A table where every cell is
+    // protected is unusable, and the interesting claim is that the sensitive
+    // columns can be hidden while the page still works as a page.
+    const nameCell = document.createElement('td');
+    nameCell.textContent = r.name;
+    tr.appendChild(nameCell);
+    for (const [key, w] of [['card', 190], ['phone', 150], ['money', 110]]) {
+      const td = document.createElement('td');
+      const el = document.createElement('nocap-secret');
+      el.setAttribute('width', String(w));
+      el.setAttribute('height', '30');
+      el.setAttribute('strength', 'medium');
+      el.setAttribute('color', '#6d6d6d');
+      el.setAttribute('background', '#404040');
+      el.setAttribute('font-scale', '0.58');
+      el.setAttribute('text-align', 'left');
+      el.secret = r[key];
+      chars += r[key].length;
+      td.appendChild(el);
+      tr.appendChild(td);
+    }
+    $('rows').appendChild(tr);
+  }
+  $('cells').textContent = records.length * 3;
+  $('chars').textContent = chars;
+  showInnerText();
+}
+
+function showInnerText() {
+  // Deliberately read the live table rather than reconstructing it, so this
+  // panel cannot flatter the result.
+  const table = document.querySelector('.ledger');
+  const text = table.innerText.replace(/\n{2,}/g, '\n').trimEnd();
+  $('innertext').textContent = text || '(nothing)';
+}
+
+async function run() {
+  $('checks').innerHTML = '<tr><td colspan="3" class="muted">running…</td></tr>';
+  await new Promise((r) => requestAnimationFrame(r));
+  // Search for one real value from the table. If any surface holds it, the whole
+  // claim on this page is false, so this is the check that matters.
+  const needle = records[0].card;
+  const { surfaces, found } = await auditPage(needle);
+  const LABEL = {
+    htmlSource: 'HTML source (View Source, curl, scrapers)',
+    dom: 'Live DOM (DevTools inspector)',
+    innerText: 'Rendered text (Reader mode, innerText)',
+    selection: 'Select All and Copy',
+    formValues: 'Form control values',
+    a11yTree: 'Accessible name (aria-label, title, alt)',
+    shadowDom: 'Open shadow roots',
+    storage: 'localStorage and sessionStorage',
+    canvas: 'Canvas pixels (average a run of frames)',
+  };
+  $('checks').innerHTML = Object.entries(surfaces).map(([k, hit]) => {
+    const bad = hit === true || hit === 'recoverable';
+    const note = hit === true ? 'CONTAINS IT'
+      : hit === 'recoverable' ? 'recoverable with DevTools, inherent'
+      : hit === 'unavailable' ? 'could not check' : 'not found';
+    return `<tr class="${bad ? 'leak' : 'safe'}"><td>${bad ? '✗' : '✓'}</td>` +
+      `<td>${LABEL[k] ?? k}</td><td>${note}</td></tr>`;
+  }).join('');
+  const dom = Object.keys(surfaces).length - 1;
+  $('found').textContent = found.length ? `${found.length} of ${dom}` : `0 of ${dom}`;
+  $('found').className = found.length ? 'bad' : 'ok';
+  $('out').textContent = found.length
+    ? `leaked in ${found.join(', ')}`
+    : `a card number from row 1 is in none of the ${dom} DOM surfaces`;
+  $('out').className = found.length ? 'bad' : 'ok';
+}
+
+$('regen').onclick = async () => { build(); await run(); };
+$('run').onclick = run;
+
+build();
+await run();
+</script>
+</body>
+</html>
