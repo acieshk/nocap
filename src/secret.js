@@ -416,6 +416,7 @@ export class NocapSecret extends ElementBase {
     'padding-x',
     'padding-y',
     'scratch',
+    'scratch-hint',
     'noise-scale',
     'chroma',
     'hardness',
@@ -448,6 +449,7 @@ export class NocapSecret extends ElementBase {
   #watermarkSwing = null;
   #watermarkWarned = false;
   #scratch = null;      // { mask, ctx, raf, pointer }
+  #hint = null;         // the scratch affordance, an overlay rather than canvas
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -464,10 +466,26 @@ export class NocapSecret extends ElementBase {
       :host { display: inline-block; position: relative; line-height: 0;
               user-select: none; -webkit-user-select: none; }
       canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
+      /* The scratch affordance. With scratch on and nothing scratched yet the
+         element is a flat rectangle, which tells a first-time user nothing at
+         all. It sits over the canvas rather than in it: painted into the canvas
+         it would be split and masked along with the value, and the one thing it
+         must never be is hidden. pointer-events stays off so it cannot swallow
+         the gesture it is asking for. */
+      .hint { position: absolute; inset: 0; display: grid; place-items: center;
+              font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
+              letter-spacing: .04em; text-align: center; padding: 0 10px;
+              pointer-events: none; opacity: 0; transition: opacity .28s ease; }
+      .hint.on { opacity: .82; }
+      @media (prefers-reduced-motion: reduce) { .hint { transition: none; } }
     </style>`;
 
     this.#canvas = document.createElement('canvas');
     root.append(this.#canvas);
+
+    this.#hint = document.createElement('div');
+    this.#hint.className = 'hint';
+    root.append(this.#hint);
 
     this.#flicker = new Flicker(this.#canvas, this.#options()).resize(
       +(this.getAttribute('width') ?? 260),
@@ -631,6 +649,7 @@ export class NocapSecret extends ElementBase {
           this.removeEventListener(type, fn);
         }
         this.style.touchAction = '';
+        if (this.#hint) this.#hint.classList.remove('on');
         this.#scratch = null;
       }
       return;
@@ -661,9 +680,32 @@ export class NocapSecret extends ElementBase {
     // Seconds a stroke stays readable. See scratchLingerKeep for what that means.
     const linger = () => +(this.getAttribute('scratch-linger') ?? 30);
 
+    // Shown until the first scratch, then again once the trail has faded, so it
+    // reappears exactly when the element has gone blank and needs explaining
+    // again. Tied to `linger` rather than a constant for that reason.
+    const HINT_DEFAULT = 'Scratch to reveal';
+    let lastActivity = 0;
+    let hintText = '';
+    const syncHint = (now) => {
+      if (!this.#hint) return;
+      const raw = this.getAttribute('scratch-hint');
+      const off = raw === 'off' || raw === '';
+      const text = off ? '' : (raw ?? HINT_DEFAULT);
+      // Assigning textContent every frame would be wasteful and would fight a
+      // screen reader, so only on a real change.
+      if (text !== hintText) {
+        hintText = text;
+        this.#hint.textContent = text;
+      }
+      this.#hint.style.color = this.#perceived(this.#palette.color);
+      const faded = !lastActivity || (now - lastActivity) > linger() * 1000;
+      this.#hint.classList.toggle('on', !off && faded);
+    };
+
     let last = 0;
     const step = (now) => {
       state.raf = requestAnimationFrame(step);
+      syncHint(now);
       // Decay by elapsed time rather than per frame. A constant per-frame factor
       // cleared the trail twice as fast on a 120Hz display as on a 60Hz one, so
       // no setting could honestly say how long a stroke lasts.
@@ -701,6 +743,7 @@ export class NocapSecret extends ElementBase {
     this.style.touchAction = 'none';
 
     const track = (e) => {
+      lastActivity = performance.now();
       const rect = this.getBoundingClientRect();
       state.x = (e.clientX - rect.left) * dpr;
       state.y = (e.clientY - rect.top) * dpr;

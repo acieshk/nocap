@@ -723,7 +723,8 @@ copies still land on exactly the same pixels and cancel.
 | `adaptive` | off | Exact colours, amplitude capped to their headroom |
 | `scratch` | off | **Experimental.** Unmask only a trail under the pointer |
 | `scratch-linger` | `30` | Seconds for a trail to fade to 1%. See the note below |
-| `scratch-radius` | `34` | Brush radius in CSS px |
+| `scratch-radius` | `34`, or `52` on a coarse pointer | Brush radius in CSS px |
+| `scratch-hint` | `Scratch to reveal` | Affordance text. Any string, or `off` |
 | `width` / `height` | `260` / `56` | CSS pixels |
 
 **`scratch-linger` is the trade, not a cosmetic.** A pixel carries the value
@@ -737,6 +738,19 @@ a second is close to unreadable. A trail that outlasts the reading sits near
 full duty, so treat the default as a gate on when the value appears rather than
 as a defence against capture. Set it to a second or two if capture is the
 threat you care about.
+
+**The hint is on by default and you should probably leave it on.** With
+`scratch` enabled and nothing scratched yet, the element is a flat rectangle
+that tells a first-time user nothing. The hint sits over the canvas, fades out
+once they start, and comes back only after the trail has gone, so it reappears
+exactly when the element has gone blank again. Set `scratch-hint="off"` if your
+own UI already explains the gesture.
+
+It is ordinary text in the element's shadow root, not canvas pixels, which means
+it is the one string the element contributes to `innerText` and to a screen
+reader. That is deliberate: it is a fixed label rather than a secret, and it is
+better for assistive technology to announce that something interactive is here
+than to meet silence.
 
 It needs a pointer of some kind. Touch is handled, including the scroll conflict
 and the fingertip-sized brush, but keyboard and screen reader users cannot scrub

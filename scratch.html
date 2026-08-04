@@ -30,6 +30,11 @@
       <input type="range" id="linger" min="1" max="60" step="1" value="30"></label>
     <label class="f"><span>Brush size <em id="radV">34</em>px</span>
       <input type="range" id="rad" min="8" max="90" step="2" value="34"></label>
+    <label class="f"><span>Hint text</span>
+      <input type="text" id="hint" placeholder="Scratch to reveal"></label>
+    <label class="f"><span>Show the hint</span>
+      <select id="hintOn"><option value="1">on, the default</option>
+        <option value="">off</option></select></label>
   </div>
   <div class="readout">
     <span>duty at this trail <b id="duty">…</b></span>
@@ -82,6 +87,29 @@
   accumulates.
 </p>
 
+<h2>The hint is on by default</h2>
+<p>
+  With scratch enabled and nothing scratched yet, the element is a flat
+  rectangle. Nothing about it says it can be rubbed, so a first-time user sees an
+  empty box and moves on. The hint is the affordance, and it is on unless you
+  turn it off.
+</p>
+<p>
+  It fades out the moment scratching starts and comes back only once the trail
+  has faded, which ties it to <code>scratch-linger</code> rather than to a
+  constant. That way it reappears exactly when the element has gone blank again
+  and needs explaining a second time. Drop the trail to a second or two above and
+  watch it return quickly.
+</p>
+<p>
+  It sits over the canvas rather than being painted into it. Painted in, it would
+  be split into frames and masked along with the value, and the one thing an
+  affordance must never be is hidden. It is ordinary text in the shadow root, so
+  it is also the one string the element contributes to <code>innerText</code> and
+  to a screen reader. That is on purpose: it is a fixed label, not a secret, and
+  announcing that something interactive is here beats silence.
+</p>
+
 <h2>On a phone</h2>
 <p>
   Touch works, and it takes three things rather than one. A drag over an element
@@ -113,6 +141,7 @@
   scratch
   scratch-linger="30"   &lt;!-- seconds for a stroke to fade to 1% --&gt;
   scratch-radius="34"   &lt;!-- brush radius in CSS px --&gt;
+  scratch-hint="Scratch to reveal"   &lt;!-- or "off" --&gt;
 &gt;&lt;/nocap-secret&gt;</pre>
 
   </main>
@@ -149,9 +178,18 @@ function apply() {
   const clamped = Math.max(0.25, Math.min(0.70, est));
   $('est').textContent = `~${clamped.toFixed(2)}`;
   $('est').className = clamped < 0.35 ? 'ok' : clamped < 0.55 ? 'warn' : 'bad';
+
+  // Removing the attribute rather than writing the default keeps the element on
+  // its own default, which is what "on" should mean here.
+  const hintText = $('hint').value.trim();
+  if (!$('hintOn').value) chip.setAttribute('scratch-hint', 'off');
+  else if (hintText) chip.setAttribute('scratch-hint', hintText);
+  else chip.removeAttribute('scratch-hint');
 }
 
-$('linger').oninput = $('rad').oninput = apply;
+for (const id of ['linger', 'rad', 'hint', 'hintOn']) {
+  $(id).oninput = $(id).onchange = apply;
+}
 apply();
 </script>
 </body>
