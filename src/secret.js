@@ -184,6 +184,21 @@ export function scratchLingerKeep(dt, linger) {
 /** Deliberately odd so a real font string cannot collide with it. */
 const FONT_SENTINEL = '7.31px serif';
 
+/**
+ * Every scratch element currently running, so revealing one can clear the rest.
+ *
+ * This does NOT slow an extraction attack down, and it should not be sold as if
+ * it does. Timed on the live challenge, taking one cell costs 3.4s of dragging a
+ * pointer and 0.3s of capture. An attacker finishes a cell and moves on long
+ * before any reset matters, and sequential is the natural way to write that
+ * attack anyway.
+ *
+ * What it does do is stop a single frame ever containing two revealed values,
+ * which is the still capture and the person behind you, and that is the case
+ * this library is actually for. Worth having, worth describing accurately.
+ */
+const liveScratch = new Set();
+
 const warned = new Set();
 function warnOnce(key, message) {
   if (warned.has(key)) return;
@@ -495,6 +510,7 @@ export class NocapSecret extends ElementBase {
     'padding-y',
     'scratch',
     'scratch-hint',
+    'scratch-exclusive',
     'noise-scale',
     'noise-profile',
     'ink-bias',
@@ -755,6 +771,7 @@ export class NocapSecret extends ElementBase {
         }
         this.style.touchAction = '';
         if (this.#hint) this.#hint.classList.remove('on');
+        liveScratch.delete(this.#scratch);
         this.#scratch = null;
       }
       return;
@@ -847,8 +864,25 @@ export class NocapSecret extends ElementBase {
     // never fires on a phone and scratch mode silently does nothing at all.
     this.style.touchAction = 'none';
 
+    // Only one at a time. See liveScratch: this is about what a single frame can
+    // contain, not about what an attacker can extract.
+    const clearOthers = () => {
+      if (this.getAttribute('scratch-exclusive') === 'off') return;
+      for (const other of liveScratch) {
+        if (other !== state && other.ctx) {
+          other.ctx.save();
+          other.ctx.globalCompositeOperation = 'destination-out';
+          other.ctx.fillStyle = 'rgba(0,0,0,1)';
+          other.ctx.fillRect(0, 0, other.mask.width, other.mask.height);
+          other.ctx.restore();
+          other.x = other.y = -1;
+        }
+      }
+    };
+
     const track = (e) => {
       lastActivity = performance.now();
+      clearOthers();
       const rect = this.getBoundingClientRect();
       state.x = (e.clientX - rect.left) * dpr;
       state.y = (e.clientY - rect.top) * dpr;
@@ -876,6 +910,7 @@ export class NocapSecret extends ElementBase {
     ];
     for (const [type, fn] of listeners) this.addEventListener(type, fn);
     state.listeners = listeners;
+    liveScratch.add(state);
   }
 
   /** Measured single-plane leak for the current settings, for tuning. */

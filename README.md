@@ -811,6 +811,7 @@ copies still land on exactly the same pixels and cancel.
 | `scratch-linger` | `30` | Seconds for a trail to fade to 1%. See the note below |
 | `scratch-radius` | `34`, or `52` on a coarse pointer | Brush radius in CSS px |
 | `scratch-hint` | `Scratch to reveal` | Affordance text. Any string, or `off` |
+| `scratch-exclusive` | on | Revealing one scratch element clears the others. `off` to allow several at once |
 | `width` / `height` | `260` / `56` | CSS pixels |
 
 **`scratch-linger` is the trade, not a cosmetic.** A pixel carries the value
@@ -824,6 +825,14 @@ a second is close to unreadable. A trail that outlasts the reading sits near
 full duty, so treat the default as a gate on when the value appears rather than
 as a defence against capture. Set it to a second or two if capture is the
 threat you care about.
+
+**Only one reveals at a time**, and it is worth being precise about what that
+buys. It does **not** slow an extraction attack: timed on the demo, taking one
+cell costs 3.4s of dragging a pointer and 0.3s of capture, so an attacker
+finishes a cell and moves on long before any reset matters. What it does is stop
+a single frame ever containing two revealed values, which is the still capture
+and the person standing behind you, and that is the case this library is for.
+Set `scratch-exclusive="off"` if you want several open at once.
 
 **The hint is on by default and you should probably leave it on.** With
 `scratch` enabled and nothing scratched yet, the element is a flat rectangle
