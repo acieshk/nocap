@@ -161,6 +161,56 @@ export function scratchLingerKeep(dt, linger) {
  * @param {number} [dpr=1]  a preset's block is authored at dpr 1 and scaled here
  */
 /**
+ * Attributes arrive as strings, and a malformed one used to reach the canvas.
+ *
+ * `padding-y="qq"` became NaN, and a non-finite coordinate makes fillText skip
+ * the draw entirely without throwing, so the element rendered a blank noise
+ * field and nothing said why. `font-size="abc"` produced `600 NaNpx monospace`,
+ * an invalid font string, and assigning one of those is a silent no-op that
+ * leaves whatever font happened to be set before.
+ *
+ * Both are the same failure: garbage in, nothing drawn, no error. Every numeric
+ * attribute goes through here instead — coerce, check, fall back to the
+ * documented default, and say so once.
+ */
+/** Deliberately odd so a real font string cannot collide with it. */
+const FONT_SENTINEL = '7.31px serif';
+
+const warned = new Set();
+function warnOnce(key, message) {
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(`[nocap-secret] ${message}`);
+}
+
+function num(attrs, name, fallback) {
+  if (!(name in attrs)) return fallback;
+  const v = +attrs[name];
+  if (Number.isFinite(v)) return v;
+  warnOnce(`${name}=${attrs[name]}`,
+    `${name}="${attrs[name]}" is not a number. Using ${fallback}.`);
+  return fallback;
+}
+
+/**
+ * Canvas letterSpacing wants a CSS length. A bare number and an unparseable
+ * string are both silent no-ops, so the unit is added when missing and anything
+ * that is not a length falls back rather than being passed through.
+ */
+function spacing(raw) {
+  if (raw == null) return '0px';
+  // No space between the number and the unit: CSS does not allow one, and
+  // quietly repairing `10 px` would be guessing at intent rather than checking.
+  const m = /^\s*(-?(?:\d+\.?\d*|\.\d+))([a-z%]*)\s*$/i.exec(raw);
+  if (!m) {
+    warnOnce(`letter-spacing=${raw}`,
+      `letter-spacing="${raw}" is not a CSS length. Using 0px.`);
+    return '0px';
+  }
+  return m[2] ? `${m[1]}${m[2]}` : `${m[1]}px`;
+}
+
+/**
  * Resolve the text styling attributes into everything the draw paths need.
  *
  * Pure and exported so it can be tested without a DOM, same reason
@@ -178,25 +228,20 @@ export function scratchLingerKeep(dt, linger) {
  */
 export function resolveText(attrs = {}, height = 56) {
   // 0.46 of the height is the long-standing default and stays the default.
-  const scale = 'font-scale' in attrs ? +attrs['font-scale'] : 0.46;
-  const sizePx = Math.max(6, Math.round(
-    'font-size' in attrs ? +attrs['font-size'] : height * scale));
+  const scale = num(attrs, 'font-scale', 0.46);
+  // The 6px floor cannot double as the guard here, because Math.max(6, NaN)
+  // is NaN. The value has to be finite before it gets this far.
+  const sizePx = Math.max(6, Math.round(num(attrs, 'font-size', height * scale)));
   const weight = attrs['font-weight'] ?? '600';
   const family = attrs['font-family'] ?? 'ui-monospace, monospace';
   return {
     font: `${weight} ${sizePx}px ${family}`,
     sizePx,
-    // Canvas letterSpacing wants a CSS length. A bare number is the common
-    // mistake and silently does nothing, so a unit is added when missing.
-    letterSpacing: 'letter-spacing' in attrs
-      ? (/[a-z%]$/i.test(attrs['letter-spacing'])
-          ? attrs['letter-spacing']
-          : `${+attrs['letter-spacing']}px`)
-      : '0px',
+    letterSpacing: spacing(attrs['letter-spacing']),
     align: ['left', 'center', 'right'].includes(attrs['text-align'])
       ? attrs['text-align'] : 'center',
-    padX: Math.max(0, +(attrs['padding-x'] ?? 0)),
-    padY: +(attrs['padding-y'] ?? 0),
+    padX: Math.max(0, num(attrs, 'padding-x', 0)),
+    padY: num(attrs, 'padding-y', 0),
   };
 }
 
@@ -1029,7 +1074,18 @@ export class NocapSecret extends ElementBase {
    * error, so the element warns once instead of quietly ignoring the attribute.
    */
   #applyTextStyle(ctx, style) {
+    // An invalid font string is a silent no-op, and font-family and font-weight
+    // are free text that resolveText cannot check without a DOM. Assigning over
+    // a sentinel makes the rejection observable: if the string was refused, the
+    // sentinel is still there afterwards.
+    ctx.font = FONT_SENTINEL;
     ctx.font = style.font;
+    if (ctx.font === FONT_SENTINEL && style.font !== FONT_SENTINEL) {
+      warnOnce(`font=${style.font}`,
+        `font "${style.font}" was rejected by the canvas, so the text is drawn ` +
+        'in the default font. Check font-family and font-weight.');
+      ctx.font = resolveText({}, style.sizePx / 0.46).font;
+    }
     if (style.letterSpacing !== '0px') {
       if ('letterSpacing' in ctx) ctx.letterSpacing = style.letterSpacing;
       else if (!this.#spacingWarned) {

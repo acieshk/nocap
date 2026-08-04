@@ -816,3 +816,43 @@ test('the noise block ceiling follows the real font size, not the old assumption
   assert.equal(resolveOptions({}, 1, 56).noiseScale, resolveOptions({}, 1, 56, 56 * 0.46).noiseScale);
 });
 
+// A malformed attribute used to reach the canvas and stop the draw without
+// throwing: a non-finite coordinate makes fillText skip silently, and an
+// invalid font string is a silent no-op. Both showed a blank or wrong element
+// with nothing in the console, so every numeric attribute is now checked.
+
+test('a malformed numeric attribute falls back instead of producing NaN', async () => {
+  const { resolveText } = await import('../src/secret.js');
+
+  // fillText(text, x, NaN) draws nothing at all, and this sits on the default
+  // centre-aligned path, so it is not an exotic case.
+  assert.equal(resolveText({ 'padding-y': 'qq' }).padY, 0);
+  assert.equal(resolveText({ 'padding-x': 'qq', 'text-align': 'left' }).padX, 0);
+
+  // Math.max(6, Math.round(NaN)) is NaN, so the 6px floor cannot be the guard.
+  const want = `600 ${Math.round(56 * 0.46)}px ui-monospace, monospace`;
+  assert.equal(resolveText({ 'font-size': 'abc' }, 56).font, want);
+  assert.equal(resolveText({ 'font-scale': 'x' }, 56).font, want);
+  for (const bad of ['abc', '', 'Infinity', 'NaN']) {
+    assert.ok(Number.isFinite(resolveText({ 'font-size': bad }).sizePx),
+      `font-size="${bad}" must not produce a non-finite size`);
+  }
+
+  // Negative padding is legal and must survive the check.
+  assert.equal(resolveText({ 'padding-y': '-5' }).padY, -5);
+  assert.equal(resolveText({ 'font-size': '10' }).sizePx, 10);
+});
+
+test('letter-spacing is a CSS length or it is not used at all', async () => {
+  const { resolveText } = await import('../src/secret.js');
+  const ls = (v) => resolveText({ 'letter-spacing': v }).letterSpacing;
+
+  // Assigning a non-length to ctx.letterSpacing is the same silent no-op the
+  // unit handling was added to remove, so it falls back rather than passing on.
+  for (const bad of ['abc', '10 px', 'em', '', '1,2']) assert.equal(ls(bad), '0px', bad);
+
+  assert.equal(ls('4'), '4px');        // bare number, the common mistake
+  assert.equal(ls('-2'), '-2px');      // negative tracking is legal
+  assert.equal(ls('0.1em'), '0.1em');  // already a length, left alone
+  assert.equal(ls('5%'), '5%');
+});
