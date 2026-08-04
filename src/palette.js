@@ -346,3 +346,89 @@ export function isoluminantPartner(base, swing = 60) {
     deltaLuma: luma(toRgb(toHex(out))) - luma(rgb),
   };
 }
+
+/**
+ * Move a palette that cannot carry noise into one that can.
+ *
+ * The masking ratio is `min(swing) / |text - background|`, so a pair fails for
+ * one of two reasons: the colours sit where there is no headroom (white has a
+ * swing of exactly 0, being already at the ceiling), or they are simply too far
+ * apart. Both are fixed by the same move, which is to bring them together.
+ *
+ * This exists because "white on black cannot be masked" was the wrong lesson to
+ * draw. Nothing physical stops it. What stopped it was the split insisting the
+ * frames average to the authored hex, and that is a choice about colour
+ * fidelity, not a law. Give up the exact hex and the noise works as expected.
+ *
+ * The midpoint is preserved where it can be, so a light design stays light and a
+ * dark one stays dark, and only the separation shrinks. Only when the midpoint
+ * itself has no headroom does it get pulled toward mid-grey, because that is
+ * where a colour can travel furthest in either direction.
+ *
+ * Hue survives: placeInBand keeps the chroma and moves only the luma.
+ *
+ * @param {{color: string, background: string, minRatio?: number, gamma?: number}} design
+ * @returns {{color: string, background: string, ratio: number, moved: boolean,
+ *            contrast: number}}
+ */
+export function fitToBand({ color, background, minRatio = 1, gamma = 2.4 }) {
+  const already = checkPalette({ color, background, gamma });
+  if (already.ratio >= minRatio) {
+    return { color, background, ratio: already.ratio, moved: false,
+             contrast: contrastRatio(color, background, gamma) };
+  }
+
+  const cL = luma(toRgb(color));
+  const bL = luma(toRgb(background));
+  const sign = cL >= bL ? 1 : -1;
+  const sep0 = Math.abs(cL - bL);
+
+  // The inset desaturates. A saturated hue keeps a channel pinned at an extreme
+  // however its luma moves, and a channel at 0 or 255 has no swing, so pure red
+  // on black cannot be rescued by luma alone. Narrowing the bounds makes
+  // placeInBand scale the chroma down until every channel has room.
+  const pairAt = (mid, sep, inset) => {
+    const bounds = { lo: inset, hi: 255 - inset };
+    return {
+      color: toHex(placeInBand(color, mid + (sign * sep) / 2, bounds)),
+      background: toHex(placeInBand(background, mid - (sign * sep) / 2, bounds)),
+    };
+  };
+
+  // Try the original midpoint first, then walk it toward mid-grey. A pure
+  // black-on-black-ish design has no headroom at its own midpoint however
+  // little separation is left, so shrinking alone cannot rescue it.
+  for (const inset of [0, 12, 24, 40, 60]) {
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const mid = ((cL + bL) / 2) * (1 - t) + 128 * t;
+      // A pair with no separation left is not a fit, it is one colour, so the
+      // smallest step has to still be legible rather than merely maskable.
+      const floor = checkPalette({ ...pairAt(mid, 8, inset), gamma }).ratio;
+      if (!(floor >= minRatio)) continue;
+      // Wider separation lowers the ratio, so this is monotone and bisects.
+      let lo = 8;
+      let hi = Math.max(sep0, 9);
+      for (let i = 0; i < 24; i++) {
+        const sep = (lo + hi) / 2;
+        if (checkPalette({ ...pairAt(mid, sep, inset), gamma }).ratio >= minRatio) lo = sep;
+        else hi = sep;
+      }
+      const out = pairAt(mid, lo, inset);
+      return { ...out, ratio: checkPalette({ ...out, gamma }).ratio, moved: true,
+               contrast: contrastRatio(out.color, out.background, gamma) };
+    }
+  }
+
+  // Nothing reachable, which needs both colours pinned at an extreme. Report it
+  // rather than returning something that quietly does not mask.
+  return { color, background, ratio: already.ratio, moved: false,
+           contrast: contrastRatio(color, background, gamma) };
+}
+
+/** WCAG-style contrast, so the cost of fitting is a number and not a feeling. */
+export function contrastRatio(a, b, gamma = 2.4) {
+  const la = toLight(luma(toRgb(a)), gamma);
+  const lb = toLight(luma(toRgb(b)), gamma);
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}

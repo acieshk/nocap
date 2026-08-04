@@ -1,6 +1,6 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange, averageFrames, perceivedMean } from './splitter.js';
-import { checkPalette, toLight, toCode, isoluminantPartner } from './palette.js';
+import { checkPalette, toLight, toCode, isoluminantPartner, fitToBand } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
 
@@ -423,6 +423,7 @@ export class NocapSecret extends ElementBase {
     'gamma',
     'color',
     'background',
+    'fit',
     'adaptive',
     'scramble',
     'fake',
@@ -1376,7 +1377,7 @@ export class NocapSecret extends ElementBase {
   }
 
   get #palette() {
-    return {
+    const asked = {
       // Defaults must be maskable, not merely handsome. #e8e8f0 on #14141a is
       // the obvious dark-UI pairing and it leaks 0.951. A screenshot reads it
       // outright. This pair scores a masking ratio of 1.42 and leaks 0.180.
@@ -1384,6 +1385,42 @@ export class NocapSecret extends ElementBase {
       color: this.getAttribute('color') ?? '#9ea6b4',
       background: this.getAttribute('background') ?? '#6b7280',
     };
+
+    // Protection wins over the exact hex, unless you say otherwise.
+    //
+    // A pair that cannot carry noise is not a weaker version of this technique,
+    // it is none of it: white has a swing of exactly 0, so a captured frame
+    // shows the value as plainly as a screenshot of ordinary text. The old
+    // behaviour was to render it anyway and put a line in the console, which is
+    // invisible in production, so the failure mode was a secret on screen and
+    // no signal anyone would see.
+    //
+    // What made it unmaskable was never the colour. It was this split insisting
+    // the frames average to the authored hex, which is a choice about fidelity
+    // rather than a law. Giving up the exact hex buys back the headroom and the
+    // noise does what it always could.
+    if (this.getAttribute('fit') === 'off') return asked;
+    const fitted = fitToBand(asked);
+    if (fitted.moved) {
+      warnOnce(`fit:${asked.color}:${asked.background}`,
+        `${asked.color} on ${asked.background} cannot carry noise (masking ratio ` +
+        `${checkPalette(asked).ratio.toFixed(2)}), so a single frame would show the ` +
+        `value. Rendered ${fitted.color} on ${fitted.background} instead, which ` +
+        `masks at ${fitted.ratio.toFixed(2)} and keeps the hue. Contrast drops to ` +
+        `${fitted.contrast.toFixed(2)}:1. Set fit="off" to keep your exact colours ` +
+        'and lose the protection.');
+    }
+    return { color: fitted.color, background: fitted.background };
+  }
+
+  /** What the palette was moved to, or null if it was already maskable. */
+  get fitted() {
+    if (this.getAttribute('fit') === 'off') return null;
+    const r = fitToBand({
+      color: this.getAttribute('color') ?? '#9ea6b4',
+      background: this.getAttribute('background') ?? '#6b7280',
+    });
+    return r.moved ? r : null;
   }
 }
 

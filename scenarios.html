@@ -196,8 +196,11 @@ for (const [label, color, background] of PALETTES) {
   const top = document.createElement('div');
   top.className = 'top';
   top.style.background = background;
+  // fit="off" so each swatch shows the palette it is labelled with. Left on,
+  // the unmaskable rows would render as something else and the ratio printed
+  // underneath would describe a palette that is not on screen.
   top.appendChild(mk({ width: '250', height: '52', strength: 'medium',
-    color, background }, SECRET));
+    color, background, fit: 'off' }, SECRET));
   box.appendChild(top);
   const meta = document.createElement('div');
   meta.className = 'meta';

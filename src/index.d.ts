@@ -79,6 +79,23 @@ export function checkPalette(design: {
 }): PaletteCheck;
 
 export function codeSwing(color: string, gamma?: number): number;
+/** WCAG-style contrast, so the cost of fitting is a number. */
+export function contrastRatio(a: string, b: string, gamma?: number): number;
+
+/**
+ * Move a palette that cannot carry noise into one that can, keeping the hue and
+ * the light-or-dark character and shrinking only the separation.
+ *
+ * White has a swing of 0, so white on black masks nothing. That was never a
+ * property of the colour: it followed from the split insisting the frames
+ * average to the authored hex. Give up the exact hex and it masks.
+ */
+export function fitToBand(design: {
+  color: string;
+  background: string;
+  minRatio?: number;
+  gamma?: number;
+}): { color: string; background: string; ratio: number; moved: boolean; contrast: number };
 export function toLight(v: number, gamma?: number): number;
 export function toCode(x: number, gamma?: number): number;
 export function luma(rgb: number[]): number;

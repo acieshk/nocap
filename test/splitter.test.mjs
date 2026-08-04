@@ -969,3 +969,43 @@ test('the decoy gets more of the budget as the share rises, and the pair stays z
   const down = decoySplit(cap, 0.9, 1, 90, 150);
   assert.ok(down.signed > 0, 'a large share biases the plane regardless of the noise');
 });
+
+test('an unmaskable palette is moved into one that masks', async () => {
+  const { fitToBand, checkPalette, contrastRatio } = await import('../src/palette.js');
+
+  // The claim this replaced: "white on black cannot be masked". It can. What
+  // could not happen was masking it while still emitting the exact hex, because
+  // white sits at the ceiling and has a swing of 0. That is a constraint the
+  // split chose, not one the physics imposes, so giving up the hex buys it back.
+  const white = fitToBand({ color: '#ffffff', background: '#000000' });
+  assert.equal(checkPalette({ color: '#ffffff', background: '#000000' }).ratio, 0);
+  assert.ok(white.moved, 'white on black must be moved');
+  assert.ok(white.ratio >= 1, `fitted ratio ${white.ratio} should mask`);
+
+  // Both shipped palettes already mask, so neither may be touched. If fitting
+  // moved them the default rendering would change under everyone.
+  for (const [color, background] of [['#6d6d6d', '#404040'], ['#9ea6b4', '#6b7280']]) {
+    const kept = fitToBand({ color, background });
+    assert.equal(kept.moved, false, `${color} on ${background} must be left alone`);
+    assert.equal(kept.color, color);
+    assert.equal(kept.background, background);
+  }
+
+  // A light design stays light and a dark one stays dark: only the separation
+  // shrinks, so the page still looks like the page.
+  const { luma, toRgb } = await import('../src/palette.js');
+  const light = fitToBand({ color: '#c9ccd1', background: '#f0f0f0' });
+  assert.ok(luma(toRgb(light.background)) > 170, 'a light background must stay light');
+  const dark = fitToBand({ color: '#e8e8f0', background: '#14141a' });
+  assert.ok(luma(toRgb(dark.color)) > luma(toRgb(dark.background)),
+    'light-on-dark must not invert');
+
+  // A saturated hue keeps a channel pinned at an extreme however its luma
+  // moves, so luma banding alone cannot rescue it. It has to desaturate too.
+  const red = fitToBand({ color: '#ff0000', background: '#000000' });
+  assert.ok(red.moved && red.ratio >= 1, `saturated red should still fit: ${red.ratio}`);
+  assert.ok(toRgb(red.color)[0] < 255, 'the pinned channel has to come down');
+
+  // Fitting costs contrast, and that is the honest trade rather than a bug.
+  assert.ok(white.contrast < 4.5, 'a fitted pair cannot also be high contrast');
+});

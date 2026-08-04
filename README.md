@@ -211,9 +211,11 @@ draws one line and does not wrap, a paragraph is one element per line, and at th
 default rounding every seam gets a pair of notches so the block reads as separate
 strips rather than a passage of text.
 
-**The colours are not free.** See
-[Choosing colours](https://github.com/acieshk/nocap#choosing-colours). A pair
-that cannot carry noise cannot be masked at any amplitude.
+**The colours are not free, and the element will change them if it has to.**
+A pair that cannot carry noise gets moved into one that can, keeping the hue and
+the light-or-dark character and shrinking only the separation. Set `fit="off"` to
+keep your exact hex and accept that a single frame shows the value. See
+[Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
 
 **`letter-spacing`, `text-align` and `padding-*` do nothing while `scramble` is
 on** ([#14](https://github.com/acieshk/nocap/issues/14)). Scramble draws each
@@ -479,6 +481,46 @@ rather than friction. Use nocap for the moment the value is on screen.
 
 ## Choosing colours
 
+**Masking and contrast are the same axis, pointing opposite ways.** The masking
+ratio is `min(swing) / |text − background|`, where swing is how far a colour can
+travel before it clips. High contrast means a large separation, which means a low
+ratio, whatever the colours are. Measured on stroke-width bars at amplitude 127:
+
+| pair | ratio | leak after a blur | contrast |
+| --- | --- | --- | --- |
+| `#b4b4b4` on `#4b4b4b` | 0.50 | 0.48 readable | 4.21:1 |
+| `#a0a0a0` on `#646464` | 1.15 | 0.28 | 2.26:1 |
+| `#969696` on `#6e6e6e` | 1.89 | 0.19 masked | 1.72:1 |
+
+Masking arrives around **2:1 contrast and below**. That is the real constraint,
+and it is worth knowing before you fight it: there is no setting that gives a
+high-contrast design and a masked one at the same time.
+
+**White on black is not a special case, and it is not impossible.** White has a
+swing of exactly 0, being already at the ceiling, so a white pixel cannot be
+displaced and a captured frame shows the text as plainly as ordinary rendering.
+But that follows from the split insisting the frames average to the *authored
+hex*, which is a choice about colour fidelity rather than a law. Give up the
+exact hex and the noise works:
+
+```
+asked for   #ffffff on #000000    ratio 0.00   leak 0.53
+rendered    #a0a0a0 on #5f5f5f    ratio 1.01   leak 0.25
+```
+
+That substitution is what `fit` does, and it is on by default, because a secret
+that is protected in a slightly different grey beats one that is exactly the
+grey you asked for and plainly readable. It keeps the hue, keeps light-on-dark
+light-on-dark, desaturates only when a pinned channel leaves it no choice, and
+warns once saying what it swapped. `fit="off"` restores the old behaviour.
+
+```js
+import { fitToBand } from 'nocap';
+fitToBand({ color: '#ffffff', background: '#000000' });
+// { color: '#a0a0a0', background: '#5f5f5f', ratio: 1.01, moved: true, contrast: 2.44 }
+```
+
+
 `color` and `background` **are** the perceived colours. The split runs in linear
 light, so what you author is what you see. Verified to within 0.3 code levels
 across the range. There is no band, no compression, and no contrast
@@ -732,7 +774,8 @@ copies still land on exactly the same pixels and cancel.
 | `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress |
 | `chroma` | `0` | 0 = grey noise, 1 = independent per channel |
 | `hardness` | `1` | 1 slams every pixel to ±amplitude. Lower keeps noise near the background |
-| `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Must be maskable. See below |
+| `color` / `background` | `#9ea6b4` / `#6b7280` | Authored palette. Moved into a maskable one if it is not. See below |
+| `fit` | on | `off` renders your exact colours even when they cannot mask |
 | `adaptive` | off | Exact colours, amplitude capped to their headroom |
 | `scratch` | off | **Experimental.** Unmask only a trail under the pointer |
 | `scratch-linger` | `30` | Seconds for a trail to fade to 1%. See the note below |

@@ -126,7 +126,9 @@ const PRESETS = {
   balanced: { amp:110, blk:6, hard:1,   chr:0, fg:'#6d6d6d', bg:'#404040', scr:'' },
   strong:   { amp:127, blk:8, hard:1,   chr:0, fg:'#8f8f8f', bg:'#5a5a5a', scr:'1' },
   readable: { amp:80,  blk:4, hard:0.5, chr:0, fg:'#7a7a7a', bg:'#484848', scr:'' },
-  // Deliberately bad: exact colours, and a screenshot reads it outright.
+  // Deliberately bad, and it needs fit="off" to stay that way: the element now
+  // moves an unmaskable palette into one that masks, so without opting out this
+  // preset would quietly succeed and demonstrate nothing.
   broken:   { amp:110, blk:6, hard:1,   chr:0, fg:'#e8e8f0', bg:'#14141a', scr:'' },
 };
 
@@ -146,6 +148,9 @@ function apply() {
     ['chroma',v.chr],['gamma',v.gam],['color',v.fg],['background',v.bg]])
     chip.setAttribute(a, val);
   v.scr ? chip.setAttribute('scramble', '') : chip.removeAttribute('scramble');
+  // Show the palette exactly as chosen. This page is where you go to see what a
+  // pair really does, so silently substituting a better one would defeat it.
+  chip.setAttribute('fit', 'off');
   chip.secret = v.txt;
   $('stage').style.background = v.bg;
 
