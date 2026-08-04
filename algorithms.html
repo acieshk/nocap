@@ -76,6 +76,36 @@
   live panels are for.
 </div>
 
+<h2>Leaning the noise toward the ink</h2>
+<p>
+  Flicker over empty background protects nothing, so <code>ink-bias</code> lets
+  the amplitude lean toward where the content is. It is the largest comfort win
+  available and it comes straight out of the protection, because <b>where the
+  noise is, is where the text is.</b> Measured over 6 seeds on the shipped
+  palette:
+</p>
+<table>
+  <tr><th>ink-bias</th><th>leak after the best blur</th><th>within-pair modulation</th></tr>
+  <tr><td>0, ships</td><td class="ok">0.263</td><td>96.5</td></tr>
+  <tr><td>0.2</td><td class="ok">0.304</td><td>81.4</td></tr>
+  <tr><td>0.4</td><td class="warn">0.361</td><td>66.4</td></tr>
+  <tr><td>0.6</td><td class="bad">0.441</td><td>51.4</td></tr>
+  <tr><td>1.0</td><td class="bad">0.732</td><td>21.4</td></tr>
+</table>
+<p>
+  Around 0.2 buys roughly 16% less flicker for a leak still under a third. Past
+  0.4 the value starts coming back and by 1.0 it is plainly readable, which is
+  the trap arriving exactly as predicted rather than as a surprise.
+</p>
+<div class="note">
+  The map is blurred well past the stroke width and keeps a floor, so it cannot
+  follow a glyph edge and the background is never fully quiet. That stops the
+  amplitude map <i>outlining</i> the text. It does not stop the trade, which is
+  inherent: quieter background means the noise is concentrated where the signal
+  is, and concentration is information. Default 0, and measure on your own
+  content before going past 0.3.
+</div>
+
 <h2>The first thing merging the pages showed</h2>
 <p>
   <b>aperture is far calmer than amplitude</b>, and neither page could have told

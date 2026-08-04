@@ -83,6 +83,19 @@ const TEXT_DEFAULTS = {
   // variance and should not be quoted as a result. Whether it reads better is
   // unverified on a real panel, which no measurement here can settle.
   noiseProfile: 'white',
+  // 0, and the measurements are why. Leaning amplitude toward the ink is the
+  // largest comfort win available and it buys that comfort directly out of the
+  // protection, because where the noise is, is where the text is:
+  //
+  //   bias 0.0   leak 0.263   modulation 96.5
+  //   bias 0.2   leak 0.304   modulation 81.4   <- the usable end
+  //   bias 0.4   leak 0.361   modulation 66.4
+  //   bias 1.0   leak 0.732   modulation 21.4   <- the value is legible again
+  //
+  // 6 seeds, shipped palette. Blurring the map and keeping a floor stop it
+  // tracing an outline, but nothing stops the trade itself, so this is opt-in
+  // and anything past about 0.3 wants measuring on your own content first.
+  inkBias: 0,
   bankSize: 6,
 };
 
@@ -410,6 +423,7 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
     // alternatives fail is worth being able to run rather than read.
     mode: attrs.mode ?? base.mode,
     noiseProfile: attrs['noise-profile'] ?? base.noiseProfile,
+    inkBias: num('ink-bias', base.inkBias),
     chroma: num('chroma', base.chroma),
     gamma: num('gamma', base.gamma),
     hardness: num('hardness', base.hardness),
@@ -444,6 +458,7 @@ export class NocapSecret extends ElementBase {
     'scratch-hint',
     'noise-scale',
     'noise-profile',
+    'ink-bias',
     'chroma',
     'hardness',
     'gamma',

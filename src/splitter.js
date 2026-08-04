@@ -179,6 +179,54 @@ export function splitFrames(src, opts = {}) {
  * zero-sum modulator. The two modes differ only in where the modulator comes
  * from. Random draws, or a second image.
  */
+/**
+ * Where the noise should be loudest.
+ *
+ * Flicker over empty background protects nothing, so spending the same
+ * amplitude everywhere is paying for calm you did not have to give up. Leaning
+ * the amplitude toward the ink is the largest comfort win available.
+ *
+ * THE TRAP, and it is the whole reason this is shaped the way it is: where the
+ * noise is, is where the text is. An amplitude map that follows the glyphs hands
+ * their shape to a single frame in the noise texture alone, with no value ever
+ * recovered. Two things stop that here.
+ *
+ * The map is blurred hard, at a radius well past the stroke, so it cannot follow
+ * an edge. And it keeps a floor, so the background is never quiet, only quieter.
+ * `inkBias` is the fraction of amplitude allowed to vary, never all of it.
+ */
+function inkWeights(target, cfg) {
+  const { width: w, height: h, data } = target;
+  if (cfg.inkBias <= 0) return null;
+
+  // Distance from the image's own mean stands in for "ink". No glyph knowledge
+  // is needed, and it works for any content rather than only for text.
+  let mean = 0;
+  for (let i = 0; i < data.length; i += 4) mean += data[i];
+  mean /= data.length / 4;
+
+  const map = { width: w, height: h, data: new Uint8ClampedArray(data.length) };
+  let peak = 1;
+  for (let i = 0; i < data.length; i += 4) {
+    const d = Math.abs(data[i] - mean);
+    if (d > peak) peak = d;
+  }
+  for (let i = 0; i < data.length; i += 4) {
+    const v = (Math.abs(data[i] - mean) / peak) * 255;
+    map.data[i] = map.data[i + 1] = map.data[i + 2] = v;
+    map.data[i + 3] = 255;
+  }
+  // Well past the stroke, so the result is a soft field over the text rather
+  // than an outline of it. This radius is the safety margin.
+  const soft = boxBlur(map, Math.max(6, cfg.noiseScale * 3));
+  const floor = 1 - cfg.inkBias;
+  const out = new Float32Array(w * h);
+  for (let i = 0, k = 0; i < soft.data.length; i += 4, k++) {
+    out[k] = floor + cfg.inkBias * (soft.data[i] / 255);
+  }
+  return out;
+}
+
 function fillModulated(planes, target, cfg) {
   const n = planes.length;
   const { width: w, height: h, data: t } = target;
@@ -186,6 +234,9 @@ function fillModulated(planes, target, cfg) {
 
   // Built once per split; 256 entries is far cheaper than solving per pixel.
   const lut = cfg.linearLight ? linearMeanTable(cfg.amplitude, cfg.gamma) : null;
+  // Scaling the offsets keeps them zero-sum, so the mean is untouched and only
+  // how loud each region gets changes.
+  const weights = inkWeights(target, cfg);
 
   const draws = cfg.mode === 'decoy'
     ? decoyDraws(cfg.decoy, w, h)
@@ -202,7 +253,8 @@ function fillModulated(planes, target, cfg) {
         // n === 2 -> +/-r, all energy at one magnitude: the strongest mask for
         // a given budget. n > 2 -> r*cos(2*PI*(phase + k/n)), which sums to
         // exactly zero and never leaves a plane holding a clean pixel.
-        const r = cfg.hardness + (1 - cfg.hardness) * mag;
+        const r = (cfg.hardness + (1 - cfg.hardness) * mag)
+          * (weights ? weights[y * w + x] : 1);
         if (n === 2) {
           off[0] = phase < 0.5 ? -r : r;
           off[1] = -off[0];
