@@ -73,11 +73,15 @@ const TEXT_DEFAULTS = {
   // peaks, so it shimmers more at 30Hz than a fine block does. strength="weak"
   // deliberately sits under 2 for that reason and accepts the blur exposure.
   blockRatio: 2,
-  // White ships. Blue costs nothing on security (0.254 against 0.252 raw, and
-  // identical after the best blur, over 12 seeds) and moves the noise energy
-  // away from the low spatial frequencies where temporal sensitivity peaks. It
-  // is not the default only because the comfort win is unverified on a real
-  // panel, which is the one thing no measurement here can settle.
+  // White ships. 'blue' high-passes the lattice and removes about a third of the
+  // low-frequency energy, measured as the spread of the block average: 0.63 of
+  // white's at an 8px window. It is NOT blue noise in the proper sense, which
+  // means a locally balanced binary pattern from void-and-cluster, and the name
+  // is kept only because it is the axis people recognise.
+  //
+  // Security is unchanged. Any leak difference between the two is inside seed
+  // variance and should not be quoted as a result. Whether it reads better is
+  // unverified on a real panel, which no measurement here can settle.
   noiseProfile: 'white',
   bankSize: 6,
 };

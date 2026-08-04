@@ -82,42 +82,45 @@
   goes from 80.6 to 161.3 for nothing in return.
 </p>
 
-<h2>Blue noise, which is free</h2>
+<h2>High-passed noise, and what it is not</h2>
 <p>
-  White noise puts equal energy at every spatial frequency, including the low
-  ones, and low spatial frequency is exactly where temporal sensitivity peaks. So
-  part of a white-noise field is flicker you feel without being paid for it in
-  masking. Blue noise pushes that energy toward the spatial limit instead, which
-  is why printing and rendering have preferred it for decades.
+  White noise puts equal energy at every spatial frequency including the low
+  ones, and low spatial frequency is where temporal sensitivity peaks, so part of
+  a white field is flicker you feel without being paid for it in masking.
+  <code>noise-profile="blue"</code> high-passes the cell lattice to push that
+  energy upward.
 </p>
 <p>
-  The thing that had to be checked is whether a blur eats it, since a
-  high-frequency bias is exactly what a blur removes. It does not, because the
-  block size still dominates. Measured over 12 seeds at the shipped defaults:
+  <b>It is not blue noise, and calling it that was wrong.</b> Blue noise means a
+  pattern whose binary values are arranged to be locally balanced, built by
+  void-and-cluster or error diffusion. This high-passes a random field and
+  thresholds it, which moves in the same direction and stops well short.
+  Measured as the spread of the block average, where a lower number means less
+  low-frequency energy:
 </p>
 <table>
-  <tr><th>profile</th><th>raw leak</th><th>after the best blur</th></tr>
-  <tr><td>white, ships today</td><td>0.252</td><td>0.252</td></tr>
-  <tr><td>blue</td><td>0.254</td><td>0.254</td></tr>
+  <tr><th>window</th><th>white</th><th>high-passed</th><th>ratio</th></tr>
+  <tr><td>4px</td><td>21.94</td><td>14.79</td><td>0.67</td></tr>
+  <tr><td>8px</td><td>11.12</td><td>7.00</td><td>0.63</td></tr>
+  <tr><td>16px</td><td>5.48</td><td>3.49</td><td>0.64</td></tr>
+  <tr><td>32px</td><td>2.72</td><td>1.84</td><td>0.68</td></tr>
 </table>
 <p>
-  Indistinguishable on security. But the comfort case did <b>not</b> come out the
-  way the theory predicted, and the panels above measure it live: blue noise
-  scores a slightly <b>higher</b> across-cycle modulation than white, around 52
-  against 48 at the defaults, while its raw leak comes out a little lower.
+  So it removes about a third of the low-frequency energy, and repeating the pass
+  does not get much past that. Real blue noise would drive the ratio far lower at
+  the coarse windows.
 </p>
 <div class="note">
-  <b>The spatial argument does not transfer to the temporal axis, and it should
-  not have been assumed it would.</b> Pushing noise energy to high spatial
-  frequency is about where the eye resolves detail. Across-cycle modulation is
-  about how much each pixel changes between one cycle and the next, and a
-  high-passed field is not obliged to change less. Two different axes, and only
-  one of them was reasoned about.
+  <b>A correction to what this page said before.</b> It reported that the profile
+  lowered the leak and raised the across-cycle churn, quoting 0.252 against 0.254
+  and 48 against 52. <b>Those differences are inside seed variance and are not
+  results.</b> Run either profile with a different seed and you get numbers that
+  far apart from the same configuration.
   <br><br>
-  So blue noise is a small security win with a small churn cost, rather than the
-  free comfort win it was proposed as. Whether the finer texture actually reads
-  better is still a question for your eyes, which is why it is switchable and why
-  white is still the default.
+  What survives is the spectrum measurement above, which is a property of the
+  field rather than of one draw. Security is unchanged, which is the part that
+  had to be checked. Whether the finer texture is nicer to look at is still an
+  open question for your eyes, and the panels above are the way to answer it.
 </div>
 
 <h2>Still untested, and the trap in the biggest one</h2>
@@ -147,7 +150,7 @@ import { splitFrames } from './src/index.js';
 const $ = (id) => document.getElementById(id);
 const CFGS = [
   { profile: 'white', name: 'white noise', sub: 'what ships today' },
-  { profile: 'blue', name: 'blue noise', sub: 'energy pushed to where the eye is least sensitive' },
+  { profile: 'blue', name: 'high-passed', sub: 'about a third of the low-frequency energy removed' },
 ];
 
 // Build the live elements once. Re-creating them on every slider move would
