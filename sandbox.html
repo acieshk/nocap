@@ -71,6 +71,11 @@
       <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
   </div>
 
+  <div class="bar btm">
+    <button id="share">Copy a link to these settings</button>
+    <span id="shared" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
+  </div>
+
   <div class="readout">
     <span>masking <b id="rMask">…</b></span>
     <span>single frame <b id="rLeak">…</b></span>
@@ -251,6 +256,56 @@ $('presets').onclick = (e) => {
   $('strength').value = named ? named[0] : 'custom';
   apply();
 };
+
+/**
+ * Settings in the URL, so a configuration can be handed to somebody.
+ *
+ * The secret is NOT in it, and that is not an oversight. Putting the value in a
+ * shareable link would leak it into a URL bar, a history file, a referrer header
+ * and whatever chat app carried it, which is a longer list of surfaces than the
+ * whole security page is about keeping it out of. The knobs are shareable. What
+ * you point them at is yours.
+ */
+const SHARED = ['strength', 'fg', 'bg', 'amp', 'blk', 'hard', 'chr', 'gam', 'scr'];
+
+function readUrl() {
+  const q = new URL(location.href).searchParams;
+  let any = false;
+  for (const id of SHARED) {
+    const v = q.get(id);
+    if (v === null || !$(id)) continue;
+    $(id).value = v;
+    any = true;
+  }
+  return any;
+}
+
+$('share').onclick = async () => {
+  const u = new URL(location.href);
+  u.search = '';
+  for (const id of SHARED) if ($(id)) u.searchParams.set(id, $(id).value);
+  const link = u.toString();
+  history.replaceState(null, '', link);
+  try {
+    await navigator.clipboard.writeText(link);
+    $('shared').textContent = 'copied, and the secret is not in it';
+    $('shared').className = 'ok';
+  } catch {
+    // Clipboard needs a permission and a secure context, and the URL bar now
+    // holds the link either way, so say that rather than reporting a failure.
+    $('shared').textContent = 'in the address bar, copy from there';
+    $('shared').className = 'warn';
+  }
+};
+
+if (readUrl()) {
+  // A shared link may describe settings that are not a named strength.
+  const named = Object.entries(STRENGTHS).find(([, s]) =>
+    s.amplitude === +$('amp').value && s.hardness === +$('hard').value);
+  if (!new URL(location.href).searchParams.get('strength')) {
+    $('strength').value = named ? named[0] : 'custom';
+  }
+}
 
 apply();
 chip.addEventListener('render', () => setTimeout(showFrames, 60));
