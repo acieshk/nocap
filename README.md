@@ -239,7 +239,40 @@ lets you check one interactively.
 `amplitude` is now a fraction of whatever headroom the colours allow, so
 **choosing mid-tone colours buys more protection than raising amplitude ever
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
-noise resists a blur far better but strobes below 120Hz, so 3 is the default.
+noise resists a blur far better but strobes below 120Hz, so 6 is the default.
+
+### Display density currently changes how well a secret is masked
+
+The block is meant to follow the stroke width, because a blur only has a radius
+worth trying when the block is narrower than the strokes it is hiding. It does
+follow it on a 2x display. On a 1x display it does not: the preset's own value
+wins, so the block stays at 6 however wide the strokes actually are.
+
+Narrow strokes carrying an over-wide block only cost shimmer. Wide strokes are
+the case that matters, because the block ends up **narrower** than they are.
+Measured over 24 seeds on the shipped palette, changing nothing but the block:
+
+| stroke | block | leak from one screenshot | after one blur pass | useful blur radius |
+| --- | --- | --- | --- | --- |
+| 12px | 6 (what dpr 1 gives) | 0.211 ±0.014 | **0.322 ±0.029** | 7.4 |
+| 12px | 12 (what dpr 2 gives) | 0.223 ±0.027 | **0.229 ±0.029** | 3.4 |
+
+The raw numbers are the same, so this is blur resistance alone. **The same
+secret on the same page gives away about 40% more to one `ffmpeg` command on a
+1x display than on a 2x one**, and nobody chose that.
+
+Reproduced independently on stroke-width bars rather than glyphs, which puts
+the gap wider still: 0.236 raw against 0.395 blurred at stroke 12 with a 6px
+block. That run also found the thing worth knowing before reaching for the
+obvious fix. **Matching the stroke is not enough**: a 12px block against a 12px
+stroke still leaves a useful blur radius of 6.6. It takes about `1.25 x` the
+stroke to close, which is what the code's ceiling already computes and what the
+floor prevents from applying.
+
+Until [#16](https://github.com/acieshk/nocap/issues/16) is settled: if your
+strokes are wider than the block and blur resistance matters to you, set
+`noise-scale` explicitly to about `1.25 x` your stroke width. Do not set it
+equal to the stroke, and do not assume the default has handled it.
 
 ## Watermarking, experimental
 
@@ -406,7 +439,7 @@ copies still land on exactly the same pixels and cancel.
 | `fake` | off | **Experimental.** `auto` / `number` / `text` / `random`. Needs masking ratio 1.0+ |
 | `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
 | `amplitude` | `110` | Fraction of the headroom the colours allow |
-| `noise-scale` | `6 × dpr` | Noise block in device px. Higher resists blur, strobes below 120Hz |
+| `noise-scale` | `6`, capped near the stroke | Noise block in device px. Higher resists blur, strobes below 120Hz. Not `6 × dpr`: the dpr-scaled value is trimmed to about `1.25 × stroke`, so dpr 2 gives 8 rather than 12. See the density note above |
 | `gamma` | `2.4` | Display EOTF. Measure yours with the calibration demo |
 | `frames` | `2` | Planes per cycle. 2 is almost always right |
 | `contrast` | `1` | Pre-emphasis. Not needed under linear light, which does not compress |
