@@ -48,8 +48,10 @@
 
 <div class="rig">
   <div class="bar">
-    <span class="lbl">Q3 accounts, 6 records</span>
-    <button id="regen" style="margin-left:auto">New data</button>
+    <label class="f" style="min-width:190px"><span>Seed</span>
+      <input type="text" id="seed" spellcheck="false"></label>
+    <button id="regen" style="align-self:end">New seed</button>
+    <span class="lbl" style="margin-left:auto">same seed, same table, anywhere</span>
   </div>
   <div class="wrap-scroll">
     <table class="ledger">
@@ -63,6 +65,31 @@
     <span>characters hidden <b id="chars">…</b></span>
     <span>found in the DOM <b id="found">…</b></span>
   </div>
+</div>
+
+<h2>Claim it</h2>
+<p>
+  The table is generated from the seed above, so it is the same table for
+  everyone who loads that seed. Read the values however you like and type them
+  back. The page holds the truth as a JavaScript local, never as DOM, so it can
+  check your answer without ever having published it.
+</p>
+<div class="rig">
+  <div class="bar" style="display:block">
+    <textarea id="answer" rows="7" spellcheck="false" placeholder="One row per line, in table order:&#10;card, phone, balance&#10;&#10;4111 1111 1111 1111, +1 (555) 010-0199, 12,480.55"
+      style="width:100%;background:#2b2b2b;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px;font:12.5px/1.6 ui-monospace,monospace"></textarea>
+  </div>
+  <div class="bar btm">
+    <button id="check">Check my answer</button>
+    <span id="verdict" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
+  </div>
+  <table class="checks" id="marks"></table>
+</div>
+<div class="note">
+  Punctuation and spacing are ignored, so <code>4111111111118842</code> counts
+  the same as <code>4111 1111 1111 8842</code>. Only the digits and letters have
+  to match, because getting the separators wrong is not the interesting part of
+  the problem.
 </div>
 
 <h2>What a scraper actually receives</h2>
@@ -170,23 +197,57 @@ const ROWS = [
 ];
 
 // Module scope, never a DOM property, never written as text. The table takes
-// these through `.secret` and auditPage takes them to search for.
+// these through `.secret`, auditPage takes them to search for, and the answer
+// check compares against them without ever putting them in the document.
 let records = [];
 
+/**
+ * A seeded generator, so the table is reproducible.
+ *
+ * Random data made a nice demo and a useless challenge: nobody could check
+ * anybody's answer, because the values were gone the moment the page reloaded.
+ * With a seed in the URL the same table appears for everyone, so a claim of
+ * "I read it" becomes something another person can verify.
+ *
+ * Reproducibility costs nothing here. The seed generates the DATA, not the
+ * noise, and the values were never secret from the page itself, only from the
+ * DOM. An attacker who knows the seed and the algorithm could compute the table
+ * without reading the screen at all, which is why this is a scraping exercise
+ * rather than a claim about secrecy.
+ */
+function seeded(text) {
+  let h = 2166136261;
+  for (const ch of String(text)) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return () => {
+    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+    return h / 4294967296;
+  };
+}
+
+/** Digits and letters only: separators are not the interesting part. */
+const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+
 function build() {
+  const rng = seeded($('seed').value || 'nocap');
   records = [];
   const used = new Set();
-  while (records.length < 6) {
-    const name = NAMES[(Math.random() * NAMES.length) | 0];
+  let guard = 0;
+  while (records.length < 6 && guard++ < 200) {
+    const name = NAMES[(rng() * NAMES.length) | 0];
     if (used.has(name)) continue;
     used.add(name);
     records.push({
       name,
-      card: fakeLike(SHAPES.card, { mode: 'auto' }),
-      phone: fakeLike(SHAPES.phone, { mode: 'auto' }),
-      money: fakeLike(SHAPES.money, { mode: 'auto' }),
+      card: fakeLike(SHAPES.card, { mode: 'auto', rng }),
+      phone: fakeLike(SHAPES.phone, { mode: 'auto', rng }),
+      money: fakeLike(SHAPES.money, { mode: 'auto', rng }),
     });
   }
+  $('marks').innerHTML = '';
+  $('verdict').textContent = '';
 
   $('rows').innerHTML = '';
   let chars = 0;
@@ -270,7 +331,40 @@ async function run() {
   $('out').className = found.length ? 'bad' : 'ok';
 }
 
-$('regen').onclick = async () => { build(); await run(); };
+$('check').onclick = () => {
+  // Compare in memory. The truth never enters the document, which is the same
+  // property the rest of the page is demonstrating.
+  const lines = $('answer').value.split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean);
+  let right = 0;
+  const total = records.length * 3;
+  $('marks').innerHTML = records.map((r, i) => {
+    const got = (lines[i] ?? '').split(',').map(norm);
+    const want = [r.card, r.phone, r.money].map(norm);
+    const hits = want.map((v, k) => v && got[k] === v);
+    right += hits.filter(Boolean).length;
+    const cells = hits.map((h) => `<span class="${h ? 'safe' : 'leak'}">${h ? '✓' : '✗'}</span>`).join(' ');
+    return `<tr><td>${cells}</td><td>row ${i + 1}, ${r.name}</td>` +
+      `<td>${hits.filter(Boolean).length} of 3</td></tr>`;
+  }).join('');
+  $('verdict').textContent = `${right} of ${total} values correct`;
+  $('verdict').className = right === total ? 'ok' : right ? 'warn' : 'bad';
+};
+
+$('regen').onclick = async () => {
+  $('seed').value = Math.random().toString(36).slice(2, 8);
+  syncUrl();
+  build();
+  await run();
+};
+$('seed').onchange = async () => { syncUrl(); build(); await run(); };
+
+// The seed lives in the URL so a challenge can be handed to someone as a link.
+function syncUrl() {
+  const u = new URL(location.href);
+  u.searchParams.set('seed', $('seed').value);
+  history.replaceState(null, '', u);
+}
+$('seed').value = new URL(location.href).searchParams.get('seed') || 'abcde';
 $('run').onclick = run;
 
 build();
