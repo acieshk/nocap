@@ -14,8 +14,9 @@
 
 <h1>Sandbox</h1>
 <p class="lede">
-  A real <code>&lt;nocap-secret&gt;</code> with every setting exposed. The numbers
-  under it are measured on each change, not looked up.
+  A real <code>&lt;nocap-secret&gt;</code> with the masking engine exposed. The
+  numbers under it are measured on each change, not looked up. Fonts and colours
+  live on the <a href="styling.html">styling page</a>.
 </p>
 <div class="note">
   This page has a text box so you can try your own value, which means the value
@@ -66,13 +67,6 @@
       <input type="range" id="chr" min="0" max="1" step="0.05" value="0"></label>
     <label class="f"><span>Gamma <em id="gamV">2.40</em></span>
       <input type="range" id="gam" min="1.8" max="3.0" step="0.01" value="2.4"></label>
-    <label class="f"><span>Font size <em id="fszV">auto</em></span>
-      <input type="range" id="fsz" min="0" max="44" value="0"></label>
-    <label class="f"><span>Letter spacing <em id="lsV">0</em>px</span>
-      <input type="range" id="ls" min="0" max="14" value="0"></label>
-    <label class="f"><span>Alignment</span>
-      <select id="align"><option value="center">center</option>
-        <option value="left">left</option><option value="right">right</option></select></label>
     <label class="f"><span>Scramble in memory</span>
       <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
   </div>
@@ -142,21 +136,15 @@ const schedule = () => { clearTimeout(pending); pending = setTimeout(apply, 70);
 function apply() {
   const v = { amp:+$('amp').value, blk:+$('blk').value, hard:+$('hard').value, chr:+$('chr').value,
     gam:+$('gam').value, fg:$('fg').value, bg:$('bg').value, scr:$('scr').value,
-    txt:$('txt').value, fsz:+$('fsz').value, ls:+$('ls').value, align:$('align').value };
+    txt:$('txt').value };
   $('ampV').textContent = v.amp; $('blkV').textContent = v.blk;
   $('hardV').textContent = v.hard.toFixed(2); $('chrV').textContent = v.chr.toFixed(2);
-  $('gamV').textContent = v.gam.toFixed(2); $('lsV').textContent = v.ls;
-  $('fszV').textContent = v.fsz ? v.fsz + 'px' : 'auto';
+  $('gamV').textContent = v.gam.toFixed(2);
   $('strV').textContent = $('strength').value;
 
   for (const [a, val] of [['amplitude',v.amp],['noise-scale',v.blk],['hardness',v.hard],
-    ['chroma',v.chr],['gamma',v.gam],['color',v.fg],['background',v.bg],
-    ['letter-spacing',v.ls],['text-align',v.align]])
+    ['chroma',v.chr],['gamma',v.gam],['color',v.fg],['background',v.bg]])
     chip.setAttribute(a, val);
-  // 0 means "let the element size from its height". Setting font-size="0" would
-  // now be refused and warned about, which is correct but not what the slider
-  // means, so the attribute comes off instead.
-  v.fsz ? chip.setAttribute('font-size', v.fsz) : chip.removeAttribute('font-size');
   v.scr ? chip.setAttribute('scramble', '') : chip.removeAttribute('scramble');
   chip.secret = v.txt;
   $('stage').style.background = v.bg;
@@ -195,9 +183,6 @@ function apply() {
 ` + (named ? `  strength="${$('strength').value}"`
            : `  amplitude="${v.amp}" noise-scale="${v.blk}"
   chroma="${v.chr}" hardness="${v.hard}"`)
-  + (v.fsz ? `\n  font-size="${v.fsz}"` : '')
-  + (v.ls ? `\n  letter-spacing="${v.ls}"` : '')
-  + (v.align !== 'center' ? `\n  text-align="${v.align}"` : '')
   + (v.scr ? `\n  scramble` : '')
   + (v.gam !== 2.4 ? `\n  gamma="${v.gam.toFixed(2)}"` : '')
   + `
@@ -247,7 +232,7 @@ for (const id of ['amp', 'blk', 'hard']) {
   });
 }
 
-for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','scr','fsz','ls','align'])
+for (const id of ['txt','fg','bg','amp','blk','hard','chr','gam','scr'])
   $(id).oninput = $(id).onchange = schedule;
 
 $('presets').onclick = (e) => {

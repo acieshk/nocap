@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: styling</title>
+<meta name="description" content="Set the text, the font and the colours, and see what the palette costs you in protection.">
+<link rel="stylesheet" href="demo/shell.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Styling</h1>
+<p class="lede">
+  Make it look like the rest of your design. Everything here is an attribute, and
+  the masking readout tells you what a given palette costs before you commit
+  to it.
+</p>
+
+<div class="rig">
+  <div class="body" id="stage">
+    <nocap-secret id="chip" width="340" height="66" strength="medium"></nocap-secret>
+  </div>
+
+  <div class="knobs">
+    <label class="f"><span>Text</span><input type="text" id="txt" placeholder="loading…"></label>
+    <label class="f"><span>Font</span>
+      <select id="fam">
+        <option value="ui-monospace, monospace">monospace, the default</option>
+        <option value="Inter, system-ui, sans-serif">Inter / system sans</option>
+        <option value="Georgia, 'Times New Roman', serif">Georgia / serif</option>
+        <option value="'Courier New', monospace">Courier New</option>
+        <option value="system-ui, sans-serif">system-ui</option>
+      </select></label>
+    <label class="f"><span>Weight</span>
+      <select id="wt">
+        <option value="400">400 regular</option>
+        <option value="600" selected>600 semibold</option>
+        <option value="700">700 bold</option>
+        <option value="800">800 heavy</option>
+      </select></label>
+    <label class="f"><span>Size <em id="fszV">auto</em></span>
+      <input type="range" id="fsz" min="0" max="46" value="0"></label>
+    <label class="f"><span>Letter spacing <em id="lsV">0</em>px</span>
+      <input type="range" id="ls" min="0" max="16" value="0"></label>
+    <label class="f"><span>Alignment</span>
+      <select id="align"><option value="center">center</option>
+        <option value="left">left</option><option value="right">right</option></select></label>
+    <label class="f"><span>Padding X <em id="pxV">0</em>px</span>
+      <input type="range" id="px" min="0" max="60" value="0"></label>
+    <label class="f"><span>Padding Y <em id="pyV">0</em>px</span>
+      <input type="range" id="py" min="-16" max="16" value="0"></label>
+    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
+    <label class="f"><span>Background</span><input type="color" id="bg" value="#404040"></label>
+  </div>
+
+  <div class="readout">
+    <span>masking <b id="rMask">…</b></span>
+    <span>single frame <b id="rLeak">…</b></span>
+    <span>after blur <b id="rBlur">…</b></span>
+    <span>stroke <b id="rStroke">…</b></span>
+    <span>noise block <b id="rBlock">…</b></span>
+  </div>
+</div>
+
+<ul id="advice"></ul>
+<pre id="snippet">…</pre>
+
+<h2>The font is not only cosmetic</h2>
+<p>
+  The noise block is meant to follow the stroke width, and the stroke follows the
+  font. Change the font and you change what the block has to be. The
+  <b>stroke</b> and <b>noise block</b> figures in the readout are the two numbers
+  that matter: when the block is narrower than the stroke, a blur has a radius
+  worth trying.
+</p>
+<p>
+  On a 1× display the block currently does not follow the stroke, so a large font
+  can end up with a block half its stroke width. Watch the two numbers diverge as
+  you drag the size up. See
+  <a href="https://github.com/acieshk/nocap/issues/16">issue 16</a> and the
+  density note in the README. Until it is settled, set
+  <code>noise-scale</code> to about <code>1.25 ×</code> your stroke by hand if
+  blur resistance matters. Do not set it equal to the stroke, which is not enough.
+</p>
+
+<h2>Colour is the setting that decides everything else</h2>
+<p>
+  A secret is maskable only if both its colours can carry noise. Masking ratio is
+  <code>min(swing(text), swing(background)) / |text − background|</code>, where
+  swing is how far a colour can travel in code values before it clips. Fully
+  saturated colours have no swing at all, so white on black cannot be masked at
+  any amplitude. Try it above and watch the ratio fall to 0.
+</p>
+<p>
+  Mid-tones are what buy protection. That is why this site is grey rather than the
+  near-black it would otherwise be.
+</p>
+
+<h2>What does not apply</h2>
+<div class="note">
+  <code>letter-spacing</code>, <code>text-align</code> and the padding attributes
+  do nothing while <code>scramble</code> is on, because that mode draws each glyph
+  into its own cell and places the cells itself. The font attributes still apply.
+  The element warns in the console rather than ignoring you silently. See
+  <a href="https://github.com/acieshk/nocap/issues/14">issue 14</a>.
+</div>
+<div class="note">
+  Any value that cannot be used falls back to the documented default and warns
+  once. An invalid font string or a non-finite coordinate is a silent no-op in
+  canvas, so it would otherwise render the wrong thing, or nothing at all, without
+  an error. Try <code>font-size="abc"</code> in DevTools and watch it land back on
+  the default rather than disappearing.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { averageFrames, leakScore, denoisedLeak, checkPalette, splitFrames,
+         resolveText, resolveOptions } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const chip = $('chip');
+// Fetched, not inlined. An inline literal would put this page's own sample value
+// straight into its View Source, which is the thing being demonstrated.
+$('txt').value = (await (await fetch('./demo/api-mock.json')).json()).account;
+
+let pending = 0;
+const schedule = () => { clearTimeout(pending); pending = setTimeout(apply, 70); };
+
+function apply() {
+  const v = { txt:$('txt').value, fam:$('fam').value, wt:$('wt').value, fsz:+$('fsz').value,
+    ls:+$('ls').value, align:$('align').value, px:+$('px').value, py:+$('py').value,
+    fg:$('fg').value, bg:$('bg').value };
+  $('fszV').textContent = v.fsz ? v.fsz + 'px' : 'auto';
+  $('lsV').textContent = v.ls; $('pxV').textContent = v.px; $('pyV').textContent = v.py;
+
+  for (const [a, val] of [['font-family',v.fam],['font-weight',v.wt],['letter-spacing',v.ls],
+    ['text-align',v.align],['padding-x',v.px],['padding-y',v.py],['color',v.fg],['background',v.bg]])
+    chip.setAttribute(a, val);
+  // 0 means "size from the height". Setting font-size="0" is refused and warned
+  // about, which is right but not what the slider means, so remove it instead.
+  v.fsz ? chip.setAttribute('font-size', v.fsz) : chip.removeAttribute('font-size');
+  chip.secret = v.txt;
+  $('stage').style.background = v.bg;
+
+  // The two numbers the prose points at. Resolved the same way the element
+  // resolves them, rather than recomputed here, so they cannot drift apart.
+  const dpr = devicePixelRatio || 1;
+  const h = 66 * dpr;
+  const style = resolveText({
+    'font-family': v.fam, 'font-weight': v.wt,
+    ...(v.fsz ? { 'font-size': String(v.fsz * dpr) } : {}),
+  }, h);
+  const opts = resolveOptions({}, dpr, 66, style.sizePx);
+  const stroke = Math.max(2, Math.round(style.sizePx / 8));
+  $('rStroke').textContent = `${stroke}px`;
+  $('rBlock').textContent = `${opts.noiseScale}px`;
+  // Narrower than the stroke is the case a blur exploits.
+  $('rBlock').className = opts.noiseScale < stroke ? 'bad'
+    : opts.noiseScale < stroke * 1.25 ? 'warn' : 'ok';
+
+  // Measure off-screen with the chosen font, so the leak reflects this styling
+  // rather than a fixed sample.
+  const c = document.createElement('canvas'); c.width = 320; c.height = 60;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = v.bg; x.fillRect(0, 0, c.width, c.height);
+  x.font = `${v.wt} ${v.fsz || 28}px ${v.fam}`;
+  x.fillStyle = v.fg; x.textBaseline = 'middle';
+  x.fillText(v.txt, 8, c.height / 2);
+  const planes = splitFrames(x.getImageData(0, 0, c.width, c.height),
+    { frames:2, chroma:0, hardness:1, noiseScale:opts.noiseScale, amplitude:110,
+      gamma:2.4, linearLight:true });
+  const target = averageFrames(planes);
+  const raw = leakScore(planes[0], target);
+  // Same cap as the sandbox, so the number means the same thing on both pages.
+  const blur = denoisedLeak(planes[0], target, 5);
+  const pal = checkPalette({ color: v.fg, background: v.bg });
+  const grade = (n) => (n < 0.2 ? 'ok' : n < 0.45 ? 'warn' : 'bad');
+
+  $('rMask').textContent = `${pal.ratio.toFixed(2)} ${pal.grade}`;
+  $('rMask').className = pal.grade === 'good' ? 'ok' : pal.grade === 'fair' ? 'warn' : 'bad';
+  $('rLeak').textContent = raw.toFixed(2); $('rLeak').className = grade(raw);
+  $('rBlur').textContent = `${blur.leak.toFixed(2)} (r=${blur.radius})`;
+  $('rBlur').className = grade(blur.leak);
+
+  const tips = [...pal.warnings];
+  if (opts.noiseScale < stroke)
+    tips.push(`The noise block (${opts.noiseScale}px) is narrower than the stroke ` +
+      `(${stroke}px), so a blur has room to work. Set noise-scale to about ` +
+      `${Math.round(stroke * 1.25)} by hand.`);
+  if (!tips.length) tips.push('This palette masks well and should fuse cleanly.');
+  $('advice').innerHTML = tips.map((t) => `<li>${t}</li>`).join('');
+
+  $('snippet').textContent = `<nocap-secret
+  color="${v.fg}" background="${v.bg}"
+  font-family="${v.fam}"
+  font-weight="${v.wt}"`
+    + (v.fsz ? `\n  font-size="${v.fsz}"` : '')
+    + (v.ls ? `\n  letter-spacing="${v.ls}"` : '')
+    + (v.align !== 'center' ? `\n  text-align="${v.align}"` : '')
+    + (v.px ? `\n  padding-x="${v.px}"` : '')
+    + (v.py ? `\n  padding-y="${v.py}"` : '')
+    + (opts.noiseScale < stroke ? `\n  noise-scale="${Math.round(stroke * 1.25)}"` : '')
+    + `
+></nocap-secret>
+
+el.secret = await fetchAccountNumber();`;
+}
+
+for (const id of ['txt','fam','wt','fsz','ls','align','px','py','fg','bg'])
+  $(id).oninput = $(id).onchange = schedule;
+
+apply();
+</script>
+</body>
+</html>

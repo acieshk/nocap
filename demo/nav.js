@@ -1,14 +1,15 @@
 /**
  * One nav for every page.
  *
- * Kept here rather than copied into five files so a new page cannot end up
- * missing from four of them. Each page ships the shell markup and an empty
+ * Kept here rather than copied into every page so a new one cannot end up
+ * missing from the rest. Each page ships the shell markup and an empty
  * `<aside class="side">`, and this fills it in. It writes chrome only, and
  * never touches anything to do with a secret.
  */
 const PAGES = [
   ['index.html', 'Overview'],
   ['sandbox.html', 'Sandbox'],
+  ['styling.html', 'Styling'],
   ['scratch.html', 'Scratch to reveal'],
   ['fake.html', 'Fake value'],
   ['security.html', 'Security check'],
