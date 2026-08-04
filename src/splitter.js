@@ -345,6 +345,17 @@ function randomDraws(w, h, cfg) {
     rowShift[i] = s;
   }
 
+  // A fresh draw every call, and that is load-bearing rather than incidental.
+  //
+  // Freezing one pattern and inverting it looks equivalent and is not. The pair
+  // still cancels and the leak is indistinguishable (0.164 against 0.166 over 24
+  // seeds), but with the pattern held fixed the first plane of the next cycle is
+  // the exact inverse of the last plane of this one. Every pixel then becomes a
+  // full-amplitude square wave at the cycle frequency: coherent in time, stable
+  // in space, which is the stimulus the visual system is most sensitive to.
+  //
+  // Measured across-cycle modulation doubles, 80.6 to 161.3, for no security in
+  // return. Re-randomising spreads that energy instead of concentrating it.
   const lat = new Float32Array(nw * nh * 9);
   for (let i = 0; i < lat.length; i++) lat[i] = cfg.rng();
 

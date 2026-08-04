@@ -2,11 +2,24 @@
 
 **Put text on a page that people can read and machines cannot.** A display layer
 that shows a secret to a human but not to a scraper, an LLM with a browser tool,
-an accessibility-tree reader, an OCR pass, or a screenshot. It ships the attacks
-against itself so you can check the claim rather than take it.
+an accessibility-tree reader, an OCR pass, or **a single still capture**. It ships
+the attacks against itself so you can check the claim rather than take it.
 
-Against machines that read the page, this is not a delay or an obfuscation. The
-text never becomes text. There is nothing in the DOM to find.
+Two halves, and they are not equally strong. Say them separately.
+
+**Against anything that reads the page, it is absolute.** The text never becomes
+text. There is nothing in the DOM to find, so there is nothing to obfuscate and
+nothing to race.
+
+**Against capture, it defeats stills and a recording defeats it.** Measured with
+Tesseract on the same element: plain text as a control reads 100%, one captured
+frame reads 0%, that frame after a box blur reads 0%, and **sixty frames of a
+screencast naively averaged reads 100%**. That last one is not a clever attack.
+It is one CDP call and `mean()`. Anything that records video gets the value whole.
+
+So: *raises the cost of a casual capture and defeats stills outright.* If your
+threat is someone who will record their screen, this is the wrong tool and no
+setting in it changes that.
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)

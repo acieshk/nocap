@@ -23,8 +23,7 @@ const PAGES = [
 const here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
 
 document.querySelector('.side').innerHTML = `
-  <a class="brand" href="index.html">nocap<small>Anti-screenshot, anti-AI display
-    for secrets on screen.</small></a>
+  <a class="brand" href="index.html">nocap<small>Unreadable to scrapers. Defeats a still, not a recording.</small></a>
   <nav>${PAGES.map(([href, label]) =>
     `<a href="${href}"${href.toLowerCase() === here ? ' aria-current="page"' : ''}>${label}</a>`
   ).join('')}</nav>

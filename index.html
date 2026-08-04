@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>nocap: anti-screenshot, anti-AI display for secrets</title>
+<title>nocap: unreadable to scrapers, and to a single capture</title>
 <meta name="description" content="Frames alternate at your display's refresh rate so your eye reads the content and a single capture gets noise. The text never enters the DOM.">
 <link rel="stylesheet" href="demo/shell.css">
 </head>
@@ -14,10 +14,14 @@
 
 <h1>nocap</h1>
 <p class="lede">
-  Content is split into frames that alternate at your display's refresh rate. Each
-  frame is noise. Their mean is the content. Your visual system does the
-  averaging, so you read it and a single screenshot does not. And the text never
-  enters the DOM, so page-reading AI agents get nothing at all.
+  Content is split into frames that alternate at your display's refresh rate.
+  Each frame is noise, their mean is the content, and your visual system does the
+  averaging. So you read it and <b>a single capture does not</b>. The text also
+  never enters the DOM, so scrapers and page-reading agents get nothing at all.
+  <br><br>
+  <b>A screen recording defeats it.</b> Sixty frames averaged reads back at 100%.
+  That is inherent to the method rather than a gap in it, and the panel on the
+  right is the cheap attack failing, not the expensive one.
 </p>
 
 <section class="compare">

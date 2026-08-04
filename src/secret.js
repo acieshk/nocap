@@ -366,6 +366,15 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
   // because dpr already moves the stroke.
   const sizePx = fontSizePx ?? height * dpr * 0.46;
   const strokePx = Math.max(2, Math.round(sizePx / 8));
+  // CALIBRATED PAIR: this 2 and the /8 above are matched to each other, not
+  // independently correct. The /8 underestimates the real stem of the default
+  // 600-weight face (a 48px face measures 7, not 6; 96px measures 14, not 12),
+  // so the shipped block is about 1.7x the TRUE stroke rather than 2x. Both the
+  // radius sweep and an independent gap measurement agree that is enough.
+  //
+  // So do not "fix" the /8 to match a rasterised measurement on its own. Doing
+  // that silently moves every block about 17% coarser, with more shimmer and
+  // nothing behind it. Either change both together or neither.
   const SATURATES = 2;
   base.noiseScale = Math.max(2, Math.round(strokePx * (base.blockRatio ?? SATURATES)));
   // blockRatio is how a preset is authored. It is not a split option, and
