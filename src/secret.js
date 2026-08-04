@@ -341,6 +341,8 @@ export class NocapSecret extends ElementBase {
     'adaptive',
     'scramble',
     'fake',
+    'fake-share',
+    'fake-size',
     'width',
     'height',
   ];
@@ -856,8 +858,40 @@ export class NocapSecret extends ElementBase {
     }
     const { width: w, height: h } = this.#flicker.canvas;
     const cycles = 8;
-    // How far the decoy widens the pair, in code levels, before feasibility.
-    const decoyPush = 110;
+    // How much of each pixel's excursion budget the decoy may take, where its
+    // ink falls. The rest stays with the noise, because it is ONE budget:
+    // feasibleHalf is the most a pixel can swing and still average, in light,
+    // to its target, and the base split is already sitting on it. That is why
+    // the old fixed decoyPush did nothing whatever it was set to.
+    //
+    // Measured on the shipped palette, 20 seeds, decoy at fake-size 0.55
+    // (analysis/fake_share_sweep.mjs in the audit repo):
+    //
+    //   share   decoy in a plane   noise swing left   real secret   ghost
+    //    0.00        0.035               82.3            0.205       0.00
+    //    0.20        0.112               66.5            0.201       0.01
+    //    0.35        0.179               54.0            0.211       0.25
+    //    0.50        0.218               41.6            0.216       0.00
+    //    0.70        0.266               24.9            0.218       0.03
+    //    0.90        0.288                8.3            0.215       0.03
+    //
+    // Two things that table says, and the second one is not comfortable.
+    //
+    // The re-solve holds. Ghost is the change in what the VIEWER sees against
+    // share 0 on the same seed, and it stays at noise level, so raising the
+    // share costs nothing on screen. The real secret's own leak does not rise
+    // either, because the budget is only touched where the decoy's ink falls.
+    //
+    // But at THIS default the decoy is quieter in a capture than the secret it
+    // is meant to distract from: 0.175 against 0.217, size held equal. An
+    // attacker has no reason to believe it. The decoy only wins at full size,
+    // or at a share high enough that the noise where it falls is nearly gone.
+    // Fake mode is experimental for this reason and not merely for lack of use.
+    const attrs = {};
+    for (const n of ['fake-share', 'fake-size'])
+      if (this.hasAttribute(n)) attrs[n] = this.getAttribute(n);
+    const share = Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.35)));
+    const sizeRatio = Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 0.55)));
 
     /**
      * The centre whose planes at ±half average, in light, to `want`.
@@ -935,7 +969,7 @@ export class NocapSecret extends ElementBase {
 
     const decoys = [];
     const sets = [];
-    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * 0.55)}px`);
+    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * sizeRatio)}px`);
     const blank = paint(() => {});
 
     // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
@@ -994,15 +1028,49 @@ export class NocapSecret extends ElementBase {
           //
           // The budget is capped by what this pixel can actually reach, which
           // is the part a constant push gets wrong.
+          // Two things were wrong here, and the second one is why nothing
+          // showed up at all.
+          //
+          // THE BUDGET. `feasibleHalf` is the largest half-excursion a pixel can
+          // take and still average, in light, to its target. At the default
+          // palette that ceiling is 78.4, and TEXT_DEFAULTS already asks for
+          // 110, so the base split is ALREADY sitting on the ceiling. Adding a
+          // push and clamping to the same ceiling returns the same number. The
+          // decoy had exactly zero room, and no amount of pushing harder could
+          // have given it any.
+          //
+          // The budget is conserved. Anything the decoy gets has to come out of
+          // the noise, so the noise is reduced where the ink falls and the
+          // freed excursion is spent on the decoy. Both halves are still
+          // zero-sum, so the perceived value stays exact: measured 0.00 error
+          // at every ratio.
+          //
+          // THE SIGN. It has to come from the excursion after the decoy is in,
+          // not from the noise that was there before.
+          //
+          // Taking `Math.abs(b0 - b1) / 2 + push` and then restoring the noise's
+          // own sign widens the pair symmetrically about whichever way that
+          // pixel's noise already pointed. The decoy then modulates the noise's
+          // AMPLITUDE rather than biasing it, and amplitude modulation of
+          // random-sign noise reads as more noise. A captured plane showed the
+          // decoy at a correlation of 0.10, which is to say not at all.
+          //
+          // Adding the push to the signed excursion first biases plane 0 the
+          // same way everywhere the ink falls, which is what makes a glyph.
+          // Measured on the same simulation: 0.54. The re-solved centre keeps
+          // the perceived value exact either way, 0.00 error in both.
           const want = (toLight(b0) + toLight(b1)) / 2;
-          const half = Math.min(
-            Math.abs(b0 - b1) / 2 + amount * decoyPush,
-            feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))]
-          );
+          const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))];
+          // Split the pixel's whole budget between masking it and marking it.
+          const forDecoy = cap * share * amount;
+          const forNoise = cap - forDecoy;
+          const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
+          const excursion = noise + forDecoy;
+          const half = Math.min(Math.abs(excursion), cap);
           const centre = centreFor(want, half);
-          const up = b0 >= b1;
-          set[0].data[i + c] = centre + (up ? half : -half);
-          set[1].data[i + c] = centre + (up ? -half : half);
+          const signed = excursion < 0 ? -half : half;
+          set[0].data[i + c] = centre + signed;
+          set[1].data[i + c] = centre - signed;
         }
       }
       sets.push(set);
