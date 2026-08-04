@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: comfort</title>
+<meta name="description" content="The readability axis. Live configurations side by side, with the flicker that buys masking separated from the flicker that buys nothing.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin:16px 0 0 }
+  .cfg { border:1px solid var(--line); border-radius:11px; overflow:hidden }
+  .cfg .top { padding:26px 16px; display:grid; place-items:center; gap:10px; background:#404040 }
+  .cfg .hd { padding:11px 15px; background:var(--panel); border-bottom:1px solid var(--line);
+             display:flex; gap:10px; align-items:baseline }
+  .cfg .hd b { font-size:13.5px }
+  .cfg .nums { border-top:1px solid var(--line); background:var(--panel); font-size:12px }
+  .cfg .nums div { display:flex; justify-content:space-between; padding:6px 15px; gap:12px }
+  .cfg .nums div + div { border-top:1px solid var(--line) }
+  .cfg .nums b { font-family:ui-monospace,monospace; font-weight:500; color:var(--fg) }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Comfort</h1>
+<p class="lede">
+  Every other number in this project is what an attacker gets. This page is about
+  the other axis: whether anyone can stand to look at it. Both panels below are
+  live and running at your display's refresh rate, so this is the one thing you
+  have to judge with your eyes rather than read off a table.
+</p>
+
+<div class="note">
+  <b>There is no comfort score here, on purpose.</b> Producing one means inventing
+  coefficients for a spatiotemporal contrast sensitivity function, and an invented
+  coefficient inside a metric is worse than no metric, because it survives review
+  by looking quantitative. What is measured below is <i>modulation</i>, which is
+  real and mechanical. Whether a given amount of it is tolerable is a judgement,
+  and it is yours.
+</div>
+
+<h2>Two kinds of flicker, and only one of them pays for itself</h2>
+<p>
+  <b>Within-pair</b> is the modulation between the two frames of one cycle. That
+  is the flicker the technique needs: it carries the masking and it cannot be
+  reduced without reducing the protection with it.
+</p>
+<p>
+  <b>Across-cycle</b> is the modulation between the last frame of one cycle and
+  the first of the next. It carries <b>nothing</b>. Every code level of it is
+  churn a viewer sits through for no security at all, and it is the number worth
+  attacking.
+</p>
+
+<div class="pair" id="pair"></div>
+
+<div class="rig">
+  <div class="knobs">
+    <label class="f"><span>Amplitude <em id="ampV">110</em></span>
+      <input type="range" id="amp" min="30" max="127" value="110"></label>
+    <label class="f"><span>Noise block <em id="blkV">6</em>px</span>
+      <input type="range" id="blk" min="2" max="14" value="6"></label>
+    <label class="f"><span>Hardness <em id="hardV">1.00</em></span>
+      <input type="range" id="hard" min="0.1" max="1" step="0.05" value="1"></label>
+  </div>
+</div>
+
+<h2>What is already settled</h2>
+<p>
+  <b>Re-randomising the noise on every cycle is correct</b>, and it looked like an
+  implementation detail for a long time. Freezing one pattern and inverting it
+  leaks the same, 0.164 against 0.166 over 24 seeds, so it is free on security and
+  the obvious thing to try.
+</p>
+<p>
+  It is also twice as bad to look at. Held fixed, the next cycle's first frame is
+  the exact inverse of this one's last, so every pixel becomes a full-amplitude
+  square wave at the cycle frequency: coherent in time, stable in space, which is
+  the stimulus the visual system is most sensitive to. Across-cycle modulation
+  goes from 80.6 to 161.3 for nothing in return.
+</p>
+
+<h2>Blue noise, which is free</h2>
+<p>
+  White noise puts equal energy at every spatial frequency, including the low
+  ones, and low spatial frequency is exactly where temporal sensitivity peaks. So
+  part of a white-noise field is flicker you feel without being paid for it in
+  masking. Blue noise pushes that energy toward the spatial limit instead, which
+  is why printing and rendering have preferred it for decades.
+</p>
+<p>
+  The thing that had to be checked is whether a blur eats it, since a
+  high-frequency bias is exactly what a blur removes. It does not, because the
+  block size still dominates. Measured over 12 seeds at the shipped defaults:
+</p>
+<table>
+  <tr><th>profile</th><th>raw leak</th><th>after the best blur</th></tr>
+  <tr><td>white, ships today</td><td>0.252</td><td>0.252</td></tr>
+  <tr><td>blue</td><td>0.254</td><td>0.254</td></tr>
+</table>
+<p>
+  Indistinguishable on security. But the comfort case did <b>not</b> come out the
+  way the theory predicted, and the panels above measure it live: blue noise
+  scores a slightly <b>higher</b> across-cycle modulation than white, around 52
+  against 48 at the defaults, while its raw leak comes out a little lower.
+</p>
+<div class="note">
+  <b>The spatial argument does not transfer to the temporal axis, and it should
+  not have been assumed it would.</b> Pushing noise energy to high spatial
+  frequency is about where the eye resolves detail. Across-cycle modulation is
+  about how much each pixel changes between one cycle and the next, and a
+  high-passed field is not obliged to change less. Two different axes, and only
+  one of them was reasoned about.
+  <br><br>
+  So blue noise is a small security win with a small churn cost, rather than the
+  free comfort win it was proposed as. Whether the finer texture actually reads
+  better is still a question for your eyes, which is why it is switchable and why
+  white is still the default.
+</div>
+
+<h2>Still untested, and the trap in the biggest one</h2>
+<p>
+  <b>Weighting amplitude toward the ink</b> is probably the largest comfort win
+  available, since flicker over empty background protects nothing. It is also the
+  easiest to get badly wrong: <b>where the noise is, is where the text is.</b>
+  Pushed far enough, the amplitude map traces the glyphs and a single frame gives
+  their shape away in the noise texture alone, without any value being recovered.
+  It has to be a gentle weighting over a blurred ink map, never a mask, and the
+  leak cost of each setting has to be measured rather than assumed.
+</p>
+<p>
+  <b>Adapting to the measured refresh rate.</b> <code>refreshHz</code> is already
+  surfaced and the presets ignore it. At 120Hz the cycle runs at 60 and the whole
+  trade moves, so the same preset is a different experience on different hardware.
+</p>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { splitFrames } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const CFGS = [
+  { profile: 'white', name: 'white noise', sub: 'what ships today' },
+  { profile: 'blue', name: 'blue noise', sub: 'energy pushed to where the eye is least sensitive' },
+];
+
+// Build the live elements once. Re-creating them on every slider move would
+// restart the animation and make the two panels impossible to compare.
+const els = CFGS.map((cfg) => {
+  const box = document.createElement('div');
+  box.className = 'cfg';
+  box.innerHTML = `<div class="hd"><b>${cfg.name}</b>
+    <span style="color:var(--faint);font-size:12px">${cfg.sub}</span></div>
+    <div class="top"></div>
+    <div class="nums">
+      <div><span>within-pair, the flicker that masks</span><b class="wp">…</b></div>
+      <div><span>across-cycle, the flicker that does not</span><b class="ac">…</b></div>
+      <div><span>raw leak</span><b class="lk">…</b></div>
+    </div>`;
+  const el = document.createElement('nocap-secret');
+  el.setAttribute('width', '270');
+  el.setAttribute('height', '58');
+  el.setAttribute('color', '#6d6d6d');
+  el.setAttribute('background', '#404040');
+  box.querySelector('.top').appendChild(el);
+  $('pair').appendChild(box);
+  return { ...cfg, box, el };
+});
+
+for (const { el } of els) el.secret = '4471-0092-8834';
+
+/**
+ * Modulation is the mean absolute difference between two frames, in code
+ * levels. Within a pair it is the masking. Across a cycle boundary it is churn.
+ */
+const modulation = (a, b) => {
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < a.data.length; i += 4) { sum += Math.abs(a.data[i] - b.data[i]); n++; }
+  return sum / n;
+};
+
+function measure() {
+  const amp = +$('amp').value, blk = +$('blk').value, hard = +$('hard').value;
+  $('ampV').textContent = amp; $('blkV').textContent = blk;
+  $('hardV').textContent = hard.toFixed(2);
+
+  const cv = document.createElement('canvas');
+  cv.width = 270; cv.height = 58;
+  const c = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+  c.fillStyle = '#404040'; c.fillRect(0, 0, cv.width, cv.height);
+  c.font = '600 26px ui-monospace, monospace'; c.fillStyle = '#6d6d6d';
+  c.textBaseline = 'middle'; c.fillText('4471-0092-8834', 10, cv.height / 2);
+  const src = c.getImageData(0, 0, cv.width, cv.height);
+
+  for (const cfg of els) {
+    // Two consecutive cycles from the same stream, so the across-cycle number
+    // compares frames a viewer actually sees back to back.
+    let seed = 31;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const opts = { mode: 'amplitude', amplitude: amp, hardness: hard, noiseScale: blk,
+      chroma: 0, linearLight: true, gamma: 2.4, noiseProfile: cfg.profile, rng };
+    const cycle1 = splitFrames(src, opts);
+    const cycle2 = splitFrames(src, opts);
+
+    cfg.box.querySelector('.wp').textContent = modulation(cycle1[0], cycle1[1]).toFixed(1);
+    cfg.box.querySelector('.ac').textContent =
+      modulation(cycle1[cycle1.length - 1], cycle2[0]).toFixed(1);
+
+    // Live element too, so the panel above matches the numbers below it.
+    for (const [a, v] of [['amplitude', amp], ['noise-scale', blk], ['hardness', hard]]) {
+      cfg.el.setAttribute(a, v);
+    }
+    cfg.el.setAttribute('noise-profile', cfg.profile);
+    cfg.box.querySelector('.lk').textContent = (cfg.el.measureLeak() ?? 0).toFixed(3);
+  }
+}
+
+let t = 0;
+for (const id of ['amp', 'blk', 'hard']) {
+  $(id).oninput = () => { clearTimeout(t); t = setTimeout(measure, 80); };
+}
+measure();
+setTimeout(measure, 700);
+</script>
+</body>
+</html>

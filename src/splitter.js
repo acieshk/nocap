@@ -114,6 +114,20 @@ function resolveCfg(opts = {}) {
     hardness: clamp(opts.hardness ?? 1, 0, 1),
     chroma: clamp(opts.chroma ?? 1, 0, 1),
     noiseScale: Math.max(1, Math.floor(opts.noiseScale ?? 1)),
+    // 'blue' high-passes the cell lattice so neighbouring cells tend to differ.
+    // White noise puts equal energy at every spatial frequency including the low
+    // ones, and low spatial frequency is exactly where temporal sensitivity
+    // peaks, so those components are the part you FEEL without buying masking.
+    noiseProfile: opts.noiseProfile === 'blue' ? 'blue' : 'white',
+    // 0 keeps the amplitude uniform. Above 0 it leans toward where the ink is,
+    // on the reasoning that flicker over empty background protects nothing.
+    //
+    // THE TRAP: where the noise is, is where the text is. Pushed far enough the
+    // amplitude map traces the glyphs and a single frame shows their shape in
+    // the noise texture alone. It is a weighting rather than a mask for that
+    // reason, the ink map is blurred before use so it cannot follow an edge, and
+    // the leak cost is measured on the comfort page rather than assumed away.
+    inkBias: clamp(opts.inkBias ?? 0, 0, 1),
     decoy: opts.decoy ?? null,
     rng: opts.rng ?? Math.random,
   };
@@ -358,6 +372,30 @@ function randomDraws(w, h, cfg) {
   // return. Re-randomising spreads that energy instead of concentrating it.
   const lat = new Float32Array(nw * nh * 9);
   for (let i = 0; i < lat.length; i++) lat[i] = cfg.rng();
+
+  // Blue noise: subtract the local mean from each cell so the field loses its
+  // low-frequency content. Cheap high-pass, and the standard reason printing and
+  // rendering prefer blue noise over white at equal amplitude.
+  if (cfg.noiseProfile === 'blue') {
+    const src = Float32Array.from(lat);
+    const at = (cx, cy, k) => {
+      const x = Math.min(nw - 1, Math.max(0, cx));
+      const y = Math.min(nh - 1, Math.max(0, cy));
+      return src[(y * nw + x) * 9 + k];
+    };
+    for (let cy = 0; cy < nh; cy++) {
+      for (let cx = 0; cx < nw; cx++) {
+        for (let s = 0; s < 3; s++) {
+          const k = s * 3;
+          const mean = (at(cx - 1, cy, k) + at(cx + 1, cy, k)
+                      + at(cx, cy - 1, k) + at(cx, cy + 1, k)) / 4;
+          // Re-centre on 0.5 so the sign decision stays balanced overall.
+          lat[(cy * nw + cx) * 9 + k] = Math.min(1, Math.max(0,
+            src[(cy * nw + cx) * 9 + k] - mean + 0.5));
+        }
+      }
+    }
+  }
 
   const chroma = cfg.chroma;
   return (x, y, c) => {

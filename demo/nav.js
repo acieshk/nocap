@@ -12,6 +12,7 @@ const PAGES = [
   ['styling.html', 'Styling'],
   ['scenarios.html', 'Scenarios'],
   ['algorithms.html', 'Algorithms'],
+  ['comfort.html', 'Comfort'],
   ['challenge.html', 'Scraping challenge'],
   ['scratch.html', 'Scratch to reveal'],
   ['fake.html', 'Fake value'],

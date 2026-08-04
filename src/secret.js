@@ -73,6 +73,12 @@ const TEXT_DEFAULTS = {
   // peaks, so it shimmers more at 30Hz than a fine block does. strength="weak"
   // deliberately sits under 2 for that reason and accepts the blur exposure.
   blockRatio: 2,
+  // White ships. Blue costs nothing on security (0.254 against 0.252 raw, and
+  // identical after the best blur, over 12 seeds) and moves the noise energy
+  // away from the low spatial frequencies where temporal sensitivity peaks. It
+  // is not the default only because the comfort win is unverified on a real
+  // panel, which is the one thing no measurement here can settle.
+  noiseProfile: 'white',
   bankSize: 6,
 };
 
@@ -399,6 +405,7 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
     // 'amplitude' masks. The others are here because a claim that the obvious
     // alternatives fail is worth being able to run rather than read.
     mode: attrs.mode ?? base.mode,
+    noiseProfile: attrs['noise-profile'] ?? base.noiseProfile,
     chroma: num('chroma', base.chroma),
     gamma: num('gamma', base.gamma),
     hardness: num('hardness', base.hardness),
@@ -432,6 +439,7 @@ export class NocapSecret extends ElementBase {
     'scratch',
     'scratch-hint',
     'noise-scale',
+    'noise-profile',
     'chroma',
     'hardness',
     'gamma',
