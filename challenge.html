@@ -94,7 +94,6 @@
 <table>
   <tr><th>row</th><th>what beats it</th></tr>
   <tr><td>amplitude, default and strong</td><td>Average a burst of frames</td></tr>
-  <tr><td>aperture</td><td>Average a burst, but six frames rather than two</td></tr>
   <tr><td>fitted from white</td><td>Same as amplitude. Shown because the palette asked for is unmaskable and the element substituted one that is not</td></tr>
   <tr><td>ink-bias 0.2</td><td>Same as amplitude, with slightly more of the value surviving one frame</td></tr>
   <tr><td class="ok">scratch to reveal</td><td class="ok">Nothing here. It needs a pointer to sweep it, and it is never on screen unless a human does</td></tr>
@@ -163,7 +162,6 @@ const SHAPES = { card: '4111 1111 1111 1111', phone: '+1 (555) 010-0199', money:
 const ROWS = [
   { label: 'amplitude, default', attrs: {} },
   { label: 'amplitude, strong', attrs: { strength: 'strong' } },
-  { label: 'aperture', attrs: { mode: 'aperture', frames: '6' } },
   { label: 'fitted from white', attrs: { color: '#ffffff', background: '#000000' } },
   { label: 'scratch to reveal', attrs: { scratch: '', 'scratch-linger': '8' } },
   { label: 'ink-bias 0.2', attrs: { 'ink-bias': '0.2' } },

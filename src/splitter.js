@@ -80,8 +80,15 @@ function resolveCfg(opts = {}) {
   return {
     mode,
     // 'aperture' hides by showing 1/N of the image per frame, so N IS the
-    // protection and 2 would reveal half the content in one capture. 6 is the
-    // most a 60Hz panel can cycle inside the ~100ms the eye integrates over.
+    // protection and 2 would reveal half the content in one capture.
+    //
+    // N is also the problem. The cycle rate is refresh/N, so 6 frames on a 60Hz
+    // panel cycles at 10Hz, and 8 to 15Hz is where the eye's temporal
+    // sensitivity peaks. Aperture is therefore uncomfortable to look at almost
+    // everywhere, and measurably so on a real display even though its per-frame
+    // modulation is a quarter of amplitude's. Per-frame modulation does not
+    // capture frequency, which is the gap that made this look like the calm
+    // option when it is the opposite. Wants 120Hz+ to be tolerable at all.
     frames: mode === 'aperture' ? Math.max(3, opts.frames ?? 6)
       : Math.max(2, opts.frames ?? 2),
     amplitude,

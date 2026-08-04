@@ -55,16 +55,23 @@
 <div id="out"></div>
 
 <div class="note">
-  <b>Looked at on a real panel, and the verdict changed what this page is for.</b>
-  aperture reads as genuinely usable rather than as a curiosity, which its 21.6
-  modulation against amplitude's 94.2 predicted but could not establish. It is
-  the backup to reach for when the palette has no headroom or the flicker is too
-  much. The high-passed profile reads much like plain amplitude, which matches
-  the measurements: the spectrum shift is real and small, and it was never going
-  to be visible the way a change of mechanism is.
+  <b>A correction, and the metric is the thing that was wrong.</b> This page said
+  aperture was the calm option, on the strength of 21.6 modulation against
+  amplitude's 94.2. Looked at on a real panel it is the <b>worst</b> of them, and
+  the numbers never disagreed with that. They were incomplete.
   <br><br>
-  That judgement is the one thing on this page no measurement could produce, and
-  it is why the live panels sit above every number.
+  Modulation here is measured <b>per frame boundary</b> and says nothing about how
+  often those boundaries arrive. Aperture needs six frames per cycle where
+  amplitude needs two, so on a 60Hz display its cycle runs at <b>10Hz</b> against
+  amplitude's 30Hz. Around 8 to 15Hz is where the eye's temporal sensitivity
+  peaks, so aperture puts a smaller modulation at the worst possible rate and
+  amplitude puts a larger one near fusion. Smaller steps, far more visible.
+  <br><br>
+  So the comfort axis needs frequency in it, not just amplitude, and until it
+  does these numbers rank configurations only when the frame count is equal.
+  Aperture remains worth having for the case it was built for, a palette with no
+  headroom at all, but it is not the comfortable option and this page should not
+  have said so on one number.
 </div>
 
 <h2>Both axes, on one page</h2>
@@ -119,7 +126,7 @@
   content before going past 0.3.
 </div>
 
-<h2>The first thing merging the pages showed</h2>
+<h2>What the merged page got wrong first</h2>
 <p>
   <b>aperture is far calmer than amplitude</b>, and neither page could have told
   you that on its own. Measured on the panels above at the shipped block:
@@ -130,11 +137,11 @@
   <tr><td>aperture</td><td>0.148</td><td><b>21.6</b></td><td><b>21.6</b></td></tr>
 </table>
 <p>
-  About a quarter of the modulation. That is the trade stated properly at last:
-  amplitude throws every pixel around every frame and you feel all of it, while
-  aperture moves a band and leaves the rest still. What aperture gives up is that
-  a burst of N frames reassembles the value exactly, where amplitude degrades
-  every frame it appears in.
+  A quarter of the modulation, and it reads far worse. The number is per frame
+  boundary and aperture has three times as many of them per cycle, so what looks
+  like a calmer field is a smaller step delivered at 10Hz instead of 30Hz. The
+  table above is only comparable between modes with the same frame count, which
+  is a limitation of the measurement rather than a property of the modes.
 </p>
 <p>
   Note also that aperture has within-pair equal to across-cycle. Its frame
