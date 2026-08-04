@@ -1,0 +1,106 @@
+/* Shared chrome for every demo page.
+   The page IS the element's background: #404040, the darkest colour that can
+   still carry enough noise to mask. Going darker looks better and cannot be
+   protected, which is the whole trade this library is about, so the page meets
+   the secret rather than the other way round. */
+:root { --bg:#404040; --fg:#ededed; --muted:#c9c9c9; --faint:#a0a0a0; --line:#565656;
+        --panel:#3a3a3a; --panel2:#4c4c4c; --accent:#a9bcff; color-scheme: dark; }
+* { box-sizing:border-box }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+       font:15px/1.65 ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
+
+/* ------------------------------------------------------------------ shell */
+.shell { display:grid; grid-template-columns:196px minmax(0,1fr); gap:44px;
+         max-width:1080px; margin:0 auto; padding:0 22px 90px }
+.side { position:sticky; top:0; align-self:start; height:100vh; padding:30px 0 20px;
+        display:flex; flex-direction:column; gap:6px }
+.brand { font:700 21px/1 ui-sans-serif,system-ui; letter-spacing:-.03em; margin:0 0 4px;
+         color:var(--fg); text-decoration:none }
+.brand small { display:block; font:400 11.5px/1.4 ui-sans-serif; letter-spacing:0;
+               color:var(--faint); margin-top:7px }
+.side nav { display:flex; flex-direction:column; gap:1px; margin-top:16px }
+.side nav a { color:var(--muted); text-decoration:none; font-size:13.5px; padding:6px 10px;
+              border-radius:6px; border-left:2px solid transparent }
+.side nav a:hover { background:var(--panel); color:var(--fg) }
+.side nav a[aria-current=page] { background:var(--panel); color:var(--fg);
+                                 border-left-color:var(--accent); font-weight:600 }
+.side .foot { margin-top:auto; font-size:12px; color:var(--faint) }
+.side .foot a { color:var(--faint) }
+main { padding:30px 0 0; min-width:0 }
+
+@media (max-width:860px) {
+  .shell { grid-template-columns:1fr; gap:0 }
+  .side { position:static; height:auto; padding:22px 0 0 }
+  .side nav { flex-direction:row; overflow-x:auto; gap:4px; margin:12px -22px 0; padding:0 22px 4px }
+  .side nav a { white-space:nowrap; border-left:0; border-bottom:2px solid transparent }
+  .side nav a[aria-current=page] { border-left:0; border-bottom-color:var(--accent) }
+  .side .foot { display:none }
+}
+
+/* ------------------------------------------------------------------- type */
+h1 { font:700 38px/1.05 ui-sans-serif,system-ui; letter-spacing:-.03em; margin:0 0 12px }
+h2 { font:600 11px/1 ui-sans-serif,system-ui; letter-spacing:.09em; text-transform:uppercase;
+     color:var(--faint); margin:46px 0 14px }
+h3 { font:600 15px/1.3 ui-sans-serif,system-ui; margin:26px 0 8px }
+p { color:var(--muted); margin:0 0 14px; max-width:68ch }
+.lede { color:var(--faint); font-size:16px; max-width:64ch }
+a { color:var(--accent) }
+code { font-family:ui-monospace,monospace; font-size:.92em; color:var(--accent) }
+ul { margin:10px 0 14px; padding-left:18px; color:var(--muted); font-size:13.5px }
+li { margin-bottom:6px }
+small { font-size:12.5px; color:var(--faint) }
+
+/* ------------------------------------------------------------------ parts */
+canvas { display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line);
+         image-rendering:pixelated }
+.compare { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:26px 0 0 }
+.pane { display:flex; flex-direction:column; gap:8px; min-width:0 }
+.pane .lbl, .lbl { font:600 10.5px/1 ui-sans-serif; letter-spacing:.06em; text-transform:uppercase;
+             color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pane .lbl em, .lbl em { font-style:normal; font-family:ui-monospace,monospace; text-transform:none; letter-spacing:0 }
+
+.rig { border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:16px 0 0 }
+.rig .bar { padding:13px 16px; background:var(--panel); border-bottom:1px solid var(--line);
+            display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+.rig .bar.btm { border-bottom:0; border-top:1px solid var(--line) }
+.rig .body { padding:28px 16px; display:grid; place-items:center; gap:12px }
+.knobs { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px 20px;
+         padding:16px; border-top:1px solid var(--line); background:var(--panel) }
+label.f { display:grid; gap:3px }
+label.f > span { font-size:11.5px; color:var(--faint) }
+em { font-style:normal; font-family:ui-monospace,monospace; color:var(--fg) }
+input[type=range] { width:100%; accent-color:var(--accent); margin:0 }
+input[type=color] { width:100%; height:28px; padding:0; border:1px solid var(--line);
+                    border-radius:6px; background:none; cursor:pointer }
+input[type=text], select { background:#2b2b2b; color:var(--fg); border:1px solid var(--line);
+                           border-radius:6px; padding:6px 8px; font:inherit; font-size:13px; width:100% }
+button { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px;
+         padding:6px 12px; font:inherit; font-size:13px; cursor:pointer }
+button:hover { filter:brightness(1.35) }
+button.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset }
+.readout { display:flex; gap:20px; flex-wrap:wrap; padding:12px 16px; border-top:1px solid var(--line);
+           background:var(--panel); font-size:12px; color:var(--faint) }
+.readout b { font-family:ui-monospace,monospace; color:var(--fg); font-weight:500 }
+.ok{color:#6fa76f!important} .warn{color:#c2a15c!important} .bad{color:#d9885f!important}
+
+table { width:100%; border-collapse:collapse; font-size:13.5px; margin:0 0 8px }
+th { text-align:left; font:600 11px/1 ui-sans-serif; letter-spacing:.07em; text-transform:uppercase;
+     color:var(--faint); padding:0 10px 8px 0; border-bottom:1px solid var(--line) }
+td { padding:8px 10px 8px 0; border-bottom:1px solid var(--line); vertical-align:top }
+td:last-child, th:last-child { text-align:right; white-space:nowrap }
+.checks { padding:4px 16px }
+.checks td:first-child { width:18px; font-weight:700 }
+.checks .safe{color:#86ad86} .checks .leak{color:#c98a63} .checks .muted{color:#7d7d7d}
+pre { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px;
+      overflow-x:auto; font-size:12.5px; color:var(--muted); margin:14px 0 0 }
+.note { border-left:2px solid #7a6134; background:#332b1a; padding:11px 15px; color:#d9bd80;
+        font-size:13.5px; margin:16px 0 0; border-radius:0 6px 6px 0 }
+.note b { color:#f0d9a0 }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:12px; margin:18px 0 0 }
+.card { border:1px solid var(--line); border-radius:10px; padding:15px 16px; background:var(--panel);
+        text-decoration:none; display:block }
+.card:hover { border-color:var(--accent) }
+.card b { display:block; color:var(--fg); font-size:14px; margin-bottom:4px }
+.card span { color:var(--faint); font-size:12.5px; line-height:1.5 }
+@media (max-width:620px){ h1{font-size:30px} .compare{grid-template-columns:1fr}
+  td:last-child,th:last-child{white-space:normal} }

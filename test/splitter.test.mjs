@@ -856,3 +856,25 @@ test('letter-spacing is a CSS length or it is not used at all', async () => {
   assert.equal(ls('0.1em'), '0.1em');  // already a length, left alone
   assert.equal(ls('5%'), '5%');
 });
+
+test('a size attribute has to be positive, not merely finite', async () => {
+  const { resolveText } = await import('../src/secret.js');
+  const def = resolveText({}, 56);
+  assert.equal(def.sizePx, 26, 'default at height 56');
+
+  // `+''` is 0 and `+'-5'` is -5. Both are finite, so a finite check passes
+  // them, and the 6px floor then turns them into text nobody can read without
+  // saying anything. A bare `<nocap-secret font-size>` is the easy way in.
+  for (const bad of ['', '0', '-5', '-0.1']) {
+    assert.equal(resolveText({ 'font-size': bad }, 56).sizePx, def.sizePx,
+      `font-size="${bad}" must fall back, not clamp to 6`);
+    assert.equal(resolveText({ 'font-scale': bad }, 56).sizePx, def.sizePx,
+      `font-scale="${bad}" must fall back, not clamp to 6`);
+  }
+  // Still finite-checked, and still usable when it is a real size.
+  assert.equal(resolveText({ 'font-size': 'abc' }, 56).sizePx, def.sizePx);
+  assert.equal(resolveText({ 'font-size': '30' }, 56).sizePx, 30);
+  assert.equal(resolveText({ 'font-scale': '0.25' }, 56).sizePx, 14);
+  // 0 is a legitimate padding, so the positive rule must not leak onto it.
+  assert.equal(resolveText({ 'padding-x': '0' }, 56).padX, 0);
+});

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: security check</title>
+<meta name="description" content="A secret generated fresh on every load, rendered only through nocap, then searched for across every surface a scraper or an agent can read.">
+<link rel="stylesheet" href="demo/shell.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Security check</h1>
+<p class="lede">
+  A secret is generated when this page loads, handed straight to the element, and
+  never written anywhere else. Then every surface a scraper, an agent or a
+  reader-mode extension can reach gets searched for it.
+</p>
+
+<h2>Why there is no text box here</h2>
+<p>
+  Every other page on this site lets you type the secret, which is convenient and
+  quietly ruins the test. A value you typed lives in
+  <code>input.value</code>, and that is a surface of its own: it survives View
+  Source, it is invisible to <code>innerText</code>, and
+  <code>querySelectorAll('input')</code> hands it over instantly. The audit
+  correctly reported a leak, the leak was the demo's own text box, and a check
+  that always fails for a reason you have to explain away is not evidence of
+  anything.
+</p>
+<p>
+  So this page has no field. The value comes from
+  <code>fakeLike()</code>, exists only as a JavaScript local, goes to
+  <code>el.secret</code>, and is passed to <code>auditPage()</code> to be searched
+  for. <b>It is never rendered as text, so it is never shown to you either.</b>
+  You get its shape and its length, which is what you need to trust the search
+  without the page having to leak it to prove itself.
+</p>
+<p>
+  <b>Reload for a different one.</b> The format rotates and the digits are random,
+  so a pass cannot be one lucky string that happens not to appear anywhere.
+</p>
+
+<div class="rig">
+  <div class="bar">
+    <span class="lbl">This load's secret</span>
+    <span id="fmt" style="font-family:ui-monospace,monospace;font-size:12.5px;color:var(--fg)">…</span>
+  </div>
+  <div class="body" id="stage">
+    <nocap-secret id="chip" width="320" height="64" strength="medium"
+                  color="#6d6d6d" background="#404040"></nocap-secret>
+  </div>
+  <table class="checks" id="checks"><tr><td colspan="3" class="muted">running…</td></tr></table>
+  <div class="bar btm">
+    <button id="again">Generate a new one</button>
+    <button id="rerun">Re-run the checks</button>
+    <span id="out" style="font-family:ui-monospace,monospace;font-size:12px;color:var(--faint)"></span>
+  </div>
+</div>
+
+<p style="margin-top:14px">
+  The canvas row is the honest one and it never says "clean". The canvas has to
+  hold the correctly arranged image or you could not read it either, so a run of
+  frames averaged together <i>is</i> the plaintext. No mode changes that, and
+  reporting it as safe would be a lie. Both attacks below run for real.
+</p>
+
+<h2>How DevTools defeats it</h2>
+<p>
+  Listing a defeat without showing it invites the assumption it is theoretical.
+</p>
+<div class="rig">
+  <div class="bar">
+    <button id="hookBtn">Hook fillText</button>
+    <button id="avgBtn">Average a run of frames</button>
+    <label class="f" style="margin-left:auto"><span>scramble</span>
+      <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
+  </div>
+  <div class="body" id="attackOut" style="min-height:44px"></div>
+</div>
+<div class="note">
+  <code>scramble</code> blunts the one line <code>fillText</code> dump and keeps
+  the value out of a heap search, but it is obfuscation rather than encryption.
+  The real line is <b>automated pipeline against targeted attacker</b>. nocap
+  defeats the pipeline. It never defeats the person who has decided to come after
+  the value, because the client belongs to them.
+</div>
+
+<h2>Run this on your own page</h2>
+<p>
+  The table above is not special to this demo. It is the same
+  <code>auditPage()</code> the library exports, which is there so you can check an
+  integration rather than take the claim on trust.
+</p>
+<pre>import { auditPage } from 'nocap';
+
+const report = await auditPage(secret);
+console.log(report.report);
+if (!report.clean) throw new Error(`leaked in ${report.found.join(', ')}`);</pre>
+<div class="note">
+  It takes the plaintext, because it has to search for it. That puts the value in
+  one more place while the call runs, so use it in development and in tests, not
+  in a production render path.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script>
+// THE ATTACK, not the library: a closed shadow root is closed to page script but
+// not to anyone who patches attachShadow first, which is what an extension does.
+window.__roots = new Map();
+const __attach = Element.prototype.attachShadow;
+Element.prototype.attachShadow = function (init) {
+  const r = __attach.call(this, init);
+  window.__roots.set(this, r);
+  return r;
+};
+</script>
+<script type="module">
+import './src/secret.js';
+import { auditPage, fakeLike, detectFormat, averageFrames } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const chip = $('chip');
+
+/**
+ * Shapes to draw from. Only their FORMAT is used: fakeLike() reads the pattern
+ * and builds a fresh random value of the same shape, so nothing here is ever the
+ * value being audited. Rotating the format matters as much as rotating the
+ * digits, because a search that only ever looks for 16 digits would not notice a
+ * surface that leaks letters.
+ */
+const SHAPES = [
+  '4111 1111 1111 1111',
+  '+1 (555) 010-0199',
+  'AKIA2E4NQ7XZLM3WPB9K',
+  '123-45-6789',
+  'GB29 NWBK 6016 1331 9268 19',
+  'nocap-9f2a-4c81-b73e',
+];
+
+// Module scope, never a property of anything reachable from the page, and never
+// written into the DOM. The element takes it, auditPage searches for it, and
+// that is the whole of its life.
+let secret = '';
+
+function regenerate() {
+  const shape = SHAPES[(Math.random() * SHAPES.length) | 0];
+  secret = fakeLike(shape, { mode: 'auto' });
+  chip.secret = secret;
+  // The shape and the length, never the value. Enough to know what is being
+  // searched for without the page having to leak it to prove the point.
+  const f = detectFormat(secret);
+  $('fmt').textContent = `${f.describe}, ${secret.length} characters, never written to the DOM`;
+}
+
+const LABEL = {
+  htmlSource: 'HTML source (View Source, curl, scrapers)',
+  dom: 'Live DOM (DevTools inspector)',
+  innerText: 'Rendered text (Reader mode, innerText)',
+  selection: 'Select All and Copy',
+  formValues: 'Form control values',
+  a11yTree: 'Accessible name (aria-label, title, alt)',
+  shadowDom: 'Open shadow roots',
+  storage: 'localStorage and sessionStorage',
+  canvas: 'Canvas pixels (average a run of frames)',
+};
+
+async function run() {
+  // The attack panel prints recovered values into the page on purpose, so
+  // leaving one up would report a leak this page created a moment ago.
+  $('attackOut').innerHTML = '';
+  $('checks').innerHTML = '<tr><td colspan="3" class="muted">running…</td></tr>';
+  await new Promise((r) => requestAnimationFrame(r));
+
+  const { surfaces, found } = await auditPage(secret);
+  $('checks').innerHTML = Object.entries(surfaces).map(([key, hit]) => {
+    const bad = hit === true || hit === 'recoverable';
+    const note = hit === true ? 'CONTAINS IT'
+      : hit === 'recoverable' ? 'recoverable with DevTools, inherent'
+      : hit === 'unavailable' ? 'could not check' : 'not found';
+    return `<tr class="${bad ? 'leak' : 'safe'}"><td>${bad ? '✗' : '✓'}</td>` +
+      `<td>${LABEL[key] ?? key}</td><td>${note}</td></tr>`;
+  }).join('');
+
+  const dom = Object.keys(surfaces).length - 1;   // every surface but the canvas
+  $('out').textContent = found.length
+    ? `found in ${found.length} of ${dom} DOM surfaces: ${found.join(', ')}`
+    : `not found in any of the ${dom} DOM surfaces. Canvas is recoverable, as always`;
+  $('out').className = found.length ? 'bad' : 'ok';
+}
+
+$('again').onclick = async () => { regenerate(); await run(); };
+$('rerun').onclick = run;
+$('scr').onchange = () => {
+  $('scr').value ? chip.setAttribute('scramble', '') : chip.removeAttribute('scramble');
+  // scramble is applied when the value is set, so it has to be set again.
+  chip.secret = secret;
+};
+
+/* -------------------------------------------------------------- attacks -- */
+$('hookBtn').onclick = async () => {
+  // Both prototypes: text is rasterised through an OffscreenCanvas, so hooking
+  // only CanvasRenderingContext2D catches nothing and looks like a pass.
+  const protos = [CanvasRenderingContext2D.prototype];
+  if (typeof OffscreenCanvasRenderingContext2D === 'function')
+    protos.push(OffscreenCanvasRenderingContext2D.prototype);
+  const orig = protos.map((p) => p.fillText);
+  const seen = [];
+  protos.forEach((p, i) => {
+    p.fillText = function (t, ...r) { seen.push(String(t)); return orig[i].call(this, t, ...r); };
+  });
+  await chip.render();
+  protos.forEach((p, i) => { p.fillText = orig[i]; });
+  $('attackOut').innerHTML =
+    `<div style="font-family:ui-monospace,monospace;font-size:13px;color:#c98a63;word-break:break-all">` +
+    `fillText saw: ${seen.join(' ') || '(nothing)'}</div>` +
+    `<div style="font-size:12px;color:var(--faint)">${chip.hasAttribute('scramble')
+      ? 'scrambled: the glyphs, without their order'
+      : 'the whole secret, in a single call'}</div>`;
+};
+
+$('avgBtn').onclick = async () => {
+  const cv = window.__roots.get(chip)?.querySelector('canvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  // A run of frames, not two: the player cycles a bank of noise sets, so an
+  // arbitrary pair can straddle two sets and fail to cancel.
+  const caps = [];
+  for (let i = 0; i < 8; i++) {
+    caps.push(ctx.getImageData(0, 0, cv.width, cv.height));
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  const m = averageFrames(caps);
+  const out = document.createElement('canvas');
+  out.width = m.width; out.height = m.height;
+  out.style.cssText = 'width:300px;border-radius:6px;border:1px solid var(--line)';
+  out.getContext('2d').putImageData(new ImageData(m.data, m.width, m.height), 0, 0);
+  $('attackOut').innerHTML =
+    '<div style="font-size:12px;color:#c98a63;margin-bottom:6px">recovered from 8 frames. No mode prevents this</div>';
+  $('attackOut').appendChild(out);
+};
+
+regenerate();
+await run();
+</script>
+</body>
+</html>

@@ -193,6 +193,27 @@ function num(attrs, name, fallback) {
 }
 
 /**
+ * A length that has to be positive. Zero or less is not a smaller font, it is
+ * no font at all.
+ *
+ * `num` cannot cover this. `+''` is 0 and `+'-5'` is -5, so both are finite,
+ * both pass a finite check, and both then land on the 6px floor and render the
+ * secret at a size nobody can read without a word being said. That is the same
+ * silent wrong output the finite check exists to stop, one step further along.
+ *
+ * The empty case is the one that matters: a bare `<nocap-secret font-size>` is
+ * an easy attribute to write by accident, and it coerces straight to 0.
+ */
+function positive(attrs, name, fallback) {
+  if (!(name in attrs)) return fallback;
+  const v = +attrs[name];
+  if (Number.isFinite(v) && v > 0) return v;
+  warnOnce(`${name}=${attrs[name]}`,
+    `${name}="${attrs[name]}" is not a positive number. Using ${fallback}.`);
+  return fallback;
+}
+
+/**
  * Canvas letterSpacing wants a CSS length. A bare number and an unparseable
  * string are both silent no-ops, so the unit is added when missing and anything
  * that is not a length falls back rather than being passed through.
@@ -228,10 +249,11 @@ function spacing(raw) {
  */
 export function resolveText(attrs = {}, height = 56) {
   // 0.46 of the height is the long-standing default and stays the default.
-  const scale = num(attrs, 'font-scale', 0.46);
-  // The 6px floor cannot double as the guard here, because Math.max(6, NaN)
-  // is NaN. The value has to be finite before it gets this far.
-  const sizePx = Math.max(6, Math.round(num(attrs, 'font-size', height * scale)));
+  const scale = positive(attrs, 'font-scale', 0.46);
+  // The 6px floor cannot double as the guard here. Math.max(6, NaN) is NaN, and
+  // Math.max(6, 0) is a readable-looking 6 that nobody can actually read. The
+  // value has to be a real positive size before it gets this far.
+  const sizePx = Math.max(6, Math.round(positive(attrs, 'font-size', height * scale)));
   const weight = attrs['font-weight'] ?? '600';
   const family = attrs['font-family'] ?? 'ui-monospace, monospace';
   return {
@@ -739,6 +761,22 @@ export class NocapSecret extends ElementBase {
   }
 
   async #drawScrambled(font, color, background) {
+    // The font reaches this path, baked into the string. The rest of the
+    // styling has nothing here to act on: every glyph is drawn alone into its
+    // own cell and the cells are placed below, so there is no run of text to
+    // space out and no single fillText to align or pad. That is a consequence
+    // of how scrambling works rather than an oversight, but an attribute that
+    // is honoured everywhere else and quietly ignored here is exactly the kind
+    // of silence the value checks were added to remove.
+    const inert = ['letter-spacing', 'text-align', 'padding-x', 'padding-y']
+      .filter((a) => this.hasAttribute(a));
+    if (inert.length) {
+      warnOnce(`scramble-inert:${inert.join()}`,
+        `${inert.join(', ')} ${inert.length > 1 ? 'have' : 'has'} no effect while ` +
+        'scramble is on, because each glyph is drawn into its own cell. The font ' +
+        'attributes do apply. See issue #14.');
+    }
+
     const { width: w, height: h } = this.#flicker.canvas;
     const scratch = makeCanvas(w, h);
     const ctx = scratch.getContext('2d', { alpha: false });

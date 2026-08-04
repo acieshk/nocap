@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: fake value</title>
+<meta name="description" content="Put a plausible wrong value into the frames a screenshot lands on, so a capture comes away with something that looks right and is not.">
+<link rel="stylesheet" href="demo/shell.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Fake value <span style="font-size:15px;color:#c2a15c;letter-spacing:0">experimental</span></h1>
+<p class="lede">
+  Noise tells an attacker they were blocked. A decoy does not. Fake mode puts a
+  plausible wrong value into the frames a capture lands on, so a screenshot comes
+  away with something that looks like an answer.
+</p>
+
+<div class="rig">
+  <div class="bar">
+    <label class="f" style="min-width:200px"><span>Mode</span>
+      <select id="mode">
+        <option value="auto">auto, match the format</option>
+        <option value="number">number</option>
+        <option value="text">text</option>
+        <option value="random">random</option>
+      </select></label>
+    <label class="f" style="min-width:200px"><span>Value</span>
+      <input type="text" id="txt" placeholder="loading…"></label>
+  </div>
+  <div class="body" id="stage">
+    <nocap-secret id="chip" width="320" height="64" strength="medium"
+                  color="#6d6d6d" background="#404040" fake="auto"></nocap-secret>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <div><div class="lbl" style="margin-bottom:5px">frame 1</div><canvas id="f1"></canvas></div>
+      <div><div class="lbl" style="margin-bottom:5px">frame 2</div><canvas id="f2"></canvas></div>
+    </div>
+  </div>
+  <div class="readout">
+    <span>detected format <b id="fmt">…</b></span>
+    <span>decoys this cycle <b id="n">…</b></span>
+    <span>last decoy <b id="last">…</b></span>
+  </div>
+</div>
+<p style="font-size:12.5px;color:var(--faint);margin-top:12px">
+  Each frame carries a different decoy. You never see them, because they cancel in
+  the average your eye computes, which is why the individual frames are shown.
+</p>
+
+<h2>Why it is marked experimental</h2>
+<p>
+  <b>Blending and legibility are the same budget, and it is already spent.</b> The
+  decoy has to ride on the excursion the noise is not using. Push it harder and it
+  clips, stops cancelling, and ghosts into the mean where <i>you</i> would see it.
+  Keep it subtle enough to stay invisible to you and it is also faint in a
+  capture. Measured on the default palette:
+</p>
+<table>
+  <tr><th>Share of the budget</th><th>Decoy in a captured frame</th><th>Noise swing left</th></tr>
+  <tr><td>0%</td><td>0.016</td><td class="ok">78.4</td></tr>
+  <tr><td>20%</td><td>0.185</td><td>62.7</td></tr>
+  <tr><td>35%</td><td>0.318</td><td class="warn">51.0</td></tr>
+  <tr><td>50%</td><td>0.407</td><td class="warn">39.2</td></tr>
+  <tr><td>70%</td><td class="ok">0.489</td><td class="bad">23.5</td></tr>
+</table>
+<p>
+  There is no setting that gives both, because it is one budget. Treat this as a
+  demonstration rather than something to ship.
+</p>
+
+<h2>It needs a maskable palette</h2>
+<p>
+  Fake mode wants a masking ratio of 1.0 or better. Below that the real value has
+  already ghosted through both frames, and adding a decoy on top of a value you
+  can already read just makes the capture noisier. Check the ratio in the
+  <a href="sandbox.html">sandbox</a> before turning this on.
+</p>
+
+<h2>The decoys are structurally honest</h2>
+<p>
+  A decoy is only useful if it survives inspection for a moment, so the generator
+  matches the format rather than emitting digits:
+</p>
+<ul>
+  <li>Card-shaped values get a <b>Luhn-valid</b> number, so a checksum test passes.</li>
+  <li>Dates stay inside real months and day counts.</li>
+  <li>Separators, grouping and letter positions follow the original's mask.</li>
+</ul>
+<p>
+  You can call the generator directly, without the element, which is also how the
+  <a href="security.html">security check</a> makes a fresh secret on every load:
+</p>
+<pre>import { fakeLike, detectFormat, passesLuhn } from 'nocap';
+
+detectFormat('4111 1111 1111 1111').describe   // "16-digit card number"
+fakeLike('4111 1111 1111 1111')                // "5327 8801 4429 6613"
+passesLuhn(fakeLike('4111 1111 1111 1111'))    // true</pre>
+
+<h2>Using it</h2>
+<pre>&lt;nocap-secret fake="auto"&gt;&lt;/nocap-secret&gt;</pre>
+<div class="note">
+  <code>auto</code> matches the detected format. <code>number</code>,
+  <code>text</code> and <code>random</code> force a kind when the value's shape is
+  not what you want imitated.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { detectFormat } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const chip = $('chip');
+$('txt').value = (await (await fetch('./demo/api-mock.json')).json()).account;
+
+function showFrames() {
+  const planes = chip.planes;
+  if (!planes?.length) return;
+  for (const [i, id] of [[0, 'f1'], [1, 'f2']]) {
+    const cv = $(id);
+    if (!planes[i]) continue;
+    cv.width = planes[i].width; cv.height = planes[i].height;
+    cv.style.width = '272px'; cv.style.height = 'auto';
+    cv.getContext('2d').putImageData(
+      new ImageData(planes[i].data, planes[i].width, planes[i].height), 0, 0);
+  }
+  $('n').textContent = chip.decoys?.length ?? 0;
+  $('last').textContent = chip.lastDecoy ?? '—';
+}
+
+function apply() {
+  chip.setAttribute('fake', $('mode').value);
+  chip.secret = $('txt').value;
+  $('fmt').textContent = detectFormat($('txt').value).describe;
+  setTimeout(showFrames, 80);
+}
+
+$('mode').onchange = apply;
+$('txt').oninput = apply;
+chip.addEventListener('render', () => setTimeout(showFrames, 60));
+apply();
+</script>
+</body>
+</html>

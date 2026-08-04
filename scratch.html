@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: scratch to reveal</title>
+<meta name="description" content="Unmask only a trail under the pointer, and time how long it lasts.">
+<link rel="stylesheet" href="demo/shell.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Scratch to reveal <span style="font-size:15px;color:#c2a15c;letter-spacing:0">experimental</span></h1>
+<p class="lede">
+  Instead of unmasking the whole value, unmask only a trail under the pointer.
+  Move across the element below.
+</p>
+
+<div class="rig">
+  <div class="body" id="stage">
+    <nocap-secret id="chip" width="320" height="64" strength="medium"
+                  color="#6d6d6d" background="#404040" scratch
+                  scratch-linger="30" scratch-radius="34"></nocap-secret>
+    <small>Drag across it. The trail fades behind you.</small>
+  </div>
+  <div class="knobs">
+    <label class="f"><span>Trail lasts <em id="lingerV">30</em>s</span>
+      <input type="range" id="linger" min="1" max="60" step="1" value="30"></label>
+    <label class="f"><span>Brush size <em id="radV">34</em>px</span>
+      <input type="range" id="rad" min="8" max="90" step="2" value="34"></label>
+  </div>
+  <div class="readout">
+    <span>duty at this trail <b id="duty">…</b></span>
+    <span>estimated leak over a long capture <b id="est">…</b></span>
+  </div>
+</div>
+
+<h2>The trail length is the whole trade</h2>
+<p>
+  A pixel carries the value only while the trail sits on it. With a short trail, a
+  long capture averages to roughly <code>duty × value</code> while the noise keeps
+  its full amplitude. Measured over 30 frames:
+</p>
+<table>
+  <tr><th>Duty</th><th>Leak</th><th>Recording needed for a clean 0.9</th></tr>
+  <tr><td>1.0, always visible</td><td class="bad">0.70</td><td>4.3s</td></tr>
+  <tr><td>0.1, a brief trail</td><td class="ok">0.25</td><td>34s</td></tr>
+</table>
+<p>Nobody leaves an account number open for 34 seconds, which is the point.</p>
+
+<div class="note">
+  <b>The 30s default gives most of that back, deliberately.</b> A trail that fades
+  in a second is close to unreadable, and a trail that outlasts your reading sits
+  near full duty. So treat the default as a gate on <i>when</i> the value appears
+  rather than as a defence against capture. Set it to a second or two if capture
+  is the threat you actually care about, and accept reading a few glyphs at a time.
+</div>
+
+<h2>Why it is timed in seconds</h2>
+<p>
+  It was not, at first. The trail faded by a constant factor per frame, so a
+  stroke cleared in about a second at 60Hz and about half that at 120Hz. The same
+  setting meant different things on different displays, and no value of it could
+  be stated in seconds at all.
+</p>
+<p>
+  <code>scratch-linger</code> is a time: how long a stroke takes to fade to 1%.
+  The decay is exponential, so the product of the per-frame factors depends only
+  on elapsed time and not on how that time was cut into frames. Measured in Chrome
+  against a manual clock, with a 30s setting:
+</p>
+<table>
+  <tr><th>Elapsed</th><th>Trail remaining</th></tr>
+  <tr><td>0s, under the pointer</td><td>1.000</td></tr>
+  <tr><td>15s</td><td>0.098</td></tr>
+  <tr><td>30s</td><td>0.0078</td></tr>
+</table>
+<p>
+  The last is a little under 1% because the mask is 8-bit and the rounding
+  accumulates.
+</p>
+
+<h2>Before you ship this</h2>
+<ul>
+  <li><b>It needs a pointer.</b> Keyboard and screen reader users cannot scrub, so
+      an integration has to offer them another route. This is a hard blocker, not
+      a rough edge.</li>
+  <li><b>Touch has no hover</b>, so it requires a drag, and a drag competes with
+      scrolling the page.</li>
+  <li><b>Reading a long value by sweeping is slow.</b> Opt in, never a default.</li>
+</ul>
+
+<h2>Using it</h2>
+<pre>&lt;nocap-secret
+  scratch
+  scratch-linger="30"   &lt;!-- seconds for a stroke to fade to 1% --&gt;
+  scratch-radius="34"   &lt;!-- brush radius in CSS px --&gt;
+&gt;&lt;/nocap-secret&gt;</pre>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+
+const $ = (id) => document.getElementById(id);
+const chip = $('chip');
+chip.secret = (await (await fetch('./demo/api-mock.json')).json()).account;
+
+function apply() {
+  const linger = +$('linger').value;
+  const rad = +$('rad').value;
+  $('lingerV').textContent = linger;
+  $('radV').textContent = rad;
+  chip.setAttribute('scratch-linger', linger);
+  chip.setAttribute('scratch-radius', rad);
+
+  // A rough duty: how much of a 40s read a given pixel spends lit, if the
+  // pointer passes over it once. Illustrative, not a measurement, and labelled
+  // as an estimate in the readout for that reason.
+  const window_ = 40;
+  const duty = Math.min(1, linger / window_);
+  $('duty').textContent = duty.toFixed(2);
+  // Leak scales roughly with duty between the two measured endpoints.
+  const est = 0.25 + (0.70 - 0.25) * ((duty - 0.1) / 0.9);
+  const clamped = Math.max(0.25, Math.min(0.70, est));
+  $('est').textContent = `~${clamped.toFixed(2)}`;
+  $('est').className = clamped < 0.35 ? 'ok' : clamped < 0.55 ? 'warn' : 'bad';
+}
+
+$('linger').oninput = $('rad').oninput = apply;
+apply();
+</script>
+</body>
+</html>

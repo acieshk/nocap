@@ -63,6 +63,216 @@ Everything below is for when you need more control. You can ignore it.
 
 ---
 
+## Using it
+
+### Registering the element
+
+`import 'nocap'` has the side effect of calling `customElements.define`. Import
+it once, anywhere that runs in the browser.
+
+```js
+import 'nocap';
+```
+
+Without a bundler, point a module script at the file directly:
+
+```html
+<script type="module" src="https://unpkg.com/nocap/src/index.js"></script>
+```
+
+The module is safe to import on a server. It falls back to a plain base class
+when `HTMLElement` is absent and only registers once it reaches a browser, so
+Next, Astro, Remix and friends will not throw at module scope. Nothing renders
+there either, so treat the element as client-only for layout purposes.
+
+### Giving it a value
+
+`secret` is a **property, not an attribute**, and it is write-only.
+
+```js
+el.secret = await fetchAccountNumber();
+```
+
+Reading it back is not supported, deliberately: a getter would put the value
+within reach of anything holding a reference to the element. Keep your own copy
+if you need one, and keep it somewhere you have thought about.
+
+Markup works and is read once and erased:
+
+```html
+<nocap-secret>4111 1111 1111 1111</nocap-secret>
+```
+
+but the value was in your HTML source on the way there, which is the one thing
+this library exists to avoid. Use it for a static demo, never for a real secret.
+
+**Restyling does not need the value again.** The element keeps the plaintext for
+as long as it is displayed, so changing a colour or a font re-renders from what
+it already holds. That is what makes a write-only setter usable. It is also why
+the value sits in JS memory for the element's lifetime, which is what `scramble`
+exists to blunt.
+
+### Sizing
+
+`width` and `height` are attributes in CSS pixels, not styles.
+
+```html
+<nocap-secret width="300" height="62"></nocap-secret>
+```
+
+The font is derived from the height, and the noise block is derived from the
+font, so the element scales as one piece. Do not size it with CSS `width`:
+letting the browser rescale the canvas resamples the noise toward its mean, which
+is the one transformation that makes a captured frame readable.
+
+### Styling
+
+```html
+<nocap-secret
+  color="#6d6d6d" background="#404040"
+  font-family="Inter, system-ui, sans-serif"
+  font-weight="700"
+  font-size="30"          <!-- or font-scale="0.46", the default -->
+  letter-spacing="4"      <!-- or "0.1em" -->
+  text-align="left"
+  padding-x="16"
+></nocap-secret>
+```
+
+Any value that is not usable falls back to the documented default and warns once
+rather than reaching the canvas, because an invalid `ctx.font` or a non-finite
+`fillText` coordinate is a silent no-op that would render the wrong thing, or
+nothing at all, without an error.
+
+**The colours are not free.** See
+[Choosing colours](https://github.com/acieshk/nocap#choosing-colours). A pair
+that cannot carry noise cannot be masked at any amplitude.
+
+**`letter-spacing`, `text-align` and `padding-*` do nothing while `scramble` is
+on** ([#14](https://github.com/acieshk/nocap/issues/14)). Scramble draws each
+glyph into its own cell and places the cells itself, so there is no run of text
+to space and no single `fillText` to align. The font attributes do apply. The
+element warns when you set one of the inert ones together with `scramble`.
+
+### Accessibility, which is not optional
+
+The value is pixels. It is unreadable to a screen reader **by construction**, and
+that is the same property that defeats DOM-reading agents. There is no setting
+that makes it accessible without also making it scrapeable.
+
+So an integration has to provide another route, and only you can decide what it
+is. A "reveal" button that swaps in real text, a copy-to-clipboard control, a
+phone line, a different page. What you must not do is ship this as the only way
+to reach the value.
+
+```html
+<nocap-secret id="acct" width="300" height="62"></nocap-secret>
+<button id="copy">Copy account number</button>
+<p class="sr-only" id="hint">Account number is shown as an image. Use the copy
+  button to place it on your clipboard.</p>
+```
+
+```js
+copy.onclick = () => navigator.clipboard.writeText(accountNumber);
+```
+
+`scratch` mode additionally needs a pointer, so keyboard and touch users need
+that alternative even more.
+
+### React
+
+`secret` is a property, so it cannot be passed as a JSX attribute. Use a ref.
+
+```jsx
+import { useEffect, useRef } from 'react';
+import 'nocap';
+
+export function Secret({ value, strength = 'medium' }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.secret = value; }, [value]);
+  return <nocap-secret ref={ref} strength={strength} width="300" height="62" />;
+}
+```
+
+React 19 passes unknown props to custom elements as attributes, so `strength`,
+`color` and the rest work as written. On React 18 and earlier, set those with a
+ref too. If you render on the server, load this component with
+`dynamic(..., { ssr: false })` or the equivalent, since it produces nothing
+there.
+
+### Vue
+
+```vue
+<script setup>
+import 'nocap';
+import { ref, watchEffect } from 'vue';
+const el = ref(null);
+const props = defineProps({ value: String });
+watchEffect(() => { if (el.value) el.value.secret = props.value; });
+</script>
+
+<template>
+  <nocap-secret ref="el" strength="medium" width="300" height="62" />
+</template>
+```
+
+Tell the compiler it is a custom element, or Vue will warn about an unknown
+component:
+
+```js
+// vite.config.js
+vue({ template: { compilerOptions: { isCustomElement: (t) => t === 'nocap-secret' } } })
+```
+
+### Svelte
+
+Svelte sets properties on custom elements when it can, so the binding is direct:
+
+```svelte
+<script>
+  import 'nocap';
+  export let value;
+</script>
+
+<nocap-secret secret={value} strength="medium" width="300" height="62" />
+```
+
+### Checking that it actually worked
+
+Three measurements, all exported, all runnable in your own tests:
+
+```js
+import { checkPalette, auditPage } from 'nocap';
+
+// 1. Can these colours carry noise at all?
+const pal = checkPalette({ color: '#6d6d6d', background: '#404040' });
+if (pal.ratio < 1) console.warn(pal.warnings);
+
+// 2. Did the page leak the value somewhere else?
+const report = await auditPage(secret);
+if (!report.clean) throw new Error(`leaked in ${report.found.join(', ')}`);
+
+// 3. How much does one captured frame give away? Lower is better.
+el.measureLeak();   // ~0.05 at the defaults, 1.0 is fully readable
+```
+
+`auditPage` takes the plaintext because it has to search for it, so the value
+exists in one more place while the call runs. Development and tests, not a
+production render path.
+
+### When it looks wrong
+
+| Symptom | Cause |
+| --- | --- |
+| Text is plainly readable in a screenshot | Palette cannot carry noise. Run `checkPalette` |
+| Heavy strobing, hard to read | 60Hz display with `strength="strong"`. Drop to `medium` or `weak` |
+| Colours look lighter than authored | Simultaneous contrast from a darker surround. The split is exact, step your panel between page and secret |
+| Blurry or readable after resizing | Sized with CSS instead of the `width` and `height` attributes |
+| A style attribute does nothing | Check the console. It warns once for a value it refused, and for styling that is inert under `scramble` |
+| Nothing renders at all | `secret` was never set, or set as an attribute rather than a property |
+
+---
+
 ## How it works
 
 Content is split into frames that alternate at your display's refresh rate. Each
@@ -510,9 +720,21 @@ This argument has not had a real accessibility review. It reads plausibly. Contr
 Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 <http://127.0.0.1:8787/>.
 
-One page: the live/screenshot/denoise comparison, a playground with presets and
-every parameter, checks that search each page surface for the secret on screen,
-and both DevTools attacks running for real.
+| Page | What is on it |
+| --- | --- |
+| [Overview](https://acieshk.github.io/nocap/) | The live, screenshot and denoise comparison, and the threat table |
+| [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | Every setting on a real element, with masking and leak measured as you change them |
+| [Security check](https://acieshk.github.io/nocap/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
+| [Scratch to reveal](https://acieshk.github.io/nocap/scratch.html) | The trail, and what its length costs |
+| [Fake value](https://acieshk.github.io/nocap/fake.html) | Decoys, and why the budget does not stretch |
+
+**The security page has no text box, on purpose.** Every other page lets you type
+a value, which is convenient and quietly ruins the test: a value you typed lives
+in `input.value`, and that is a leaky surface of its own. The audit would
+correctly report a leak, the leak would be the demo's own text box, and a check
+that always fails for a reason you have to explain away is not evidence. So that
+page generates its own secret with `fakeLike()`, hands it straight to the
+element, and never writes it anywhere else. Reload for a different format.
 
 ## Test
 
@@ -520,10 +742,12 @@ and both DevTools attacks running for real.
 npm test
 ```
 
-45 tests: the planes average back to the source at every amplitude and mode, no
+65 tests: the planes average back to the source at every amplitude and mode, no
 plane leaks, clipping never breaks the zero-sum property, the leak ordering
-holds, adaptive colour is exact, and coarse blocks resist a blur that fine noise
-does not.
+holds, adaptive colour is exact, coarse blocks resist a blur that fine noise does
+not, a scratch trail lasts the same wall-clock time at any frame rate, and every
+attribute value that is not usable falls back to its documented default rather
+than reaching the canvas.
 
 ## License
 
