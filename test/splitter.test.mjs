@@ -889,3 +889,83 @@ test('a size attribute has to be positive, not merely finite', async () => {
   // 0 is a legitimate padding, so the positive rule must not leak onto it.
   assert.equal(resolveText({ 'padding-x': '0' }, 56).padX, 0);
 });
+
+// Fake mode's decoy did nothing at any setting, and nothing failed when it did.
+// `decoyPush = 110` was added to the pair and clamped to the largest half a
+// pixel can take and still average, in light, to its target. At the element's
+// own default background that ceiling is 78.4, and the base split already asks
+// for 110, so the push was clamped to the value it started from. These assert
+// the arithmetic that made it impossible, so a future change that quietly
+// returns the budget to nothing is caught rather than shipped.
+
+test('resolveFake clamps at both ends and falls back on a malformed value', async () => {
+  const { resolveFake } = await import('../src/secret.js');
+
+  assert.deepEqual(resolveFake(), { share: 0.35, sizeRatio: 0.55 });
+
+  // 1.0 would leave no noise at all where the decoy falls.
+  assert.equal(resolveFake({ 'fake-share': '5' }).share, 0.9);
+  assert.equal(resolveFake({ 'fake-share': '-1' }).share, 0);
+  assert.equal(resolveFake({ 'fake-size': '9' }).sizeRatio, 1);
+  assert.equal(resolveFake({ 'fake-size': '0' }).sizeRatio, 0.1);
+
+  // Same treatment the other attributes got: a non-number is not a zero.
+  assert.equal(resolveFake({ 'fake-share': 'abc' }).share, 0.35);
+  assert.equal(resolveFake({ 'fake-size': 'abc' }).sizeRatio, 0.55);
+
+  assert.equal(resolveFake({ 'fake-share': '0.5' }).share, 0.5);
+});
+
+test('a push beyond the feasible half cannot widen the pair', async () => {
+  const { feasibleHalfTable, STRENGTHS } = await import('../src/secret.js');
+  const table = feasibleHalfTable(2.4);
+
+  // The element's own defaults, src/secret.js #palette.
+  const bgLuma = 114;   // #6b7280
+  const cap = table[bgLuma];
+  assert.ok(cap > 78 && cap < 79, `ceiling at the default background is ${cap}`);
+
+  // Every strength asks for more than the ceiling allows, so the base split is
+  // already sitting on it before any decoy is considered.
+  for (const [name, s] of Object.entries(STRENGTHS)) {
+    if (name === 'weak') continue;   // 80, and only just over
+    assert.ok(s.amplitude > cap,
+      `${name} amplitude ${s.amplitude} should exceed the ceiling ${cap}`);
+  }
+
+  // This is the bug, as arithmetic: once the base half is at the ceiling,
+  // adding anything and clamping returns the same number. Any push, any size.
+  const base = cap;
+  for (const push of [1, 10, 110, 1000]) {
+    assert.equal(Math.min(base + push, cap), Math.min(base, cap),
+      `a push of ${push} must change nothing once the pair is at the ceiling`);
+  }
+});
+
+test('the decoy gets more of the budget as the share rises, and the pair stays zero-sum', async () => {
+  const { feasibleHalfTable, decoySplit } = await import('../src/secret.js');
+  const cap = feasibleHalfTable(2.4)[114];
+
+  // One pixel under the decoy's ink, its noise pointing up.
+  const b0 = 150, b1 = 90;
+  let last = -1;
+  for (const share of [0, 0.2, 0.35, 0.5, 0.7, 0.9]) {
+    const r = decoySplit(cap, share, 1, b0, b1);
+    assert.ok(r.forDecoy > last, `share ${share} must give the decoy more than the last`);
+    last = r.forDecoy;
+    // Conserved: what the decoy takes comes out of the noise, nowhere else.
+    assert.ok(Math.abs(r.forDecoy + r.forNoise - cap) < 1e-9, 'budget is conserved');
+    assert.ok(r.half <= cap + 1e-9, 'the pair never exceeds what the pixel can reach');
+  }
+
+  // At share 0 the decoy takes nothing, so the split is the plain noise.
+  const none = decoySplit(cap, 0, 1, b0, b1);
+  assert.equal(none.forDecoy, 0);
+  assert.equal(none.half, Math.min(Math.abs(b0 - b1) / 2, cap));
+
+  // The sign comes from the excursion AFTER the decoy is in. With the noise
+  // pointing down and a large enough share, the decoy flips it, which is what
+  // makes a glyph rather than louder noise.
+  const down = decoySplit(cap, 0.9, 1, 90, 150);
+  assert.ok(down.signed > 0, 'a large share biases the plane regardless of the noise');
+});
