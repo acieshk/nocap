@@ -252,6 +252,90 @@ export function resolveText(attrs = {}, height = 56) {
   };
 }
 
+/**
+ * Resolve the fake-mode attributes.
+ *
+ * Pure and exported for the reason resolveText and resolveOptions are: the
+ * clamps are not reachable through the element without a DOM, and the previous
+ * version of this shipped with `fake-size` observed nowhere and clamped
+ * nowhere, which nothing could have caught.
+ *
+ * @param {Record<string,string>} attrs  attributes that are present
+ */
+/**
+ * The largest half-excursion that can still hit a given target, per code value.
+ *
+ * A pair at +/-half can only reach light means between
+ * (toLight(2*half) + toLight(0)) / 2 and (toLight(255) + toLight(255-2*half)) / 2,
+ * and that band narrows as half grows. A FIXED budget therefore becomes
+ * infeasible for dark pixels. Capping per pixel keeps the decoy at uniform
+ * contrast wherever physics allows and backs off only where it must.
+ *
+ * Exported and memoised because it is the invariant fake mode rests on, and
+ * the reason the old `decoyPush` could not work: at the element's own default
+ * background this ceiling is 78.4 while the base split already asks for 110,
+ * so a push added on top and clamped to the same ceiling returns the value it
+ * started from. That was true at every setting and nothing tested it.
+ *
+ * 256 entries, solved once per gamma.
+ */
+const feasibleCache = new Map();
+export function feasibleHalfTable(gamma = 2.4) {
+  const hit = feasibleCache.get(gamma);
+  if (hit) return hit;
+  const table = new Float64Array(256);
+  for (let v = 0; v < 256; v++) {
+    const want = toLight(v, gamma);
+    let lo = 0;
+    let hi = 127;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      const min = (toLight(2 * mid, gamma) + toLight(0, gamma)) / 2;
+      const max = (toLight(255, gamma) + toLight(255 - 2 * mid, gamma)) / 2;
+      if (want >= min && want <= max) lo = mid;
+      else hi = mid;
+    }
+    table[v] = lo;
+  }
+  feasibleCache.set(gamma, table);
+  return table;
+}
+
+/**
+ * Split one pixel's whole budget between masking it and marking it.
+ *
+ * Exported so the conserved-budget behaviour can be asserted directly. The
+ * sign has to come from the excursion AFTER the decoy is in, not from the
+ * noise that was there before: widening symmetrically about whichever way the
+ * noise already pointed modulates its AMPLITUDE rather than biasing it, and
+ * amplitude modulation of random-sign noise reads as more noise.
+ *
+ * @param {number} cap     this pixel's feasible half
+ * @param {number} share   fraction of the budget the decoy may take
+ * @param {number} amount  the decoy's coverage here, 0..1
+ * @param {number} b0      base plane 0 value
+ * @param {number} b1      base plane 1 value
+ * @returns {{half: number, signed: number, forDecoy: number, forNoise: number}}
+ */
+export function decoySplit(cap, share, amount, b0, b1) {
+  const forDecoy = cap * share * amount;
+  const forNoise = cap - forDecoy;
+  const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
+  const excursion = noise + forDecoy;
+  const half = Math.min(Math.abs(excursion), cap);
+  return { half, signed: excursion < 0 ? -half : half, forDecoy, forNoise };
+}
+
+export function resolveFake(attrs = {}) {
+  return {
+    // How much of a pixel's excursion budget the decoy may take. 0.9 rather
+    // than 1 because at 1 the noise where the decoy falls is gone entirely.
+    share: Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.35))),
+    // The decoy's font size relative to the real text.
+    sizeRatio: Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 0.55))),
+  };
+}
+
 export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = null) {
   const preset = STRENGTHS[attrs.strength] ?? {};
   const base = { ...TEXT_DEFAULTS, ...preset };
@@ -887,11 +971,10 @@ export class NocapSecret extends ElementBase {
     // attacker has no reason to believe it. The decoy only wins at full size,
     // or at a share high enough that the noise where it falls is nearly gone.
     // Fake mode is experimental for this reason and not merely for lack of use.
-    const attrs = {};
+    const fakeAttrs = {};
     for (const n of ['fake-share', 'fake-size'])
-      if (this.hasAttribute(n)) attrs[n] = this.getAttribute(n);
-    const share = Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.35)));
-    const sizeRatio = Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 0.55)));
+      if (this.hasAttribute(n)) fakeAttrs[n] = this.getAttribute(n);
+    const { share, sizeRatio } = resolveFake(fakeAttrs);
 
     /**
      * The centre whose planes at ±half average, in light, to `want`.
@@ -911,36 +994,7 @@ export class NocapSecret extends ElementBase {
       return (lo + hi) / 2;
     };
 
-    /**
-     * The largest half that can still hit a given target, per target value.
-     *
-     * This is what makes the re-solve work. A pair at ±half can only reach light
-     * means between (toLight(2·half) + toLight(0)) / 2 and
-     * (toLight(255) + toLight(255 - 2·half)) / 2, and that band narrows as half
-     * grows. A FIXED budget therefore becomes infeasible for dark pixels. The
-     * search clamps and the shortfall surfaces as a lift in the perceived value.
-     * Measured at a constant 110: 53 levels of lift, worse than no re-solve.
-     *
-     * Capping half per pixel keeps the decoy at uniform contrast wherever
-     * physics allows and backs off only where it must. 256 entries, solved once.
-     */
-    const feasibleHalf = (() => {
-      const table = new Float64Array(256);
-      for (let v = 0; v < 256; v++) {
-        const want = toLight(v);
-        let lo = 0;
-        let hi = 127;
-        for (let i = 0; i < 20; i++) {
-          const mid = (lo + hi) / 2;
-          const min = (toLight(2 * mid) + toLight(0)) / 2;
-          const max = (toLight(255) + toLight(255 - 2 * mid)) / 2;
-          if (want >= min && want <= max) lo = mid;
-          else hi = mid;
-        }
-        table[v] = lo;
-      }
-      return table;
-    })();
+    const feasibleHalf = feasibleHalfTable(this.#options().gamma);
     // Full headroom. At half, the decoy competed with the noise and read as a
     // ghost behind the real text. A capture is supposed to come away with the
     // decoy as the most legible thing in the frame.
@@ -1062,13 +1116,8 @@ export class NocapSecret extends ElementBase {
           const want = (toLight(b0) + toLight(b1)) / 2;
           const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))];
           // Split the pixel's whole budget between masking it and marking it.
-          const forDecoy = cap * share * amount;
-          const forNoise = cap - forDecoy;
-          const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
-          const excursion = noise + forDecoy;
-          const half = Math.min(Math.abs(excursion), cap);
+          const { half, signed } = decoySplit(cap, share, amount, b0, b1);
           const centre = centreFor(want, half);
-          const signed = excursion < 0 ? -half : half;
           set[0].data[i + c] = centre + signed;
           set[1].data[i + c] = centre - signed;
         }
