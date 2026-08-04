@@ -894,6 +894,7 @@ Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 | [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | The masking engine, with leak measured as you change it |
 | [Styling](https://acieshk.github.io/nocap/styling.html) | Text, font and colour, with the stroke and block shown side by side |
 | [Scenarios](https://acieshk.github.io/nocap/scenarios.html) | A wall of text, single values, and the same secret across five palettes |
+| [Algorithms](https://acieshk.github.io/nocap/algorithms.html) | Every way of splitting a frame, on the same content, against three denoisers |
 | [Scraping challenge](https://acieshk.github.io/nocap/challenge.html) | A table a human reads and a crawler cannot, with the page auditing itself |
 | [Security check](https://acieshk.github.io/nocap/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
 | [Scratch to reveal](https://acieshk.github.io/nocap/scratch.html) | The trail, and what its length costs |

@@ -13,4 +13,8 @@ export {
   boxBlur,
   denoisedLeak,
   maxAmplitudeFor,
+  // The attacks, shipped so a claim can be run rather than believed.
+  gaussianBlur,
+  medianFilter,
+  bestAttack,
 } from './splitter.js';

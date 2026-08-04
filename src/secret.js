@@ -386,6 +386,10 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
     frames: num('frames', base.frames),
     contrast: num('contrast', base.contrast),
     noiseScale: num('noise-scale', base.noiseScale),
+    // Switchable so the algorithms can be compared on the same content. Only
+    // 'amplitude' masks. The others are here because a claim that the obvious
+    // alternatives fail is worth being able to run rather than read.
+    mode: attrs.mode ?? base.mode,
     chroma: num('chroma', base.chroma),
     gamma: num('gamma', base.gamma),
     hardness: num('hardness', base.hardness),
@@ -399,6 +403,7 @@ export class NocapSecret extends ElementBase {
     'frames',
     'contrast',
     'strength',
+    'mode',
     'watermark',
     'watermark-swing',
     'watermark-repeat',

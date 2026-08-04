@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: algorithms</title>
+<meta name="description" content="Every way of splitting a frame, on the same content, scored against three different denoising attacks.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .algo { border:1px solid var(--line); border-radius:11px; overflow:hidden; margin:14px 0 0 }
+  .algo > .hd { padding:12px 15px; background:var(--panel); border-bottom:1px solid var(--line);
+                display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
+  .algo > .hd b { font-size:14px }
+  .algo > .hd .verdict { margin-left:auto; font:600 11px/1 ui-sans-serif; letter-spacing:.07em;
+                         text-transform:uppercase }
+  .algo .frames { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+                  gap:10px; padding:14px 15px }
+  .algo .frames figure { margin:0; display:grid; gap:6px }
+  .algo .frames canvas { width:100%; border-radius:5px }
+  .algo .why { padding:0 15px 14px; font-size:13px; color:var(--muted); max-width:70ch }
+  .atk { width:100%; border-collapse:collapse; font-size:12.5px; margin:0 }
+  .atk th, .atk td { padding:7px 15px; border-top:1px solid var(--line); text-align:left;
+                     white-space:nowrap }
+  .atk th { background:var(--panel); border-top:1px solid var(--line) }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Algorithms</h1>
+<p class="lede">
+  Every way this library knows of splitting one image across frames, run on the
+  same content, and scored against three different denoisers. Three of the four
+  fail, and they are kept so the failure can be run rather than asserted.
+</p>
+
+<div class="rig">
+  <div class="bar">
+    <label class="f" style="min-width:220px"><span>Content</span>
+      <input type="text" id="txt" value="4471-0092-8834"></label>
+    <label class="f" style="min-width:150px"><span>Amplitude <em id="ampV">110</em></span>
+      <input type="range" id="amp" min="30" max="127" value="110"></label>
+    <label class="f" style="min-width:150px"><span>Noise block <em id="blkV">6</em>px</span>
+      <input type="range" id="blk" min="1" max="14" value="6"></label>
+  </div>
+  <div class="readout">
+    <span><b>leak</b> is |correlation| between one captured frame and the truth</span>
+    <span>0.00 perfect · 1.00 fully readable</span>
+  </div>
+</div>
+
+<div id="out"></div>
+
+<h2>Why only one of them works</h2>
+<p>
+  The three that fail all split a dimension the eye does not need in order to
+  recognise something. Recognition survives losing colour, losing most of the
+  pixels, blur, and heavy quantisation. What it does not survive is having the
+  pixel <b>values</b> randomised, which is the one thing <code>amplitude</code>
+  does and the others do not.
+</p>
+<p>
+  That is worth stating as a rule, because the failures are the tempting ideas.
+  Splitting colour across frames sounds like it should hide something. It hides
+  nothing: one frame is a greyscale copy at full spatial resolution. Splitting
+  pixels across frames sounds stronger still, and gives you a copy at half
+  resolution, which reads fine.
+</p>
+
+<h2>Where the score itself fails</h2>
+<p>
+  <code>leakScore</code> is the absolute Pearson correlation between one frame
+  and the truth, and it is a proxy rather than the thing itself. It has a blind
+  spot worth knowing about, because this page walked straight into it.
+</p>
+<p>
+  A mode that inserts a large pattern unrelated to the content, as
+  <code>interleave</code> does with its flat fill, gets a <b>better</b> score for
+  it. The fill adds variance that correlates with nothing, the correlation is
+  diluted, and the number improves while the frame stays perfectly readable. The
+  first version of this page reported 0.19 for interleave and called it masked,
+  next to frames you can read at a glance.
+</p>
+<p>
+  The lesson generalises past this one mode: <b>a metric that disagrees with your
+  eyes is wrong until proven otherwise.</b> The frames are shown above every
+  score on this page for that reason.
+</p>
+
+<h2>About the attacks</h2>
+<p>
+  Every blur-resistance figure in this project used to be measured against a box
+  blur, which is the cheapest denoiser there is. That is a weaker claim than it
+  sounds, so the stronger ones are here and run on every algorithm.
+</p>
+<p>
+  The box blur wins anyway. At the shipped defaults: box 0.256, gaussian 0.248,
+  median 0.224, against a raw 0.256, so nothing beats not attacking at all. In
+  the under-protected case where the block is half the stroke, box 0.288 against
+  gaussian 0.284 and median 0.218.
+</p>
+<div class="note">
+  <b>The median is the interesting failure.</b> It is the standard tool for
+  impulsive noise and it preserves edges, which ought to be exactly right against
+  blocks over strokes. It loses for a structural reason: at a radius small enough
+  to keep the strokes, the window fits inside a single noise block and finds no
+  outliers to reject. At a radius wide enough to see across blocks it destroys
+  the strokes too. The block size defeats it the same way it defeats a blur.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import { splitFrames, averageFrames, leakScore, boxBlur, gaussianBlur,
+         medianFilter } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+
+const ALGOS = [
+  { mode: 'amplitude', name: 'amplitude',
+    sub: 'every pixel present, every value randomised',
+    why: 'The only one that masks. Each pixel appears in every frame, displaced by '
+       + 'a zero-sum offset, so one frame carries every pixel at the wrong value and '
+       + 'the mean carries all of them at the right one. Randomising the value is the '
+       + 'thing recognition cannot survive.' },
+  { mode: 'interleave', name: 'interleave', ownAmplitude: 0,
+    sub: 'each pixel carried by exactly one frame',
+    why: 'Splits WHERE the pixels are rather than what they are. A frame holds half '
+       + 'the real pixels at their real values, and subsampled text stays readable, '
+       + 'which is why every image format can throw pixels away. '
+       + '<b>Read the frames, not the score, on this one.</b> Correlation is the wrong '
+       + 'instrument here: the frames are half flat fill, that fill is a large pattern '
+       + 'with nothing to do with the content, and it dilutes the correlation until the '
+       + 'number looks good. On the pixels it actually carries, this leaks about 1.0.',
+    metricLies: true },
+  { mode: 'channels', name: 'channels', ownAmplitude: 0,
+    sub: 'red, green and blue on separate frames',
+    why: 'Field-sequential colour, the technique DLP projectors use. It is a display '
+       + 'method, not a masking one: one frame is a full-resolution greyscale copy, '
+       + 'and greyscale is what OCR converts to first anyway.' },
+];
+
+const ATTACKS = [
+  ['none', (p) => p, [0]],
+  ['box blur', (p, r) => boxBlur(p, r), [1, 2, 3, 4, 5, 6]],
+  ['gaussian', (p, s) => gaussianBlur(p, s), [0.5, 1, 1.5, 2, 2.5, 3]],
+  ['median', (p, r) => medianFilter(p, r), [1, 2, 3]],
+];
+
+function render() {
+  const amp = +$('amp').value, blk = +$('blk').value, txt = $('txt').value;
+  $('ampV').textContent = amp; $('blkV').textContent = blk;
+
+  // One source, shared by every algorithm, so nothing but the mode differs.
+  const cv = document.createElement('canvas');
+  cv.width = 380; cv.height = 74;
+  const c = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+  c.fillStyle = '#404040'; c.fillRect(0, 0, cv.width, cv.height);
+  c.font = '600 32px ui-monospace, monospace'; c.fillStyle = '#6d6d6d';
+  c.textBaseline = 'middle'; c.fillText(txt, 14, cv.height / 2);
+  const src = c.getImageData(0, 0, cv.width, cv.height);
+
+  $('out').innerHTML = '';
+  for (const algo of ALGOS) {
+    // A fixed seed per algorithm, so re-rendering does not reshuffle the
+    // comparison under you while you drag a slider.
+    let seed = 4242;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    // Each algorithm runs on its OWN mechanism. Giving interleave and channels
+    // the amplitude noise as well would credit them for the thing they do not
+    // do: they would score well, and the score would belong to amplitude mode
+    // wearing a hat. The first version of this page did exactly that and made
+    // interleave look like the winner.
+    const useAmp = algo.ownAmplitude ?? amp;
+    const planes = splitFrames(src, { mode: algo.mode, amplitude: useAmp, hardness: 1,
+      noiseScale: blk, chroma: 0, linearLight: algo.mode === 'amplitude',
+      gamma: 2.4, rng });
+
+    // Score the WORST plane, because an attacker picks which frame to keep.
+    let worst = { leak: -1 };
+    for (const p of planes) {
+      const l = leakScore(p, src);
+      if (l > worst.leak) worst = { leak: l, plane: p };
+    }
+    let best = { name: 'none', param: 0, leak: worst.leak };
+    for (const [name, fn, params] of ATTACKS) {
+      for (const q of params) {
+        const l = leakScore(fn(worst.plane, q), src);
+        if (l > best.leak) best = { name, param: q, leak: l };
+      }
+    }
+
+    // Calibrated against what text actually reaches rather than against zero.
+    // A working config on real glyphs lands near 0.25, so a 0.2 cut-off would
+    // mark the shipped default as a failure.
+    const grade = (n) => (n < 0.32 ? 'ok' : n < 0.55 ? 'warn' : 'bad');
+    const verdict = algo.metricLies ? ['see frames', 'bad']
+      : best.leak < 0.32 ? ['masks', 'ok']
+      : best.leak < 0.55 ? ['partial', 'warn'] : ['readable', 'bad'];
+
+    const box = document.createElement('div');
+    box.className = 'algo';
+    box.innerHTML = `<div class="hd"><b>${algo.name}</b>
+      <span style="color:var(--faint);font-size:12.5px">${algo.sub}</span>
+      <span class="verdict ${verdict[1]}">${verdict[0]}</span></div>
+      <div class="frames"></div>
+      <div class="why">${algo.why}</div>
+      ${algo.metricLies ? '<div class="why" style="color:#d9bd80">The score below '
+        + 'understates this mode. It is shown because hiding a number that disagrees '
+        + 'with the picture would be worse than explaining it.</div>' : ''}
+      <table class="atk"><tr><th>amplitude used</th><th>strongest attack</th>
+        <th>leak on one frame</th></tr>
+        <tr><td>${useAmp}${algo.ownAmplitude !== undefined
+          ? ' <span style="color:var(--faint)">its own mechanism only</span>' : ''}</td>
+        <td>${best.name}${best.param ? ` (${best.param})` : ''}</td>
+        <td class="${grade(best.leak)}">${best.leak.toFixed(3)}</td></tr></table>`;
+
+    const frames = box.querySelector('.frames');
+    const show = (img, label) => {
+      const fig = document.createElement('figure');
+      const cap = document.createElement('figcaption');
+      cap.className = 'lbl'; cap.textContent = label;
+      const el = document.createElement('canvas');
+      el.width = img.width; el.height = img.height;
+      el.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+      fig.append(cap, el);
+      frames.appendChild(fig);
+    };
+    planes.forEach((p, i) => show(p, `frame ${i + 1}`));
+    show(averageFrames(planes), 'their mean, which is what you see');
+    $('out').appendChild(box);
+  }
+}
+
+let t = 0;
+const schedule = () => { clearTimeout(t); t = setTimeout(render, 90); };
+for (const id of ['txt', 'amp', 'blk']) $(id).oninput = schedule;
+render();
+</script>
+</body>
+</html>
