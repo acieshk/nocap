@@ -21,6 +21,13 @@
           text-transform:uppercase; color:var(--faint) }
   .head > div { padding:10px 10px; text-align:center }
   .head > div:first-child { text-align:left; padding-left:14px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px;
+          margin:16px 0 0 }
+  .cell { border:1px solid var(--line); border-radius:10px; overflow:hidden }
+  .cell .top { padding:16px 12px; display:grid; place-items:center }
+  .cell .meta { padding:8px 11px; background:var(--panel); border-top:1px solid var(--line);
+                font-size:11.5px; display:flex; justify-content:space-between; gap:8px }
+  .cell .meta b { font-family:ui-monospace,monospace; font-weight:500 }
 </style>
 </head>
 <body>
@@ -66,6 +73,25 @@
   place for the split. Drag it toward either end and watch the masking column
   fall away even at separations that were fine before.
 </p>
+
+<h2>Colour, not just separation</h2>
+<p>
+  The ladder above is grey, so it only tests how far apart the two tones are.
+  Real designs have a hue, and hue matters for a reason that is not obvious:
+  <b>swing is per channel</b>. A saturated colour has at least one channel near 0
+  or 255, that channel has no room to be displaced, and the pair cannot carry
+  noise however far apart the two colours look.
+</p>
+<p>
+  Same separation in every cell below. Only hue and saturation change.
+</p>
+<div class="grid" id="hues"></div>
+<div class="note">
+  If the saturated row masks worse than the muted row at identical separation,
+  that is the per-channel headroom showing. It is also why the shipped defaults
+  are near-greys rather than a brand colour, and why <code>fit</code>
+  desaturates when it has to.
+</div>
 
 <h2>What to look for</h2>
 <ul>
@@ -161,11 +187,73 @@ function build() {
   }
 }
 
+/** HSL to RGB, so a hue can be swept without pulling in a colour library. */
+function hsl(h, s, l) {
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  return toHex([f(0), f(8), f(4)]);
+}
+
+const HUES = [[210, 'blue'], [150, 'green'], [35, 'amber'], [340, 'pink']];
+const SATS = [[0.08, 'muted'], [0.35, 'mid'], [0.9, 'saturated']];
+
+function buildHues() {
+  const txt = $('txt').value;
+  const preset = STRENGTHS[$('strength').value];
+  $('hues').innerHTML = '';
+  for (const [sat, satName] of SATS) {
+    for (const [h, hueName] of HUES) {
+      // Same lightness split every time, so only hue and saturation vary.
+      const color = hsl(h, sat, 0.62);
+      const background = hsl(h, sat, 0.38);
+      const pal = checkPalette({ color, background });
+
+      const cv = document.createElement('canvas');
+      cv.width = 250; cv.height = 46;
+      const c = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+      c.fillStyle = background; c.fillRect(0, 0, cv.width, cv.height);
+      c.font = '600 21px ui-monospace, monospace'; c.fillStyle = color;
+      c.textBaseline = 'middle'; c.fillText(txt, 8, cv.height / 2);
+      let seed = 91;
+      const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      const planes = splitFrames(c.getImageData(0, 0, cv.width, cv.height), {
+        mode: 'amplitude', frames: 2, chroma: 0, hardness: preset.hardness,
+        noiseScale: Math.max(2, Math.round(3 * preset.blockRatio)),
+        amplitude: preset.amplitude, gamma: 2.4, linearLight: true, rng });
+      const leak = denoisedLeak(planes[0], averageFrames(planes), 5).leak;
+
+      const box = document.createElement('div');
+      box.className = 'cell';
+      box.innerHTML = `<div class="top" style="background:${background}"></div>
+        <div class="meta"><span>${satName} ${hueName}<br>
+          <span style="color:var(--faint)">${color} on ${background}</span></span>
+        <span style="text-align:right">masking
+          <b class="${pal.ratio >= 1 ? 'ok' : pal.ratio >= 0.7 ? 'warn' : 'bad'}">${pal.ratio.toFixed(2)}</b><br>
+          leak <b class="${leak < 0.32 ? 'ok' : leak < 0.55 ? 'warn' : 'bad'}">${leak.toFixed(2)}</b></span></div>`;
+
+      const el = document.createElement('nocap-secret');
+      el.setAttribute('width', '215');
+      el.setAttribute('height', '42');
+      el.setAttribute('color', color);
+      el.setAttribute('background', background);
+      el.setAttribute('strength', $('strength').value);
+      el.setAttribute('fit', 'off');
+      el.secret = txt;
+      box.querySelector('.top').appendChild(el);
+      $('hues').appendChild(box);
+    }
+  }
+}
+
 let t = 0;
 for (const id of ['mid', 'strength', 'txt']) {
-  $(id).oninput = $(id).onchange = () => { clearTimeout(t); t = setTimeout(build, 120); };
+  $(id).oninput = $(id).onchange = () => { clearTimeout(t); t = setTimeout(() => { build(); buildHues(); }, 120); };
 }
 build();
+buildHues();
 </script>
 </body>
 </html>
