@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: contrast</title>
+<meta name="description" content="A ladder of contrast ratios, live, with what each costs an attacker beside it. Find the band that is both readable and masked.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .ladder { display:grid; gap:0; margin:16px 0 0; border:1px solid var(--line);
+            border-radius:11px; overflow:hidden }
+  .rung { display:grid; grid-template-columns:minmax(240px,1.3fr) repeat(3,minmax(78px,0.5fr));
+          gap:0; align-items:center; border-top:1px solid var(--line) }
+  .rung:first-child { border-top:0 }
+  .rung .live { padding:12px 14px; display:flex; justify-content:center }
+  .rung .n { padding:12px 10px; font-family:ui-monospace,monospace; font-size:12.5px;
+             text-align:center }
+  .rung .n small { display:block; font-size:10px; color:var(--faint); font-family:ui-sans-serif;
+                   letter-spacing:.05em; text-transform:uppercase; margin-bottom:3px }
+  .head { background:var(--panel); font:600 10.5px/1 ui-sans-serif; letter-spacing:.06em;
+          text-transform:uppercase; color:var(--faint) }
+  .head > div { padding:10px 10px; text-align:center }
+  .head > div:first-child { text-align:left; padding-left:14px }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Contrast</h1>
+<p class="lede">
+  Masking and contrast are the same axis pointing opposite ways, and only one
+  end of it has ever been measured here. Every rung below is live. Read down
+  until you cannot read them, and that is the answer nothing in this repository
+  can supply.
+</p>
+
+<div class="note">
+  <b>What is already known, and it is only the attacker's half.</b> The masking
+  ratio is <code>min(swing) / |text − background|</code>, so high contrast means
+  a large separation means a low ratio. Measured on stroke-width bars: at 4.21:1
+  a single captured frame is readable, at 2.26:1 it is marginal, at 1.72:1 it is
+  masked. What nobody has established is where <i>you</i> stop being able to read
+  it, and the answer decides whether a usable band exists at all.
+</div>
+
+<div class="ladder" id="ladder"></div>
+
+<div class="rig" style="margin-top:16px">
+  <div class="knobs">
+    <label class="f"><span>Midpoint <em id="midV">128</em></span>
+      <input type="range" id="mid" min="60" max="200" value="128"></label>
+    <label class="f"><span>Strength</span>
+      <select id="strength">
+        <option value="weak">weak</option>
+        <option value="medium" selected>medium</option>
+        <option value="strong">strong</option>
+      </select></label>
+    <label class="f"><span>Text</span><input type="text" id="txt" value="4471-0092-8834"></label>
+  </div>
+</div>
+<p style="font-size:12.5px;color:var(--faint);margin-top:10px">
+  The midpoint is held constant down the ladder so only the separation changes.
+  Mid-grey has the most headroom in both directions, so it is the friendliest
+  place for the split. Drag it toward either end and watch the masking column
+  fall away even at separations that were fine before.
+</p>
+
+<h2>What to look for</h2>
+<ul>
+  <li><b>Read down until it stops being legible.</b> Glance and read, do not
+      stare it into focus. The rung above where you fail is your floor.</li>
+  <li><b>Then look at the masking column at that rung.</b> If it is 1.0 or better
+      there is a usable band. If it is well under 1.0 then legibility and masking
+      do not overlap at this midpoint, and the honest answer is that this palette
+      cannot do both.</li>
+  <li><b>Check the leak column too.</b> Masking ratio is a prediction; the leak is
+      what one captured frame actually gives away, measured on this text.</li>
+</ul>
+
+<div class="note">
+  A rung can be masked and unreadable, which is useless, or readable and leaking,
+  which is worse than useless because it looks protected. The interesting rung is
+  the last one you can still read. Everything below it is where this technique
+  actually lives.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { checkPalette, contrastRatio, toHex, splitFrames, averageFrames,
+         leakScore, denoisedLeak, STRENGTHS } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+// Separations, not contrast ratios: contrast is what falls out, and holding the
+// midpoint fixed means this is the only variable moving down the ladder.
+const SEPARATIONS = [16, 24, 32, 44, 58, 74, 92, 112];
+
+const grey = (v) => toHex([v, v, v].map((x) => Math.max(0, Math.min(255, Math.round(x)))));
+
+function build() {
+  const mid = +$('mid').value;
+  const txt = $('txt').value;
+  const preset = STRENGTHS[$('strength').value];
+  $('midV').textContent = mid;
+
+  $('ladder').innerHTML = '<div class="rung head"><div>live, at your refresh rate</div>' +
+    '<div>contrast</div><div>masking</div><div>leak</div></div>';
+
+  for (const sep of SEPARATIONS) {
+    const color = grey(mid + sep / 2);
+    const background = grey(mid - sep / 2);
+    const pal = checkPalette({ color, background });
+    const wcag = contrastRatio(color, background);
+
+    // Measured on this text at this palette, rather than predicted from the
+    // ratio. The ratio is a model and the leak is the outcome.
+    const cv = document.createElement('canvas');
+    cv.width = 280; cv.height = 52;
+    const c = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+    c.fillStyle = background; c.fillRect(0, 0, cv.width, cv.height);
+    c.font = '600 24px ui-monospace, monospace'; c.fillStyle = color;
+    c.textBaseline = 'middle'; c.fillText(txt, 10, cv.height / 2);
+    let seed = 77;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const planes = splitFrames(c.getImageData(0, 0, cv.width, cv.height), {
+      mode: 'amplitude', frames: 2, chroma: 0, hardness: preset.hardness,
+      noiseScale: Math.max(2, Math.round(3 * preset.blockRatio)),
+      amplitude: preset.amplitude, gamma: 2.4, linearLight: true, rng });
+    const target = averageFrames(planes);
+    const leak = denoisedLeak(planes[0], target, 5).leak;
+
+    const cls = (v, a, b) => (v < a ? 'ok' : v < b ? 'warn' : 'bad');
+    const row = document.createElement('div');
+    row.className = 'rung';
+    row.style.background = background;
+    row.innerHTML = `<div class="live"></div>
+      <div class="n" style="background:var(--panel)"><small>wcag</small>${wcag.toFixed(2)}:1</div>
+      <div class="n" style="background:var(--panel)"><small>ratio</small>
+        <span class="${pal.ratio >= 1 ? 'ok' : pal.ratio >= 0.7 ? 'warn' : 'bad'}">${pal.ratio.toFixed(2)}</span></div>
+      <div class="n" style="background:var(--panel)"><small>one frame</small>
+        <span class="${cls(leak, 0.32, 0.55)}">${leak.toFixed(2)}</span></div>`;
+
+    const el = document.createElement('nocap-secret');
+    el.setAttribute('width', '250');
+    el.setAttribute('height', '46');
+    el.setAttribute('color', color);
+    el.setAttribute('background', background);
+    el.setAttribute('strength', $('strength').value);
+    // fit would silently move an unreadable pair somewhere readable, which is
+    // the one thing this page must not do: the whole point is seeing what each
+    // palette actually does.
+    el.setAttribute('fit', 'off');
+    el.secret = txt;
+    row.querySelector('.live').appendChild(el);
+    $('ladder').appendChild(row);
+  }
+}
+
+let t = 0;
+for (const id of ['mid', 'strength', 'txt']) {
+  $(id).oninput = $(id).onchange = () => { clearTimeout(t); t = setTimeout(build, 120); };
+}
+build();
+</script>
+</body>
+</html>

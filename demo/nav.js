@@ -10,6 +10,7 @@ const PAGES = [
   ['index.html', 'Overview'],
   ['sandbox.html', 'Sandbox'],
   ['styling.html', 'Styling'],
+  ['contrast.html', 'Contrast'],
   ['scenarios.html', 'Scenarios'],
   ['algorithms.html', 'Algorithms & comfort'],
   ['challenge.html', 'Scraping challenge'],
