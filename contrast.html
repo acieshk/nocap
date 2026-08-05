@@ -93,6 +93,31 @@
   desaturates when it has to.
 </div>
 
+<h2>Palettes at a contrast you choose</h2>
+<p>
+  Pick a contrast and every hue below is solved to hit it, so you can compare
+  colours rather than greys at the readability level you actually want. The
+  lightness pair is searched per hue, because the same two lightnesses give
+  different contrast at different hues.
+</p>
+<div class="rig">
+  <div class="knobs">
+    <label class="f"><span>Target contrast <em id="tgtV">4.0</em>:1</span>
+      <input type="range" id="tgt" min="1.5" max="7" step="0.1" value="4"></label>
+    <label class="f"><span>Saturation <em id="satV">0.18</em></span>
+      <input type="range" id="sat" min="0" max="0.6" step="0.02" value="0.18"></label>
+  </div>
+</div>
+<div class="grid" id="solved"></div>
+<div class="note">
+  <b>Watch the masking column as you raise the target.</b> Around 4:1 it sits near
+  0.45, which means a single captured frame is giving up noticeably more than it
+  does at 2:1. That is not a bug in the palette, it is the trade: the same
+  separation that makes it comfortable for you makes it recoverable for a
+  capture. If you want 4:1, the honest position is that this is a scraping
+  defence with a weak capture story rather than both at once.
+</div>
+
 <h2>What to look for</h2>
 <ul>
   <li><b>Read down until it stops being legible.</b> Glance and read, do not
@@ -248,12 +273,86 @@ function buildHues() {
   }
 }
 
+const SOLVE_HUES = [[0, 'neutral', 0], [210, 'blue', 1], [190, 'teal', 1],
+                    [150, 'green', 1], [35, 'amber', 1], [275, 'violet', 1],
+                    [345, 'rose', 1]];
+
+/** Search a text lightness that hits the target contrast against a fixed base. */
+function solvePair(hue, sat, target) {
+  const bgL = 0.34;
+  const background = hsl(hue, sat, bgL);
+  let lo = bgL;
+  let hi = 1;
+  let color = hsl(hue, sat, 1);
+  for (let i = 0; i < 22; i++) {
+    const mid = (lo + hi) / 2;
+    color = hsl(hue, sat, mid);
+    if (contrastRatio(color, background) < target) lo = mid;
+    else hi = mid;
+  }
+  return { color, background };
+}
+
+function buildSolved() {
+  const target = +$('tgt').value;
+  const sat = +$('sat').value;
+  const txt = $('txt').value;
+  const preset = STRENGTHS[$('strength').value];
+  $('tgtV').textContent = target.toFixed(1);
+  $('satV').textContent = sat.toFixed(2);
+  $('solved').innerHTML = '';
+
+  for (const [hue, name, useSat] of SOLVE_HUES) {
+    const { color, background } = solvePair(hue, useSat ? sat : 0, target);
+    const pal = checkPalette({ color, background });
+    const got = contrastRatio(color, background);
+
+    const cv = document.createElement('canvas');
+    cv.width = 250; cv.height = 46;
+    const c = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+    c.fillStyle = background; c.fillRect(0, 0, cv.width, cv.height);
+    c.font = '600 21px ui-monospace, monospace'; c.fillStyle = color;
+    c.textBaseline = 'middle'; c.fillText(txt, 8, cv.height / 2);
+    let seed = 55;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const planes = splitFrames(c.getImageData(0, 0, cv.width, cv.height), {
+      mode: 'amplitude', frames: 2, chroma: 0, hardness: preset.hardness,
+      noiseScale: Math.max(2, Math.round(3 * preset.blockRatio)),
+      amplitude: preset.amplitude, gamma: 2.4, linearLight: true, rng });
+    const leak = denoisedLeak(planes[0], averageFrames(planes), 5).leak;
+
+    const box = document.createElement('div');
+    box.className = 'cell';
+    box.innerHTML = `<div class="top" style="background:${background}"></div>
+      <div class="meta"><span>${name}<br>
+        <span style="color:var(--faint)">${color} on ${background}</span></span>
+      <span style="text-align:right">${got.toFixed(2)}:1 &middot; masking
+        <b class="${pal.ratio >= 1 ? 'ok' : pal.ratio >= 0.7 ? 'warn' : 'bad'}">${pal.ratio.toFixed(2)}</b><br>
+        leak <b class="${leak < 0.32 ? 'ok' : leak < 0.55 ? 'warn' : 'bad'}">${leak.toFixed(2)}</b></span></div>`;
+
+    const el = document.createElement('nocap-secret');
+    el.setAttribute('width', '215');
+    el.setAttribute('height', '42');
+    el.setAttribute('color', color);
+    el.setAttribute('background', background);
+    el.setAttribute('strength', $('strength').value);
+    el.setAttribute('fit', 'off');
+    el.secret = txt;
+    box.querySelector('.top').appendChild(el);
+    $('solved').appendChild(box);
+  }
+}
+
 let t = 0;
+for (const id of ['tgt', 'sat']) {
+  $(id).oninput = () => { clearTimeout(t); t = setTimeout(buildSolved, 120); };
+}
 for (const id of ['mid', 'strength', 'txt']) {
-  $(id).oninput = $(id).onchange = () => { clearTimeout(t); t = setTimeout(() => { build(); buildHues(); }, 120); };
+  $(id).oninput = $(id).onchange = () => { clearTimeout(t); t = setTimeout(() => { build(); buildHues(); buildSolved(); }, 120); };
 }
 build();
 buildHues();
+buildSolved();
 </script>
 </body>
 </html>
