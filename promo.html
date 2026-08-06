@@ -579,7 +579,7 @@ function setPattern(i) {
   for (const el of document.querySelectorAll('nocap-secret')) {
     if (inner) {
       el.setAttribute('pattern', inner);
-      el.setAttribute('pattern-strength', '16');
+      el.setAttribute('pattern-strength', '20');
       alignPattern(el);
     } else {
       el.removeAttribute('pattern');
