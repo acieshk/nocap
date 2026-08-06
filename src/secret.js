@@ -1,7 +1,7 @@
 import { Flicker } from './flicker.js';
 import { leakScore, planeRange, averageFrames, perceivedMean } from './splitter.js';
 import { checkPalette, toLight, toCode, isoluminantPartner, fitToBand,
-         isoluminantPair, toRgb } from './palette.js';
+         isoluminantPair, toRgb, luma } from './palette.js';
 import { fakeLike } from './fake.js';
 import { splitFrames } from './splitter.js';
 
