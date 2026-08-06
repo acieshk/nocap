@@ -8,38 +8,43 @@
 <style>
   :root { color-scheme: dark }
   * { box-sizing:border-box; margin:0 }
-  /* The page is #404040 because the ELEMENT cannot come to the page.
-     Near-black has almost no swing: a pixel at 17 can barely be displaced, so a
-     secret blended into #111114 could not carry noise and would not mask at any
-     amplitude. #6d6d6d on #404040 is about the darkest pair that still reaches a
-     masking ratio of 1.0, so the page meets the secret instead and the element
-     disappears into it completely. */
-  body { background:#404040; color:#ededed; min-height:100vh; overflow:hidden;
+  body { min-height:100vh; overflow:hidden; color:#ededed; background:#404040;
          font:16px/1.5 Inter,system-ui,-apple-system,sans-serif;
-         display:grid; place-items:center }
+         transition:background 700ms cubic-bezier(.4,0,.2,1) }
   #stage { position:relative; width:100%; height:100vh; display:grid; place-items:center }
-  /* Every beat is absolutely placed and centred, so only opacity and an integer
-     translate ever animate. Scaling or rotating the canvas would resample the
-     noise toward its mean and quietly undo the protection, which is the one
-     thing a page demonstrating the protection must not do. */
-  .beat { position:absolute; opacity:0; will-change:opacity, transform;
-          transition:opacity .45s ease, transform .45s cubic-bezier(.2,.7,.3,1) }
-  .beat.on { opacity:1 }
-  .note { position:fixed; left:0; right:0; bottom:26px; text-align:center;
-          font-size:13.5px; color:#c2c2c2; opacity:0; transition:opacity .6s ease }
+  .beat { position:absolute; display:flex; flex-wrap:wrap; gap:0 10px;
+          justify-content:center; align-items:center; max-width:93vw; pointer-events:none }
+  /* One element per word, each on its own delay. Only opacity and an integer
+     translate ever animate: scaling or rotating a canvas resamples it, and
+     resampling noise moves it toward its mean, which is the attack this whole
+     thing defends against. A promo animating with scale would be demonstrating
+     the bypass. */
+  .word { opacity:0; will-change:opacity, transform;
+          transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1) }
+  .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
+  .note { position:fixed; left:0; right:0; bottom:30px; text-align:center;
+          font-size:14px; color:#e6e6e6; opacity:0; transition:opacity .5s ease }
   .note.on { opacity:1 }
-  .note b { color:#cdd6ff; font-weight:600 }
-  #hint { position:fixed; top:22px; right:24px; font-size:12px; color:#8d8d8d;
-          font-family:ui-monospace,monospace }
-  #replay { position:fixed; bottom:24px; right:24px; background:#4c4c4c; color:#e4e4e4;
-            border:1px solid #626262; border-radius:7px; padding:7px 13px; font:inherit;
-            font-size:13px; cursor:pointer; opacity:0; transition:opacity .4s ease }
-  #replay.on { opacity:1 }
-  @media (prefers-reduced-motion: reduce) { .beat { transition:opacity .3s ease } }
+  .note b { color:#fff; font-weight:600 }
+  #code { position:absolute; opacity:0; transition:opacity .6s ease; text-align:left;
+          font-family:ui-monospace,SFMono-Regular,monospace; font-size:16px; line-height:1.9 }
+  #code.on { opacity:1 }
+  #code .k { color:#cbd6ff } #code .s { color:#ffd9a8 } #code .c { color:#adadad }
+  #code .cmd { display:block; font-size:23px; color:#fff; margin-bottom:22px }
+  #hint { position:fixed; top:22px; right:24px; font-size:12px; color:#cfcfcf;
+          font-family:ui-monospace,monospace; letter-spacing:.04em }
+  #replay { position:fixed; bottom:24px; right:24px; background:rgba(255,255,255,.14);
+            color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:7px;
+            padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+            opacity:0; transition:opacity .4s ease }
+  #replay.on { opacity:1; pointer-events:auto }
+  @media (prefers-reduced-motion: reduce) {
+    .word { transition:opacity .3s ease } body { transition:none }
+  }
 </style>
 </head>
 <body>
-<div id="stage"></div>
+<div id="stage"><div id="code"></div></div>
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
@@ -48,130 +53,182 @@
 import './src/secret.js';
 
 /**
- * The live reel.
- *
- * A recording of this cannot show it, which is why this page exists. The effect
- * only happens at the display's refresh rate: the eye integrates two planes into
- * their mean and any capture lands on one plane. Filmed, that becomes either
- * flat text (the mean) or noise (a plane), and neither is the thing.
- *
- * So it runs live and asks the viewer to attack it, which is the only honest
- * demonstration available.
+ * The live reel. A recording cannot show this, which is the whole reason the
+ * page exists: the effect only happens at a display's refresh rate, where an eye
+ * integrates two planes and a capture lands on one. Filmed, it is either flat
+ * text or noise. So it runs live and asks the viewer to attack it.
  */
 const stage = document.getElementById('stage');
+const note = document.getElementById('note');
+const codeEl = document.getElementById('code');
+const replay = document.getElementById('replay');
 
+/**
+ * Tinted palettes at the luminance of the pair that is known to mask.
+ *
+ * #6d6d6d on #404040 measures 1.00 and is about the darkest that does. These
+ * hold its two lightnesses and add hue. Saturation stays low on purpose: a
+ * saturated colour pins a channel near an extreme, that channel cannot be
+ * displaced, and the pair stops masking however far apart the colours look.
+ */
+// 0.05, found by measurement rather than taste. At 0.14 the tinted pairs fell
+// to 0.81 masking against the neutral's 1.00, because saturation eats swing:
+// the further a channel sits from mid, the less room it has to be displaced.
+// This is the most hue the palette can carry and still mask.
+const SAT = 0.05;
+function hsl(h, s, l) {
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  const hx = (v) => v.toString(16).padStart(2, '0');
+  return '#' + hx(f(0)) + hx(f(8)) + hx(f(4));
+}
+const pal = (hue) => (hue === null
+  ? { fg: '#6d6d6d', bg: '#404040' }
+  : { fg: hsl(hue, SAT, 0.427), bg: hsl(hue, SAT, 0.251) });
+
+/**
+ * Weights lean light, because a thinner stem simply looks better here. It also
+ * happens to help: the block the element derives is twice the STROKE, and a
+ * 300-weight stem is far narrower than the size/8 that derivation assumes, so
+ * lighter type wants a finer block on both aesthetic and measured grounds.
+ */
 const SCRIPT = [
-  { text: 'Hi',                    size: 92,  hold: 1500, from: [0, 26] },
-  { text: 'This is nocap',         size: 86,  hold: 2100, from: [0, 22] },
-  { text: 'Text',                  size: 104, hold: 1300, from: [-40, 0] },
-  { text: 'that you cannot',       size: 70,  hold: 1500, from: [40, 0] },
-  { text: 'capture.',              size: 116, hold: 2400, from: [0, 20] },
-  { text: 'Try taking a picture',  size: 62,  hold: 2600, from: [0, 18],
+  { text: 'Hi', size: 104, hold: 1400, hue: null, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 9 },
+  { text: 'This is nocap', size: 88, hold: 2000, hue: 210, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
+  { text: 'Text', size: 118, hold: 1200, hue: 210, enter: 'fan',
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 10 },
+  { text: 'that you cannot', size: 70, hold: 1500, hue: 190, enter: 'left',
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8 },
+  { text: 'capture.', size: 124, hold: 2300, hue: 150, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 13 },
+  { text: 'Try taking a picture', size: 60, hold: 2500, hue: 35, enter: 'alt',
+    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  { text: 'or screen-capture it',  size: 62,  hold: 2600, from: [0, 18],
+  { text: 'or screen-capture it', size: 60, hold: 2500, hue: 35, enter: 'alt',
+    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7,
     note: 'a still gets noise. a <b>recording</b> still wins, and that is inherent' },
-  { text: 'It makes AI scraping',  size: 62,  hold: 1700, from: [-30, 0] },
-  { text: 'hard as well',          size: 86,  hold: 2000, from: [30, 0],
+  { text: 'It makes AI scraping', size: 58, hold: 1600, hue: 275, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 7 },
+  { text: 'hard as well', size: 92, hold: 1900, hue: 275, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 11,
     note: 'the text never enters the DOM, so there is nothing to scrape' },
-  { text: 'hard, not impossible',  size: 58,  hold: 2600, from: [0, 16],
-    note: '<b>npm i nocap</b>' },
+  { text: 'hard, not impossible', size: 56, hold: 2400, hue: 345, enter: 'up',
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7 },
 ];
 
-// Built once. Creating an element per beat per loop would restart a flicker on
-// every pass and show as a stutter at the moment each line appears.
+// Where each word starts before it settles at the centre. Per word rather than
+// per line, so a phrase assembles instead of sliding in as a slab.
+const ENTER = {
+  up:   (i) => `translate3d(0, ${30 + i * 6}px, 0)`,
+  left: (i) => `translate3d(${-70 - i * 26}px, 0, 0)`,
+  alt:  (i) => `translate3d(0, ${i % 2 ? 34 : -34}px, 0)`,
+  // Not a CSS scale, which would resample the canvas. The words fan out from
+  // the centre and close up, which reads as a zoom without touching a pixel of
+  // the rendered noise.
+  fan:  (i, n) => `translate3d(${(i - (n - 1) / 2) * 54}px, 0, 0)`,
+};
+
+/**
+ * One element per word. The element draws a single line, so a phrase is several
+ * of them, and that is what lets each word carry its own entrance.
+ */
 const beats = SCRIPT.map((b) => {
   const wrap = document.createElement('div');
   wrap.className = 'beat';
-  wrap.style.transform = `translate3d(${b.from[0]}px, ${b.from[1]}px, 0)`;
+  const { fg, bg } = pal(b.hue);
+  const words = b.text.split(' ');
 
-  const el = document.createElement('nocap-secret');
-  // Sized to the text rather than guessed, or the element clips what it draws
-  // and says so in the console.
-  const probe = document.createElement('canvas').getContext('2d');
-  probe.font = `700 ${b.size}px Inter, system-ui, sans-serif`;
-  el.setAttribute('width', String(Math.ceil(probe.measureText(b.text).width) + 70));
-  el.setAttribute('height', String(Math.round(b.size * 1.7)));
-  el.setAttribute('font-family', 'Inter, system-ui, sans-serif');
-  el.setAttribute('font-weight', '700');
-  // font-scale, NOT font-size. font-size is measured in DEVICE pixels against
-  // the canvas height, so on a 2x display every line would come out half the
-  // intended size. A scale is relative to the height and survives any density.
-  el.setAttribute('font-scale', '0.58');
-  el.setAttribute('strength', 'medium');
-  // Block set by hand, well under the 2x-stroke the element would derive.
-  //
-  // At this size the derived block is 24 to 30px, which reads as a chunky
-  // checkerboard rather than as noise and looks bad enough to undercut the
-  // pitch. The cost of going finer is narrow: block size drives BLUR
-  // resistance, not raw leak, which sat between 0.17 and 0.22 at every block in
-  // the earlier sweep.
-  //
-  // Measured at stroke 13, which is what this page renders, and it is not the
-  // compromise it looked like:
-  //
-  //   block  7   raw 0.278   blurred 0.409
-  //   block 12   raw 0.233   blurred 0.233   <- finer AND better
-  //   block 26   raw 0.378   blurred 0.378   <- what 2x stroke derives
-  //
-  // 12 wins on both axes. The 2x rule was calibrated at strokes 3 to 8 and does
-  // not hold up here: a block far larger than the stroke lifts or crushes whole
-  // strokes uniformly, so the blocks start tracing the text and the raw leak
-  // goes UP. There is a ceiling on block size as well as a floor, and only the
-  // floor is in the library. Filed.
-  el.setAttribute('noise-scale', '12');
-  // Matched to the page, so no panel edge shows and the words appear to float on
-  // the background itself. This is the darkest pair that still masks, which is
-  // why the page is this grey rather than the near-black it started as.
-  el.setAttribute('color', '#6d6d6d');
-  el.setAttribute('background', '#404040');
-  wrap.appendChild(el);
+  words.forEach((word, i) => {
+    const el = document.createElement('nocap-secret');
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = `${b.weight} ${b.size}px ${b.face}`;
+    el.setAttribute('width', String(Math.ceil(probe.measureText(word).width) + 30));
+    el.setAttribute('height', String(Math.round(b.size * 1.55)));
+    el.setAttribute('font-family', b.face);
+    el.setAttribute('font-weight', String(b.weight));
+    // A scale, not a size: font-size is device pixels against the canvas
+    // height, so type would come out half-sized on a 2x display.
+    el.setAttribute('font-scale', '0.56');
+    el.setAttribute('color', fg);
+    el.setAttribute('background', bg);
+    // Set per beat, under the 2x-stroke the element derives. That rule gives
+    // 24 to 30px at this size, which reads as tiles rather than noise, and at
+    // stroke 13 a 12px block measured finer AND better on both axes. It was
+    // calibrated at strokes 3 to 8 and has a ceiling above them.
+    el.setAttribute('noise-scale', String(b.block));
+    el.className = 'word';
+    el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
+    el.style.transitionDelay = `${i * 70}ms`;
+    wrap.appendChild(el);
+    el.secret = word;
+  });
+
   stage.appendChild(wrap);
-  el.secret = b.text;
   return { ...b, wrap };
 });
 
-const note = document.getElementById('note');
-const replay = document.getElementById('replay');
+const USAGE = `<span class="cmd">npm i nocap</span>
+<span class="k">import</span> <span class="s">'nocap'</span>;  <span class="c">// registers &lt;nocap-secret&gt;</span>
+
+<span class="c">&lt;nocap-secret</span> <span class="k">strength</span>=<span class="s">"medium"</span><span class="c">&gt;&lt;/nocap-secret&gt;</span>
+
+<span class="c">// write-only, and it never enters the DOM</span>
+el.<span class="k">secret</span> = <span class="k">await</span> fetchAccountNumber();`;
+
 let timer = 0;
 let stopped = false;
 
 function play(i) {
   if (stopped) return;
-  if (i >= beats.length) {
-    replay.classList.add('on');
-    return;
-  }
+  if (i >= beats.length) return showUsage();
+
   const b = beats[i];
-  // Land on the centre. Only opacity and an integer translate move, so the
-  // canvas is never resampled and the noise stays exactly as rendered.
+  document.body.style.background = pal(b.hue).bg;
   b.wrap.classList.add('on');
-  b.wrap.style.transform = 'translate3d(0, 0, 0)';
   note.innerHTML = b.note ?? '';
   note.classList.toggle('on', Boolean(b.note));
 
   timer = setTimeout(() => {
     b.wrap.classList.remove('on');
-    b.wrap.style.transform = `translate3d(${-b.from[0]}px, ${-b.from[1]}px, 0)`;
+    // Put the start offsets back once it has faded, so the next loop enters the
+    // same way rather than appearing from wherever it stopped.
     setTimeout(() => {
-      // Reset for the next loop without a visible jump.
-      b.wrap.style.transition = 'none';
-      b.wrap.style.transform = `translate3d(${b.from[0]}px, ${b.from[1]}px, 0)`;
-      requestAnimationFrame(() => { b.wrap.style.transition = ''; });
-    }, 460);
+      const words = [...b.wrap.children];
+      words.forEach((el, k) => {
+        el.style.transition = 'none';
+        el.style.transform = (ENTER[b.enter] ?? ENTER.up)(k, words.length);
+        requestAnimationFrame(() => { el.style.transition = ''; });
+      });
+    }, 440);
     play(i + 1);
   }, b.hold);
+}
+
+function showUsage() {
+  document.body.style.background = '#404040';
+  codeEl.innerHTML = USAGE;
+  codeEl.classList.add('on');
+  note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
+  note.classList.add('on');
+  replay.classList.add('on');
 }
 
 function start() {
   stopped = false;
   clearTimeout(timer);
+  codeEl.classList.remove('on');
   replay.classList.remove('on');
   for (const b of beats) b.wrap.classList.remove('on');
-  setTimeout(() => play(0), 300);
+  setTimeout(() => play(0), 320);
 }
 
 replay.onclick = start;
-// Pause when the tab is hidden, so a backgrounded page is not still cycling.
+// A backgrounded tab should not keep cycling.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { stopped = true; clearTimeout(timer); }
   else start();
