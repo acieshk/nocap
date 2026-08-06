@@ -102,6 +102,25 @@
   desaturates when it has to.
 </div>
 
+<div class="note" style="border-left-color:#7a3434;background:#331a1a;color:#e0a0a0">
+  <b>Measured: at 4:1 this technique does not mask.</b> Searching every grey pair
+  between 4.0 and 4.6:1 for the one that masks best:
+  <br><br>
+  <code>#cbcbcb on #5d5d5d &nbsp; 4.06:1 &nbsp; masking 0.59 &nbsp; leak 0.63</code><br>
+  <code>#c1c1c1 on #575757 &nbsp; 4.01:1 &nbsp; masking 0.57 &nbsp; leak 0.55</code>
+  <br><br>
+  A leak of 0.55 to 0.63 is a single frame giving up most of the value. At 2.2:1
+  the same measurement is 0.10. Nothing recovers this at 4:1, because the ratio
+  is <code>min(swing) / separation</code> and 4:1 <i>is</i> a large separation.
+  <br><br>
+  <b>That does not make 4:1 wrong, it makes it a different product.</b> The
+  anti-scraping half does not depend on the palette at all: the value is canvas
+  pixels either way, so it is absent from the DOM, the accessibility tree,
+  <code>innerText</code> and Select All whatever the contrast. Choose 4:1 and you
+  keep every one of those absolutely, and give up the capture story. Choose 2:1
+  and you keep both, at a contrast below WCAG AA for body text.
+</div>
+
 <h2>Pick a pair</h2>
 <p>
   Text and background hue move independently here, because a coloured accent on
