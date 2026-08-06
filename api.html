@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: API</title>
+<meta name="description" content="Every attribute and every export, with what each one trades and why it works the way it does.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .api { width:100%; border-collapse:collapse; font-size:13.5px; margin:14px 0 0 }
+  .api th { text-align:left; font:600 10.5px/1 ui-sans-serif; letter-spacing:.07em;
+            text-transform:uppercase; color:var(--faint); padding:0 12px 8px 0;
+            border-bottom:1px solid var(--line) }
+  .api td { padding:11px 12px 11px 0; border-bottom:1px solid var(--line);
+            vertical-align:top; text-align:left; white-space:normal }
+  .api td:first-child { white-space:nowrap; font-family:ui-monospace,monospace;
+                        color:var(--accent); width:1% }
+  .api td:nth-child(2) { white-space:nowrap; font-family:ui-monospace,monospace;
+                         color:var(--faint); width:1% }
+  .api tr.exp td { color:#d9bd80 }
+  .toc { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0 }
+  .toc a { font-size:12.5px; padding:5px 11px; border:1px solid var(--line);
+           border-radius:20px; text-decoration:none; color:var(--muted) }
+  .toc a:hover { border-color:var(--accent); color:var(--fg) }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>API</h1>
+<p class="lede">
+  Every attribute and every export. Each row says what it trades, not just what
+  it sets, because almost nothing here is free and the costs are measured.
+</p>
+
+<div class="toc">
+  <a href="#value">The value</a><a href="#strength">Strength</a><a href="#split">The split</a>
+  <a href="#colour">Colour</a><a href="#type">Type</a><a href="#modes">Modes</a>
+  <a href="#scratch">Scratch</a><a href="#exports">Exports</a><a href="#how">How it works</a>
+</div>
+
+<h2 id="value">The value</h2>
+<pre>import 'nocap';                          // registers &lt;nocap-secret&gt;
+el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pre>
+<table class="api">
+  <tr><th>member</th><th>type</th><th>what it does, and what it costs</th></tr>
+  <tr><td>.secret</td><td>set only</td><td>The value. <b>No getter, deliberately:</b> one would put the plaintext back within reach of anything holding the element. The element keeps it internally so a restyle does not need it again, which is why <code>scramble</code> exists.</td></tr>
+  <tr><td>.planes</td><td>Pixels[]</td><td>The frames a capture can land on. Plane <i>k</i> is exactly what one screenshot gets.</td></tr>
+  <tr><td>.measureLeak()</td><td>number</td><td>Worst plane scored against the mean. ~0.2 at the defaults on text, 1.0 is fully readable.</td></tr>
+  <tr><td>.fitted</td><td>object</td><td>What the palette was moved to, or <code>null</code> if it already masked. See <code>fit</code>.</td></tr>
+  <tr><td>width / height</td><td>CSS px</td><td>Attributes, not styles. <b>Do not size with CSS:</b> letting the browser rescale the canvas resamples the noise toward its mean, which is the one transformation that makes a captured frame readable.</td></tr>
+</table>
+
+<h2 id="strength">Strength</h2>
+<table class="api">
+  <tr><th>value</th><th>at the default size</th><th>what it trades</th></tr>
+  <tr><td>weak</td><td>amp 80, block 4</td><td>Block ratio 1.33, deliberately <b>under</b> the saturation point, so a blur has a radius worth trying. Calmest to look at.</td></tr>
+  <tr><td>medium</td><td>amp 110, block 6</td><td>Ratio 2.0, exactly saturated. The default.</td></tr>
+  <tr><td>strong</td><td>amp 127, block 8</td><td>Ratio 2.67, headroom. The most visually active.</td></tr>
+</table>
+<div class="note">
+  These are tested points on the <b>masking</b> curve, not the comfort curve.
+  All three read comfortably at the default size on a 60Hz panel, judged by one
+  person on one display. Large text is unmeasured.
+</div>
+
+<h2 id="split">The split</h2>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>amplitude</td><td>110</td><td>How far each pixel is displaced, as a fraction of the headroom its colour allows. The biggest lever on raw leak. Capped by the palette, not by this number.</td></tr>
+  <tr><td>noise-scale</td><td>2 × stroke</td><td>Block size in device px. Its <b>only</b> job is blur resistance: raw leak barely moves with it. Derived rather than set, because the right block follows the stroke. Warns if you go under twice the stroke.</td></tr>
+  <tr><td>hardness</td><td>1</td><td>1 puts every pixel at full amplitude. Lower spreads the magnitudes and measures ~20% worse both raw and blurred, so 1 is right.</td></tr>
+  <tr><td>chroma</td><td>0</td><td>0 shares one draw across R/G/B, putting the whole budget into luminance, which is what the eye and OCR key on. 1 is per channel: rainbow static, and weaker. Measured 0.227 → 0.279 at block 12.</td></tr>
+  <tr><td>noise-profile</td><td>white</td><td><code>blue</code> high-passes the lattice, removing about a third of the low-frequency energy. Security unchanged. <b>Not true blue noise</b>, which needs void-and-cluster.</td></tr>
+  <tr><td>frames</td><td>2, or 6 for aperture</td><td>Planes per cycle. Chosen by the mode. More frames means a slower cycle, and cycle rate is refresh ÷ frames.</td></tr>
+  <tr><td>gamma</td><td>2.4</td><td>Display EOTF. Decides where plane centres are solved, so a wrong value shifts the perceived colour.</td></tr>
+  <tr><td>contrast</td><td>1</td><td>Pre-emphasis. Not needed under linear light, which does not compress.</td></tr>
+  <tr><td>ink-bias</td><td>0</td><td>Leans amplitude toward the content. <b>The trap:</b> where the noise is, is where the text is. Measured 0.263 → 0.304 → 0.441 → 0.732 across its range. Past 0.3, measure on your own content.</td></tr>
+  <tr><td>edge-fade</td><td>0</td><td>Tapers noise to nothing within N px of the element edge, so a lone block dissolves. <b>Free</b>, unlike ink-bias: it follows the canvas rectangle, which an attacker already sees. <b>Not for adjacent elements</b> — two taperings meet at a seam and read as a border.</td></tr>
+</table>
+
+<h2 id="colour">Colour</h2>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>color</td><td>#9ea6b4</td><td>Text colour.</td></tr>
+  <tr><td>background</td><td>#6b7280</td><td>Background. Usually the one to move: <b>the page has to meet the secret</b>, because a near-black ground has no room to carry noise.</td></tr>
+  <tr><td>fit</td><td>on</td><td>Moves an unmaskable palette into one that masks, keeping hue and light-or-dark character. <code>off</code> keeps your exact hex and loses the protection. White on black goes 0.00 → 1.01.</td></tr>
+  <tr><td>adaptive</td><td>off</td><td>Exact colours, amplitude capped per pixel to their own headroom.</td></tr>
+</table>
+<div class="note">
+  <b>Masking and contrast are the same axis pointing opposite ways.</b> Ratio is
+  <code>min(swing) / |text − background|</code>, so high contrast <i>is</i> a
+  large separation. Masking arrives around 2:1 and below. At 4:1 the best pair
+  reaches 0.59 masking and leaks 0.63 — readable. <b>Saturation destroys masking,
+  not hue:</b> a saturated colour pins a channel at an extreme, and a pinned
+  channel cannot be displaced.
+</div>
+
+<h2 id="type">Type</h2>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>font-family</td><td>ui-monospace</td><td>The stroke follows the font and the block follows the stroke, so this changes protection as well as looks.</td></tr>
+  <tr><td>font-weight</td><td>600</td><td>The block derivation assumes roughly this weight. A 300 stem is much thinner and wants a finer block.</td></tr>
+  <tr><td>font-size</td><td>height × 0.46</td><td>In <b>device</b> px. On a 2× display a CSS-px number renders half-size — use <code>font-scale</code> instead.</td></tr>
+  <tr><td>font-scale</td><td>0.46</td><td>Fraction of the element height. Density-independent, so prefer this.</td></tr>
+  <tr><td>letter-spacing</td><td>0</td><td>Needs a CSS length; a bare number gets <code>px</code> added. Inert under <code>scramble</code>.</td></tr>
+  <tr><td>text-align</td><td>center</td><td>left / center / right. Inert under <code>scramble</code>.</td></tr>
+  <tr><td>padding-x / padding-y</td><td>0</td><td>Inert under <code>scramble</code>.</td></tr>
+</table>
+<div class="note">
+  Any value that is not usable falls back to the documented default and warns
+  once, because an invalid <code>ctx.font</code> or a non-finite
+  <code>fillText</code> coordinate is a <b>silent</b> no-op in canvas. Text wider
+  than the element also warns rather than being quietly clipped. Stack elements
+  with <code>--nocap-radius: 0</code> or the 4px rounding notches every seam.
+</div>
+
+<h2 id="modes">Modes</h2>
+<table class="api">
+  <tr><th>mode</th><th>leak</th><th>what it does, and what it costs</th></tr>
+  <tr><td>amplitude</td><td>~0.25</td><td>Every pixel present, every value displaced. Needs colour headroom. The default.</td></tr>
+  <tr><td>aperture</td><td>~0.15</td><td>A band sweeps down; each frame carries one slice and genuinely lacks the rest. <b>Needs no colour headroom</b>, so it works at pure white. Costs a 6-frame cycle, which is 10Hz on a 60Hz panel — near the peak of temporal sensitivity.</td></tr>
+  <tr class="exp"><td>interleave</td><td>~1.0</td><td>Kept as a counterexample. Splits <i>where</i> pixels are, and subsampled text reads fine.</td></tr>
+  <tr class="exp"><td>fake</td><td>ignored</td><td>Accepted, warned about, <b>not applied</b>. The decoy measured fainter in a capture (0.175) than the value it covers (0.217), so it convinces nobody. <code>fakeLike()</code> still exported.</td></tr>
+  <tr><td>scramble</td><td>—</td><td>Stores glyphs shuffled, so a heap search never finds the value in order. Obfuscation, not encryption.</td></tr>
+  <tr class="exp"><td>chroma-decoy</td><td>—</td><td>A decoy in chrominance at zero luminance contrast. <b>Spatial, so it survives frame averaging</b> — the only thing here that does. Block 2–4px: 1px is annihilated by 4:2:0.</td></tr>
+</table>
+
+<h2 id="scratch">Scratch</h2>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>scratch</td><td>off</td><td>Unmask only a trail under the pointer. <b>Needs a pointer</b>, so keyboard and screen-reader users need another route.</td></tr>
+  <tr><td>scratch-linger</td><td>30</td><td>Seconds for a stroke to fade to 1%. A long trail sits near full duty and gives up most of the capture benefit. 1–2s if capture is the threat.</td></tr>
+  <tr><td>scratch-radius</td><td>34, or 52 coarse</td><td>Brush radius in CSS px. Wider on touch, because a fingertip covers what it reveals.</td></tr>
+  <tr><td>scratch-hint</td><td>Scratch to reveal</td><td>The affordance. Without it the element is a blank rectangle. It is real DOM text, so it is the one string the element contributes to <code>innerText</code>.</td></tr>
+  <tr><td>scratch-exclusive</td><td>on</td><td>Revealing one clears the others. <b>Does not slow extraction</b> — capture is 0.3s. It stops one frame containing two revealed values.</td></tr>
+</table>
+
+<h2 id="exports">Exports</h2>
+<table class="api">
+  <tr><th>export</th><th>kind</th><th>what it is for</th></tr>
+  <tr><td>splitFrames</td><td>core</td><td>One image to N planes. Pure, DOM-free, runs in Node.</td></tr>
+  <tr><td>averageFrames</td><td>core</td><td>Arithmetic mean — what an attacker's ffmpeg computes.</td></tr>
+  <tr><td>perceivedMean</td><td>core</td><td>Mean in <b>light</b> — what a viewer resolves. Differs from the above by ~19 levels.</td></tr>
+  <tr><td>leakScore</td><td>metric</td><td>|Pearson r| between a plane and the truth. <b>Blind spot:</b> a mode inserting a large content-independent pattern scores better for it.</td></tr>
+  <tr><td>boxBlur / gaussianBlur / medianFilter</td><td>attack</td><td>Shipped so a claim can be run. Box wins against block noise; median loses because at a radius that keeps strokes it sits inside one block.</td></tr>
+  <tr><td>denoisedLeak / bestAttack</td><td>attack</td><td>Worst result across radii, or across all three denoisers.</td></tr>
+  <tr><td>checkPalette</td><td>palette</td><td>Masking ratio, grade and warnings for a pair.</td></tr>
+  <tr><td>fitToBand</td><td>palette</td><td>Move an unmaskable pair into one that masks.</td></tr>
+  <tr><td>isoluminantPair</td><td>palette</td><td>Two colours of equal luminance whose mean is exactly the background.</td></tr>
+  <tr><td>contrastRatio / codeSwing</td><td>palette</td><td>WCAG contrast; how far a colour can travel before clipping.</td></tr>
+  <tr><td>auditPage</td><td>check</td><td>Search every readable surface for a value. Takes plaintext, so development and tests only.</td></tr>
+  <tr><td>fakeLike / detectFormat / passesLuhn</td><td>generate</td><td>Plausible values of a matching shape. Luhn-valid cards, real dates.</td></tr>
+  <tr><td>resolveOptions / resolveText</td><td>pure</td><td>Attribute resolution, exported so it can be tested without a DOM.</td></tr>
+  <tr><td>Flicker</td><td>runtime</td><td>The presenter, if you want the split without the element.</td></tr>
+</table>
+
+<h2 id="how">How it actually works</h2>
+<p>
+  Content is split into frames that alternate at your display's refresh rate.
+  Each frame is noise, their mean is the content, and your visual system does the
+  averaging. <b>There is no noise layer.</b> Each plane pixel <i>is</i> the target
+  pixel displaced, so "covering" is the wrong picture: the noise moves values, it
+  does not sit on top of them.
+</p>
+<p>
+  Two consequences follow, and both surprise people. A pixel can only be
+  displaced as far as its colour allows, which is why white — already at the
+  ceiling — cannot be displaced at all and why <code>fit</code> exists. And every
+  pixel inside one block gets the <i>same</i> offset, so local edges survive
+  intact and the block shifts brightness rather than destroying structure. That
+  is why it can look faintly transparent while still masking.
+</p>
+<p>
+  The split is solved in <b>light</b>, not in code values. A display emits
+  <code>(v/255)^gamma</code> and the eye integrates light, so averaging in sRGB
+  reads far too bright: <code>#ff0000</code> arrives as <code>#be8c8c</code>.
+  Solving the centre so the pair averages in light is what makes
+  <code>color</code> and <code>background</code> mean what they say.
+</p>
+<div class="note">
+  <b>What this defeats:</b> scrapers, LLM agents, accessibility-tree readers,
+  <code>innerText</code>, Select All, single-frame OCR — the first four
+  absolutely, because the text never becomes text. <b>What defeats it:</b> a
+  screen recording, a phone camera, and anyone with DevTools. Measured with
+  Tesseract: one frame reads 0%, sixty frames naively averaged read 100%.
+</div>
+
+  </main>
+</div>
+<script src="demo/nav.js"></script>
+</body>
+</html>

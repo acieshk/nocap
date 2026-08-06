@@ -8,6 +8,7 @@
  */
 const PAGES = [
   ['index.html', 'Overview'],
+  ['api.html', 'API'],
   ['sandbox.html', 'Sandbox'],
   ['styling.html', 'Styling'],
   ['contrast.html', 'Contrast'],

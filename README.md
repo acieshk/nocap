@@ -954,6 +954,7 @@ Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 
 | Page | What is on it |
 | --- | --- |
+| [API](https://acieshk.github.io/nocap/api.html) | Every attribute and export, with what each one trades |
 | [Overview](https://acieshk.github.io/nocap/) | The live, screenshot and denoise comparison, and the threat table |
 | [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | The masking engine, with leak measured as you change it |
 | [Styling](https://acieshk.github.io/nocap/styling.html) | Text, font and colour, with the stroke and block shown side by side |
