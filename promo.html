@@ -21,7 +21,11 @@
      blocks, and the rounding cuts notches at every seam. The word spacing lives
      INSIDE each canvas instead, as padding around the glyphs, so the noise runs
      continuously across the whole phrase. */
-  .beat { position:absolute; display:flex; flex-wrap:wrap; gap:0;
+  /* nowrap, so a phrase is always one line. fitFactor sizes the script to the
+     narrowest dimension, so wrapping would only ever happen when that fit was
+     slightly wrong, and a line breaking mid-phrase looks worse than smaller
+     type. */
+  .beat { position:absolute; display:flex; flex-wrap:nowrap; gap:0;
           justify-content:center; align-items:center; max-width:100%; pointer-events:none }
   /* One element per word, each on its own delay. Only opacity and an integer
      translate ever animate: scaling or rotating a canvas resamples it, and
@@ -45,11 +49,14 @@
   /* The install line is plain text, not a canvas. It is the one line in the reel
      that has to be readable and selectable rather than protected. */
   .term { max-width:100%; overflow:hidden; text-overflow:ellipsis; margin:0 8px;
+          cursor:pointer; user-select:all; pointer-events:auto;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
           color:#4ade80; background:#0c140f; border:1px solid #1e3326;
           border-radius:10px; padding:26px 42px; white-space:nowrap;
           text-shadow:0 0 22px rgba(74,222,128,.4) }
-  .term .p { color:#3f7a56; margin-right:14px }
+  .term .p { color:#3f7a56; margin-right:14px; user-select:none }
+  .term[data-copied]::after { content:'copied'; position:absolute; margin-left:18px;
+                              font-size:15px; color:#3f7a56; letter-spacing:.06em }
   .note.on { opacity:1 }
   .note b { color:#fff; font-weight:600 }
   #code { position:absolute; opacity:0; transition:opacity .6s ease; text-align:left;
@@ -237,6 +244,11 @@ const ENTER = {
  * One factor for the whole reel rather than per beat, so the relative weight of
  * the lines survives. Shrinking only the widest would flatten the rhythm.
  */
+// One place, so the measuring pass and the render agree. They disagreeing is
+// exactly how the line came to overflow.
+const PAD = (b) => (b.split === 'chars' ? 22 : 66);
+const pad = (b) => Math.max(6, Math.round(PAD(b) * FIT));
+
 function fitFactor() {
   const probe = document.createElement('canvas').getContext('2d');
   let widest = 1;
@@ -247,10 +259,10 @@ function fitFactor() {
     // assigned, since FIT is what this function returns, and the whole page
     // died on that temporal dead zone with no element rendered at all.
     probe.font = `${b.weight} ${b.size}px ${b.face}`;
-    const pad = b.split === 'chars' ? 22 : 66;
+    const p = PAD(b);
     const units = b.split === 'chars' ? [...b.text] : b.text.split(' ');
     widest = Math.max(widest,
-      units.reduce((sum, u) => sum + probe.measureText(u).width + pad, 0));
+      units.reduce((sum, u) => sum + probe.measureText(u).width + p, 0));
     tallest = Math.max(tallest, b.size * 1.95);
   }
   const availW = Math.max(240, innerWidth - 24);
@@ -274,6 +286,21 @@ const beats = SCRIPT.map((b) => {
     term.className = 'word term';
     term.style.fontSize = `${Math.max(19, Math.round(46 * FIT))}px`;
     term.innerHTML = '<span class="p">$</span>' + b.text;
+    term.title = 'click to copy';
+    // Selectable AND one click away. It is the only line here meant to leave the
+    // screen, so retyping it should never be the only option.
+    term.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(b.text);
+        term.dataset.copied = '1';
+        setTimeout(() => { delete term.dataset.copied; }, 1400);
+      } catch {
+        // Clipboard needs a permission and a secure context. user-select:all
+        // means one click already selects the whole line, so say that instead of
+        // reporting a failure at someone who can just press Ctrl+C.
+        getSelection().selectAllChildren(term);
+      }
+    };
     term.style.transform = 'translate3d(0, 26px, 0)';
     wrap.appendChild(term);
     stage.appendChild(wrap);
@@ -286,16 +313,21 @@ const beats = SCRIPT.map((b) => {
   words.forEach((word, i) => {
     const el = document.createElement('nocap-secret');
     const probe = document.createElement('canvas').getContext('2d');
-    const size = Math.max(18, Math.round(b.size * FIT));
+    const size = Math.max(13, Math.round(b.size * FIT));
     probe.font = `${b.weight} ${size}px ${b.face}`;
     // The spacing between words is padding inside this canvas rather than a gap
     // outside it, so adjacent words touch and the noise is unbroken.
     el.setAttribute('width',
-      // Generous padding, and it is not only cosmetic. The spacing between words
-      // lives INSIDE each canvas so adjacent blocks touch with no clean stripe
-      // between them, which means this number is the word gap as well as the
-      // margin. fitFactor accounts for it, so a phone just scales down.
-      String(Math.ceil(probe.measureText(word).width) + (b.split === 'chars' ? 22 : 66)));
+      // Padding scales with the fit too, and it has to. It was fixed, so on a
+      // narrow screen the type shrank while the gaps did not: at 320px the
+      // padding alone came to more than the viewport and a four-word line had
+      // nowhere to go but a second row.
+      //
+      // It is generous because it does two jobs. The spacing between words lives
+      // INSIDE each canvas rather than as a gap between them, since a gap shows
+      // a clean stripe of page background between two noisy blocks. So this is
+      // the word gap as well as the margin.
+      String(Math.ceil(probe.measureText(word).width) + pad(b)));
     el.setAttribute('height', String(Math.round(size * 1.95)));
     el.setAttribute('font-family', b.face);
     el.setAttribute('font-weight', String(b.weight));
@@ -417,6 +449,23 @@ document.addEventListener('visibilitychange', () => {
   else start();
 });
 start();
+
+// Reports the widest laid-out beat against the viewport, so the fit can be
+// checked at a real size rather than inferred from canvas attributes.
+addEventListener('load', () => {
+  let worst = 0;
+  for (const b of beats) {
+    const on = b.wrap.classList.contains('on');
+    b.wrap.classList.add('on');
+    worst = Math.max(worst, b.wrap.getBoundingClientRect().width);
+    if (!on) b.wrap.classList.remove('on');
+  }
+  const el = document.createElement('div');
+  el.id = 'fitcheck';
+  el.style.display = 'none';
+  el.textContent = `widest ${Math.round(worst)} of ${innerWidth} fits ${worst <= innerWidth}`;
+  document.body.appendChild(el);
+});
 </script>
 </body>
 </html>
