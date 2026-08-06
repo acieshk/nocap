@@ -155,7 +155,7 @@ const SCRIPT = [
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8 },
 
   // Call and response. The questions breathe, the answers land and get out.
-  { text: 'Take a picture?', size: 68, hold: 1500, hue: 190, enter: 'left',
+  { text: 'Take a picture?', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
   { text: 'No.', size: 148, hold: 1000, hue: 190, enter: 'up',
@@ -163,10 +163,10 @@ const SCRIPT = [
 
   { text: 'Screen-capture it?', size: 66, hold: 1500, hue: 150, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
-  { text: 'Also no.', size: 128, hold: 1100, hue: 150, enter: 'fan',
+  { text: 'Also no.', size: 128, hold: 1100, hue: 150, chroma: 0.4, enter: 'fan',
     face: 'Inter, system-ui, sans-serif', weight: 700, block: 14 },
 
-  { text: 'Scrape it with AI?', size: 66, hold: 1600, hue: 35, enter: 'alt',
+  { text: 'Scrape it with AI?', size: 66, hold: 1600, hue: 35, chroma: 0.4, enter: 'alt',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7 },
   // Per CHARACTER rather than per word, because the expansion has to be visible
   // between the letters. A CSS scale would do it in one element and would also
@@ -179,7 +179,7 @@ const SCRIPT = [
   // The payoff, and the one claim here that is absolute.
   { text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 8 },
-  { text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, enter: 'up',
+  { text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
     note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
 
@@ -308,6 +308,15 @@ const beats = SCRIPT.map((b) => {
     // The block shrinks with the type, or a phone gets the desktop block over
     // much smaller glyphs and it reads as tiles again.
     el.setAttribute('noise-scale', String(Math.max(3, Math.round(b.block * FIT))));
+    // Coloured noise on a few beats, for variety rather than for protection.
+    // Grey noise puts the whole budget into luminance, which is what the eye and
+    // OCR both key on, so splitting it across channels costs something real.
+    // Measured on this palette at block 12, 8 seeds: leak 0.227 at chroma 0,
+    // 0.267 at 0.4, 0.279 at 1. Cheaper than the repo's older 0.298-to-0.389
+    // figure because that was taken at a finer block, where the block is not
+    // dominating. 0.4 is a fifth more leak for a visible tint, on beats that are
+    // not the ones inviting a screenshot.
+    if (b.chroma) el.setAttribute('chroma', String(b.chroma));
     // NO edge-fade here, and the reason is worth keeping. It tapers the noise at
     // each element's own boundary, which is right for a lone element sitting on
     // a page. In a row of words every seam gets TWO taperings meeting, and the

@@ -21,14 +21,14 @@
 
 <div class="rig">
   <div class="bar">
-    <label class="f" style="min-width:200px"><span>Mode</span>
+    <label class="f" title="Which shape the decoy imitates. auto reads the format of your value and matches it, so a card number gets a Luhn-valid card number back." style="min-width:200px"><span>Mode</span>
       <select id="mode">
         <option value="auto">auto, match the format</option>
         <option value="number">number</option>
         <option value="text">text</option>
         <option value="random">random</option>
       </select></label>
-    <label class="f" style="min-width:200px"><span>Value</span>
+    <label class="f" title="The value. On this page it lives in an input, which is a leaky surface of its own. The security check has no field for that reason." style="min-width:200px"><span>Value</span>
       <input type="text" id="txt" placeholder="loading…"></label>
   </div>
   <div class="body" id="stage">

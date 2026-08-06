@@ -39,11 +39,11 @@
 
 <div class="rig">
   <div class="bar">
-    <label class="f" style="min-width:220px"><span>Content</span>
+    <label class="f" title="The value. On this page it lives in an input, which is a leaky surface of its own. The security check has no field for that reason." style="min-width:220px"><span>Content</span>
       <input type="text" id="txt" value="4471-0092-8834"></label>
-    <label class="f" style="min-width:150px"><span>Amplitude <em id="ampV">110</em></span>
+    <label class="f" title="Amplitude: how far each pixel is displaced, as a fraction of the headroom its colour allows. The single biggest lever on raw leak. Capped by the palette, not by this slider." style="min-width:150px"><span>Amplitude <em id="ampV">110</em></span>
       <input type="range" id="amp" min="30" max="127" value="110"></label>
-    <label class="f" style="min-width:150px"><span>Noise block <em id="blkV">6</em>px</span>
+    <label class="f" title="Noise block in pixels. Its only job is blur resistance: below about twice the stroke width a blur recovers the value, above it nothing helps. Costs fusion, since coarse noise sits where the eye is most sensitive to flicker." style="min-width:150px"><span>Noise block <em id="blkV">6</em>px</span>
       <input type="range" id="blk" min="1" max="14" value="6"></label>
   </div>
   <div class="readout">

@@ -47,27 +47,27 @@
   </p>
 
   <div class="knobs">
-    <label class="f"><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
-    <label class="f"><span>Strength <em id="strV">medium</em></span>
+    <label class="f" title="The value. On this page it lives in an input, which is a leaky surface of its own. The security check has no field for that reason."><span>Secret</span><input type="text" id="txt" placeholder="loading…"></label>
+    <label class="f" title="weak, medium and strong are tested points on the masking curve, not the comfort curve. They set amplitude, block ratio and hardness together."><span>Strength <em id="strV">medium</em></span>
       <select id="strength">
         <option value="weak">weak, easiest to read</option>
         <option value="medium" selected>medium, the default</option>
         <option value="strong">strong, wants 120Hz+</option>
         <option value="custom">custom</option>
       </select></label>
-    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
-    <label class="f"><span>Background</span><input type="color" id="bg" value="#404040"></label>
-    <label class="f"><span>Amplitude <em id="ampV">110</em></span>
+    <label class="f" title="Text colour. Masking needs both colours to have swing, so mid-tones protect far better than anything near black or white."><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
+    <label class="f" title="Background colour. This is usually the one to move: the page has to meet the secret, because a near-black ground has no room to carry noise."><span>Background</span><input type="color" id="bg" value="#404040"></label>
+    <label class="f" title="Amplitude: how far each pixel is displaced, as a fraction of the headroom its colour allows. The single biggest lever on raw leak. Capped by the palette, not by this slider."><span>Amplitude <em id="ampV">110</em></span>
       <input type="range" id="amp" min="30" max="127" value="110"></label>
-    <label class="f"><span>Noise block <em id="blkV">6</em>px</span>
+    <label class="f" title="Noise block in pixels. Its only job is blur resistance: below about twice the stroke width a blur recovers the value, above it nothing helps. Costs fusion, since coarse noise sits where the eye is most sensitive to flicker."><span>Noise block <em id="blkV">6</em>px</span>
       <input type="range" id="blk" min="1" max="12" value="6"></label>
-    <label class="f"><span>Hardness <em id="hardV">1.00</em></span>
+    <label class="f" title="1 puts every pixel at full amplitude, which masks best. Lower spreads the magnitudes and measures about 20 percent worse both raw and blurred."><span>Hardness <em id="hardV">1.00</em></span>
       <input type="range" id="hard" min="0.1" max="1" step="0.05" value="1"></label>
-    <label class="f"><span>Chroma <em id="chrV">0.00</em></span>
+    <label class="f" title="0 shares one noise draw across R, G and B, so the whole budget goes into luminance, which is what the eye and OCR key on. 1 draws per channel: rainbow static, and measurably weaker."><span>Chroma <em id="chrV">0.00</em></span>
       <input type="range" id="chr" min="0" max="1" step="0.05" value="0"></label>
-    <label class="f"><span>Gamma <em id="gamV">2.40</em></span>
+    <label class="f" title="Your display EOTF. 2.4 is the real sRGB curve. It decides where the plane centres are solved, so a wrong value shifts the perceived colour."><span>Gamma <em id="gamV">2.40</em></span>
       <input type="range" id="gam" min="1.8" max="3.0" step="0.01" value="2.4"></label>
-    <label class="f"><span>Scramble in memory</span>
+    <label class="f" title="Stores the glyphs shuffled, so a heap search never finds the value in order. Obfuscation rather than encryption, and it blunts a one-line fillText dump."><span>Scramble in memory</span>
       <select id="scr"><option value="">off</option><option value="1">on</option></select></label>
   </div>
 

@@ -25,8 +25,8 @@
   </div>
 
   <div class="knobs">
-    <label class="f"><span>Text</span><input type="text" id="txt" placeholder="loading…"></label>
-    <label class="f"><span>Font</span>
+    <label class="f" title="The value. On this page it lives in an input, which is a leaky surface of its own. The security check has no field for that reason."><span>Text</span><input type="text" id="txt" placeholder="loading…"></label>
+    <label class="f" title="Font family. The stroke follows the font and the noise block follows the stroke, so this changes the protection as well as the look."><span>Font</span>
       <select id="fam">
         <option value="ui-monospace, monospace">monospace, the default</option>
         <option value="Inter, system-ui, sans-serif">Inter / system sans</option>
@@ -34,26 +34,26 @@
         <option value="'Courier New', monospace">Courier New</option>
         <option value="system-ui, sans-serif">system-ui</option>
       </select></label>
-    <label class="f"><span>Weight</span>
+    <label class="f" title="Font weight. A lighter stem is thinner, which wants a finer block: the derivation assumes roughly a 600 weight."><span>Weight</span>
       <select id="wt">
         <option value="400">400 regular</option>
         <option value="600" selected>600 semibold</option>
         <option value="700">700 bold</option>
         <option value="800">800 heavy</option>
       </select></label>
-    <label class="f"><span>Size <em id="fszV">auto</em></span>
+    <label class="f" title="Font size in CSS pixels. 0 sizes it from the element height instead."><span>Size <em id="fszV">auto</em></span>
       <input type="range" id="fsz" min="0" max="46" value="0"></label>
-    <label class="f"><span>Letter spacing <em id="lsV">0</em>px</span>
+    <label class="f" title="Letter spacing. Does nothing while scramble is on, because that mode draws each glyph into its own cell."><span>Letter spacing <em id="lsV">0</em>px</span>
       <input type="range" id="ls" min="0" max="16" value="0"></label>
-    <label class="f"><span>Alignment</span>
+    <label class="f" title="Text alignment. Also inert under scramble, for the same reason."><span>Alignment</span>
       <select id="align"><option value="center">center</option>
         <option value="left">left</option><option value="right">right</option></select></label>
-    <label class="f"><span>Padding X <em id="pxV">0</em>px</span>
+    <label class="f" title="Horizontal padding. A malformed value used to blank the element silently, and now falls back and warns."><span>Padding X <em id="pxV">0</em>px</span>
       <input type="range" id="px" min="0" max="60" value="0"></label>
-    <label class="f"><span>Padding Y <em id="pyV">0</em>px</span>
+    <label class="f" title="Vertical padding."><span>Padding Y <em id="pyV">0</em>px</span>
       <input type="range" id="py" min="-16" max="16" value="0"></label>
-    <label class="f"><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
-    <label class="f"><span>Background</span><input type="color" id="bg" value="#404040"></label>
+    <label class="f" title="Text colour. Masking needs both colours to have swing, so mid-tones protect far better than anything near black or white."><span>Text colour</span><input type="color" id="fg" value="#6d6d6d"></label>
+    <label class="f" title="Background colour. This is usually the one to move: the page has to meet the secret, because a near-black ground has no room to carry noise."><span>Background</span><input type="color" id="bg" value="#404040"></label>
   </div>
 
   <div class="readout">

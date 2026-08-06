@@ -26,13 +26,13 @@
     <small>Drag across it. The trail fades behind you.</small>
   </div>
   <div class="knobs">
-    <label class="f"><span>Trail lasts <em id="lingerV">30</em>s</span>
+    <label class="f" title="Seconds for a scratch trail to fade to one percent. A long trail is readable and sits near full duty, which gives up most of the capture protection."><span>Trail lasts <em id="lingerV">30</em>s</span>
       <input type="range" id="linger" min="1" max="60" step="1" value="30"></label>
-    <label class="f"><span>Brush size <em id="radV">34</em>px</span>
+    <label class="f" title="Brush radius in CSS pixels. Wider on a coarse pointer by default, because a fingertip covers what it is revealing."><span>Brush size <em id="radV">34</em>px</span>
       <input type="range" id="rad" min="8" max="90" step="2" value="34"></label>
-    <label class="f"><span>Hint text</span>
+    <label class="f" title="The affordance text. Without it a scratch element is a blank rectangle that tells a first-time user nothing."><span>Hint text</span>
       <input type="text" id="hint" placeholder="Scratch to reveal"></label>
-    <label class="f"><span>Show the hint</span>
+    <label class="f" title="Turns the affordance off if your own UI already explains the gesture."><span>Show the hint</span>
       <select id="hintOn"><option value="1">on, the default</option>
         <option value="">off</option></select></label>
   </div>

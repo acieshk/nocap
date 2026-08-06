@@ -65,15 +65,15 @@
 
 <div class="rig" style="margin-top:16px">
   <div class="knobs">
-    <label class="f"><span>Midpoint <em id="midV">128</em></span>
+    <label class="f" title="Where the pair sits on the tone scale. Mid-grey has the most headroom in both directions, so it is the friendliest place for a split."><span>Midpoint <em id="midV">128</em></span>
       <input type="range" id="mid" min="60" max="200" value="128"></label>
-    <label class="f"><span>Strength</span>
+    <label class="f" title="weak, medium and strong are tested points on the masking curve, not the comfort curve. They set amplitude, block ratio and hardness together."><span>Strength</span>
       <select id="strength">
         <option value="weak">weak</option>
         <option value="medium" selected>medium</option>
         <option value="strong">strong</option>
       </select></label>
-    <label class="f"><span>Text</span><input type="text" id="txt" value="4471-0092-8834"></label>
+    <label class="f" title="The value. On this page it lives in an input, which is a leaky surface of its own. The security check has no field for that reason."><span>Text</span><input type="text" id="txt" value="4471-0092-8834"></label>
   </div>
 </div>
 <p style="font-size:12.5px;color:var(--faint);margin-top:10px">
@@ -129,17 +129,17 @@
 </p>
 <div class="rig">
   <div class="knobs">
-    <label class="f"><span><i class="sw" id="swFg"></i>Text hue <em id="hFgV">210</em></span>
+    <label class="f" title="Text hue. The slider shows the spectrum it selects from."><span><i class="sw" id="swFg"></i>Text hue <em id="hFgV">210</em></span>
       <input type="range" class="hue" id="hFg" min="0" max="360" value="210"></label>
-    <label class="f"><span>Text saturation <em id="sFgV">0.20</em></span>
+    <label class="f" title="Text saturation. Watch the masking column as you raise it."><span>Text saturation <em id="sFgV">0.20</em></span>
       <input type="range" id="sFg" min="0" max="1" step="0.02" value="0.2"></label>
-    <label class="f"><span>Text lightness <em id="lFgV">0.72</em></span>
+    <label class="f" title="Text lightness."><span>Text lightness <em id="lFgV">0.72</em></span>
       <input type="range" id="lFg" min="0.1" max="0.95" step="0.01" value="0.72"></label>
-    <label class="f"><span><i class="sw" id="swBg"></i>Background hue <em id="hBgV">210</em></span>
+    <label class="f" title="Background hue, independent of the text, because a coloured accent on a neutral ground is a real design."><span><i class="sw" id="swBg"></i>Background hue <em id="hBgV">210</em></span>
       <input type="range" class="hue" id="hBg" min="0" max="360" value="210"></label>
-    <label class="f"><span>Background saturation <em id="sBgV">0.20</em></span>
+    <label class="f" title="Background saturation."><span>Background saturation <em id="sBgV">0.20</em></span>
       <input type="range" id="sBg" min="0" max="1" step="0.02" value="0.2"></label>
-    <label class="f"><span>Background lightness <em id="lBgV">0.34</em></span>
+    <label class="f" title="Background lightness."><span>Background lightness <em id="lBgV">0.34</em></span>
       <input type="range" id="lBg" min="0.05" max="0.9" step="0.01" value="0.34"></label>
   </div>
   <div class="body" id="pickStage" style="padding:22px 16px"></div>
@@ -160,9 +160,9 @@
 </p>
 <div class="rig">
   <div class="knobs">
-    <label class="f"><span>Target contrast <em id="tgtV">4.0</em>:1</span>
+    <label class="f" title="Target WCAG contrast. Every hue below is solved to hit it, so you can compare colours at the readability level you want."><span>Target contrast <em id="tgtV">4.0</em>:1</span>
       <input type="range" id="tgt" min="1.5" max="7" step="0.1" value="4"></label>
-    <label class="f"><span>Saturation <em id="satV">0.18</em></span>
+    <label class="f" title="Saturation. This is what destroys masking rather than hue: a saturated colour pins a channel near an extreme, and a pinned channel cannot be displaced."><span>Saturation <em id="satV">0.18</em></span>
       <input type="range" id="sat" min="0" max="0.6" step="0.02" value="0.18"></label>
   </div>
 </div>
