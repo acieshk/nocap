@@ -26,6 +26,9 @@
      the bypass. */
   .word { opacity:0; will-change:opacity, transform; --nocap-radius:0;
           transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1) }
+  /* Fast out and then nothing. No overshoot, no settle: the letters travel and
+     stop dead, which is what reads as impact. */
+  .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1) }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
   .note { position:fixed; left:0; right:0; bottom:30px; text-align:center;
           font-size:14px; color:#e6e6e6; opacity:0; transition:opacity .5s ease }
@@ -124,8 +127,12 @@ const SCRIPT = [
 
   { text: 'Scrape it with AI?', size: 66, hold: 1600, hue: 35, enter: 'alt',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7 },
-  { text: 'Nothing to scrape.', size: 76, hold: 2100, hue: 35, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
+  // Per CHARACTER rather than per word, because the expansion has to be visible
+  // between the letters. A CSS scale would do it in one element and would also
+  // resample the canvas, turning the noise toward its mean, so the letters move
+  // apart instead: same read, and not a single pixel of noise is touched.
+  { text: 'HARD', size: 150, hold: 1500, hue: 35, enter: 'burst', split: 'chars',
+    face: 'Inter, system-ui, sans-serif', weight: 800, block: 15,
     note: 'not obfuscated. <b>absent.</b> there is no text to find' },
 
   // The payoff, and the one claim here that is absolute.
@@ -155,6 +162,8 @@ const ENTER = {
   // the centre and close up, which reads as a zoom without touching a pixel of
   // the rendered noise.
   fan:  (i, n) => `translate3d(${(i - (n - 1) / 2) * 54}px, 0, 0)`,
+  // Stacked at the centre, so releasing them reads as the word expanding out.
+  burst: (i, n) => `translate3d(${((n - 1) / 2 - i) * 74}px, 0, 0)`,
 };
 
 /**
@@ -165,7 +174,8 @@ const beats = SCRIPT.map((b) => {
   const wrap = document.createElement('div');
   wrap.className = 'beat';
   const { fg, bg } = pal(b.hue);
-  const words = b.text.split(' ');
+  if (b.enter === 'burst') wrap.classList.add('burst');
+  const words = b.split === 'chars' ? [...b.text] : b.text.split(' ');
 
   words.forEach((word, i) => {
     const el = document.createElement('nocap-secret');
@@ -173,7 +183,8 @@ const beats = SCRIPT.map((b) => {
     probe.font = `${b.weight} ${b.size}px ${b.face}`;
     // The spacing between words is padding inside this canvas rather than a gap
     // outside it, so adjacent words touch and the noise is unbroken.
-    el.setAttribute('width', String(Math.ceil(probe.measureText(word).width) + 38));
+    el.setAttribute('width',
+      String(Math.ceil(probe.measureText(word).width) + (b.split === 'chars' ? 12 : 38)));
     el.setAttribute('height', String(Math.round(b.size * 1.55)));
     el.setAttribute('font-family', b.face);
     el.setAttribute('font-weight', String(b.weight));
@@ -194,7 +205,9 @@ const beats = SCRIPT.map((b) => {
     el.setAttribute('edge-fade', String(Math.round(b.size * 0.34)));
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
-    el.style.transitionDelay = `${i * 70}ms`;
+    // The burst releases together. Staggering it would read as a wipe rather
+    // than as one word snapping open.
+    el.style.transitionDelay = b.enter === 'burst' ? '0ms' : `${i * 70}ms`;
     wrap.appendChild(el);
     el.secret = word;
   });
