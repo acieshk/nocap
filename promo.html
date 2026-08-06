@@ -124,8 +124,15 @@ const pal = (b) => (b.light ? LIGHT
  * lighter type wants a finer block on both aesthetic and measured grounds.
  */
 const SCRIPT = [
-  { text: 'Hi', size: 104, hold: 1200, hue: null, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 9 },
+  // The first impression, so it lands hardest. Heaviest weight in the reel and
+  // the largest type, split per character and released together so the two
+  // letters drive apart and stop dead rather than easing in.
+  //
+  // Block 16 is a deliberate compromise. A stem this thick would take a coarser
+  // block by the derivation, and coarser reads as tiles at this size, which is
+  // the opposite of impact. 16 keeps the noise looking like noise.
+  { text: 'Hi', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
+    face: 'Inter, system-ui, sans-serif', weight: 800, block: 16 },
   { text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
 
