@@ -31,7 +31,13 @@
   .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1) }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
   .note { position:fixed; left:0; right:0; bottom:30px; text-align:center;
-          font-size:14px; color:#e6e6e6; opacity:0; transition:opacity .5s ease }
+          font-size:14px; color:#e6e6e6; opacity:0;
+          transition:opacity .5s ease, color .7s ease }
+  /* Light beats flip the chrome, or the captions vanish into the page. */
+  body.light .note { color:#2e2e2e } body.light .note b { color:#000 }
+  body.light #hint { color:#575757 }
+  body.light #replay { background:rgba(0,0,0,.09); color:#2b2b2b;
+                       border-color:rgba(0,0,0,.22) }
   .note.on { opacity:1 }
   .note b { color:#fff; font-weight:600 }
   #code { position:absolute; opacity:0; transition:opacity .6s ease; text-align:left;
@@ -40,6 +46,7 @@
   #code .k { color:#cbd6ff } #code .s { color:#ffd9a8 } #code .c { color:#adadad }
   #code .cmd { display:block; font-size:23px; color:#fff; margin-bottom:22px }
   #hint { position:fixed; top:22px; right:24px; font-size:12px; color:#cfcfcf;
+          transition:color .7s ease;
           font-family:ui-monospace,monospace; letter-spacing:.04em }
   #replay { position:fixed; bottom:24px; right:24px; background:rgba(255,255,255,.14);
             color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:7px;
@@ -93,9 +100,17 @@ function hsl(h, s, l) {
   const hx = (v) => v.toString(16).padStart(2, '0');
   return '#' + hx(f(0)) + hx(f(8)) + hx(f(4));
 }
-const pal = (hue) => (hue === null
-  ? { fg: '#6d6d6d', bg: '#404040' }
-  : { fg: hsl(hue, SAT, 0.427), bg: hsl(hue, SAT, 0.251) });
+/**
+ * Light ground, dark text. Measured rather than eyeballed: #737373 on #bfbfbf
+ * comes out at 1.04 masking, better than the dark default's 1.00, because both
+ * colours still sit where there is swing to spend. Push the background much
+ * past #c7c7c7 and it collapses, since a channel near 255 has nowhere to go.
+ */
+const LIGHT = { fg: '#737373', bg: '#bfbfbf' };
+
+const pal = (b) => (b.light ? LIGHT
+  : b.hue === null ? { fg: '#6d6d6d', bg: '#404040' }
+  : { fg: hsl(b.hue, b.sat ?? SAT, 0.427), bg: hsl(b.hue, b.sat ?? SAT, 0.251) });
 
 /**
  * Weights lean light, because a thinner stem simply looks better here. It also
@@ -110,7 +125,8 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
 
   // The setup. Everything after this is only interesting because this is true.
-  { text: 'You can read this.', size: 74, hold: 2000, hue: 210, enter: 'up',
+  // Light ground, so the reel is not one long dark slab.
+  { text: 'You can read this.', size: 74, hold: 2000, hue: 210, light: true, enter: 'up',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8 },
 
   // Call and response. The questions breathe, the answers land and get out.
@@ -136,7 +152,7 @@ const SCRIPT = [
     note: 'not obfuscated. <b>absent.</b> there is no text to find' },
 
   // The payoff, and the one claim here that is absolute.
-  { text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, enter: 'left',
+  { text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 8 },
   { text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
@@ -158,7 +174,10 @@ const SCRIPT = [
   // because a command nobody can paste is a worse joke than none.
   { text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
-  { text: 'npm i nocap', size: 92, hold: 2200, hue: 210, enter: 'fan',
+  // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
+  // by 0.30 the pair is down to 0.46 masking and a bright phosphor green does
+  // not exist at any usable ratio. This is the most green the technique allows.
+  { text: 'npm i nocap', size: 92, hold: 2400, hue: 140, sat: 0.11, enter: 'fan',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 600, block: 11 },
 ];
 
@@ -183,7 +202,7 @@ const ENTER = {
 const beats = SCRIPT.map((b) => {
   const wrap = document.createElement('div');
   wrap.className = 'beat';
-  const { fg, bg } = pal(b.hue);
+  const { fg, bg } = pal(b);
   if (b.enter === 'burst') wrap.classList.add('burst');
   const words = b.split === 'chars' ? [...b.text] : b.text.split(' ');
 
@@ -242,7 +261,8 @@ function play(i) {
   if (i >= beats.length) return showUsage();
 
   const b = beats[i];
-  document.body.style.background = pal(b.hue).bg;
+  document.body.style.background = pal(b).bg;
+  document.body.classList.toggle('light', Boolean(b.light));
   b.wrap.classList.add('on');
   note.innerHTML = b.note ?? '';
   note.classList.toggle('on', Boolean(b.note));
@@ -265,6 +285,7 @@ function play(i) {
 
 function showUsage() {
   document.body.style.background = '#404040';
+  document.body.classList.remove('light');
   codeEl.innerHTML = USAGE;
   codeEl.classList.add('on');
   note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
