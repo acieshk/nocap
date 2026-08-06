@@ -9,145 +9,158 @@
 <div id="status">rendering…</div>
 <script type="module">
 /**
- * Frame generator for the promo reel.
+ * Kinetic typography reel, every line rendered through the real splitter.
  *
- * A video of this technique cannot show the technique. At any frame rate a
- * recording captures, the two planes do not fuse into their mean, so a naive
- * capture of a running element reads as noise rather than as text. Showing the
- * mean instead is just text, with nothing to demonstrate.
+ * The constraint that shapes it: a recording cannot reproduce the effect. At any
+ * frame rate a viewer plays this back at, two planes alternating do not fuse
+ * into their mean the way they do at a display's refresh rate. Show the planes
+ * and it reads as noise. Show the mean and it is ordinary text.
  *
- * So the reel shows both halves side by side. Left is the mean, which is what a
- * viewer's visual system computes. Right is a single plane, which is exactly
- * what one screenshot lands on. Neither is retouched and both come out of the
- * same splitFrames call, so the comparison is the real one.
+ * So the effect is used as MOTION rather than as flicker. Each line materialises
+ * out of its own captured plane and resolves into the mean, which is the same
+ * pair of images the technique actually produces, moving between them instead of
+ * alternating. Readable at any playback rate, and honest, because both frames
+ * come from one splitFrames call.
  *
- * Renders every frame to a data URL and hands them over in one go, rather than
- * relaunching a browser per frame.
+ * One beat holds on the raw plane on purpose. Screenshot the reel there and you
+ * get noise, which is the claim demonstrating itself.
  */
 import { splitFrames, perceivedMean } from '../src/splitter.js';
 
-const W = 960, H = 540, FPS = 20, SECONDS = 9;
-const TOTAL = FPS * SECONDS;
+const W = 960, H = 540, FPS = 30;
 
-// Palettes are the shipped default and two variations kept at a comparable
-// masking ratio. A promo whose "screenshot" panel is readable argues against
-// itself, and the first cut of this used a pair I had not checked.
-const SCENES = [
-  { at: 0,   value: '4471 0092 8834', label: 'card number',
-    family: '600 %PXpx ui-monospace, monospace', fg: '#9ea6b4', bg: '#6b7280' },
-  { at: 55,  value: 'sk_live_9Fk2Qw', label: 'api key',
-    family: '700 %PXpx Inter, system-ui, sans-serif', fg: '#a3aeb8', bg: '#6f767e' },
-  { at: 110, value: '+1 (555) 010-0199', label: 'phone number',
-    family: '500 %PXpx Georgia, serif', fg: '#b9a8ae', bg: '#7d6e73' },
+// Palette is the element's own default, which measures 1.42 masking. A promo
+// whose noise does not actually mask would be arguing against itself.
+const FG = '#9ea6b4', BG = '#6b7280';
+
+const SCRIPT = [
+  { t: 0,   dur: 40,  text: 'Hi',                       size: 74,  move: 'rise' },
+  { t: 40,  dur: 55,  text: 'This is nocap',            size: 78,  move: 'resolve' },
+  { t: 95,  dur: 38,  text: 'Text',                     size: 92,  move: 'resolve' },
+  { t: 133, dur: 45,  text: 'that you cannot',          size: 66,  move: 'slide' },
+  { t: 178, dur: 58,  text: 'capture.',                 size: 104, move: 'punch' },
+  { t: 236, dur: 60,  text: 'Try taking a picture',     size: 58,  move: 'hold-noise' },
+  { t: 296, dur: 58,  text: 'or screen-capture it',     size: 58,  move: 'hold-noise' },
+  { t: 354, dur: 62,  text: 'It makes AI scraping',     size: 56,  move: 'resolve' },
+  { t: 416, dur: 46,  text: 'hard as well',             size: 68,  move: 'punch' },
+  { t: 462, dur: 52,  text: 'hard, not impossible*',    size: 44,  move: 'fade' },
 ];
+const TOTAL = 560;
 
 const cv = document.createElement('canvas');
 cv.width = W; cv.height = H;
 const g = cv.getContext('2d', { alpha: false, willReadFrequently: true });
 
-const ease = (t) => (t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3));
+const easeOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3));
+const easeInOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5
+  ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/** The split, rendered once per scene and reused across its frames. */
+/**
+ * A line, split for real. Returns the plane a capture lands on and the mean a
+ * viewer resolves, both from one call so the pair is genuine.
+ */
 const cache = new Map();
-function planesFor(scene, w, h) {
-  const key = scene.at + ':' + w + ':' + h;
+function render(text, size) {
+  const key = text + ':' + size;
   if (cache.has(key)) return cache.get(key);
+
+  const pad = 60;
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
+  const w = Math.min(W - 40, Math.ceil(probe.measureText(text).width) + pad);
+  const h = Math.ceil(size * 1.7);
+
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const x = c.getContext('2d', { alpha: false, willReadFrequently: true });
-  x.fillStyle = scene.bg; x.fillRect(0, 0, w, h);
-
-  // Fit the face to the panel rather than hoping. The first cut hardcoded 42px
-  // and clipped every value, which is the same silent-overflow bug the element
-  // now warns about, reproduced by hand in the promo for it.
-  let px = 56;
-  do {
-    x.font = scene.family.replace('%PX', px);
-    px -= 2;
-  } while (x.measureText(scene.value).width > w - 36 && px > 12);
-
-  x.fillStyle = scene.fg;
+  x.fillStyle = BG; x.fillRect(0, 0, w, h);
+  x.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
+  x.fillStyle = FG;
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.fillText(scene.value, w / 2, h / 2);
+  x.fillText(text, w / 2, h / 2);
 
-  // Block from the stroke, the way the element derives it: twice the stroke is
-  // where a blur stops gaining, and a block chosen by eye was leaving the value
-  // legible in the panel that is supposed to show it hidden.
-  const stroke = Math.max(2, Math.round(px / 8));
-  let seed = 4242;
+  // Block from the stroke the way resolveOptions derives it: twice the stroke is
+  // where a blur stops gaining. Picking one by eye left an earlier cut legible.
+  const stroke = Math.max(2, Math.round(size / 8));
+  let seed = 9137;
   const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   const planes = splitFrames(x.getImageData(0, 0, w, h), {
     mode: 'amplitude', frames: 2, amplitude: 122, hardness: 1,
     noiseScale: stroke * 2, chroma: 0, linearLight: true, gamma: 2.4, rng });
-  const out = { planes, mean: perceivedMean(planes) };
+
+  const toCanvas = (img) => {
+    const o = document.createElement('canvas');
+    o.width = img.width; o.height = img.height;
+    o.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+    return o;
+  };
+  const out = { plane: toCanvas(planes[0]), alt: toCanvas(planes[1]),
+                mean: toCanvas(perceivedMean(planes)), w, h };
   cache.set(key, out);
   return out;
 }
 
-function put(img, dx, dy) {
-  const c = document.createElement('canvas');
-  c.width = img.width; c.height = img.height;
-  c.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
-  g.drawImage(c, dx, dy);
-}
-
 function frame(f) {
-  g.fillStyle = '#1a1a1c';
+  g.fillStyle = '#111114';
   g.fillRect(0, 0, W, H);
 
-  // Title, typed on and held.
-  const title = 'The text you cannot capture';
-  const shown = title.slice(0, Math.min(title.length, Math.round(f * 1.1)));
-  g.fillStyle = '#ededed';
-  g.font = '700 40px Inter, system-ui, sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'alphabetic';
-  g.fillText(shown, W / 2, 78);
-  if (f < 30 && Math.floor(f / 3) % 2 === 0) {
-    const wpx = g.measureText(shown).width;
-    g.fillRect(W / 2 + wpx / 2 + 4, 52, 3, 32);
+  for (const line of SCRIPT) {
+    const local = f - line.t;
+    if (local < 0 || local > line.dur) continue;
+    const p = local / line.dur;
+    const { plane, alt, mean, w, h } = render(line.text, line.size);
+
+    // Every line arrives as a captured plane and resolves into the mean. That is
+    // the technique's two outputs, used as motion rather than as flicker.
+    let noise = 1 - easeOut(local / 16);
+    let dx = 0, dy = 0, scale = 1, alpha = easeOut(local / 8);
+
+    if (line.move === 'rise') dy = (1 - easeOut(local / 18)) * 40;
+    if (line.move === 'slide') dx = (1 - easeOut(local / 20)) * -70;
+    if (line.move === 'punch') scale = 0.86 + easeOut(local / 14) * 0.14;
+    if (line.move === 'fade') alpha = easeInOut(local / 20) * 0.85;
+    if (line.move === 'hold-noise') {
+      // Held on the raw plane, so a screenshot taken here gets noise. The claim
+      // demonstrating itself is worth more than another line of copy.
+      noise = local < line.dur - 14 ? 1 : 1 - easeOut((local - (line.dur - 14)) / 12);
+    }
+    // Out.
+    if (local > line.dur - 10) alpha *= easeOut((line.dur - local) / 10);
+
+    const cx = W / 2, cy = H / 2;
+    g.save();
+    g.globalAlpha = Math.max(0, Math.min(1, alpha));
+    g.translate(cx + dx, cy + dy);
+    g.scale(scale, scale);
+    // Alternate the plane while it is showing, so the noisy state is a real
+    // capture rather than one frozen frame.
+    const noisy = (f >> 1) % 2 ? plane : alt;
+    if (noise > 0.02) {
+      g.globalAlpha *= 1;
+      g.drawImage(noisy, -w / 2, -h / 2);
+    }
+    if (noise < 0.98) {
+      g.globalAlpha = Math.max(0, Math.min(1, alpha)) * (1 - noise);
+      g.drawImage(mean, -w / 2, -h / 2);
+    }
+    g.restore();
   }
 
-  const scene = [...SCENES].reverse().find((s) => f >= s.at) ?? SCENES[0];
-  const local = f - scene.at;
-  const inn = ease(local / 14);
-  if (inn <= 0) return;
-
-  const pw = 420, ph = 132;
-  const { planes, mean } = planesFor(scene, pw, ph);
-  const gap = 44;
-  const left = (W - pw * 2 - gap) / 2;
-  const y = 190 + (1 - inn) * 18;
-
-  g.globalAlpha = inn;
-  put(mean, left, y);
-  // Alternate which plane is shown, so the right panel is honestly a capture
-  // rather than one cherry-picked frame.
-  put(planes[Math.floor(f / 2) % 2], left + pw + gap, y);
-  g.globalAlpha = 1;
-
-  g.font = '600 13px Inter, system-ui, sans-serif';
-  g.fillStyle = '#8a8a90';
-  g.textAlign = 'center';
-  g.fillText('WHAT YOU SEE', left + pw / 2, y - 14);
-  g.fillText('WHAT A SCREENSHOT GETS', left + pw + gap + pw / 2, y - 14);
-
-  g.font = '500 15px ui-monospace, monospace';
-  g.fillStyle = '#6f6f78';
-  g.fillText(scene.label, W / 2, y + ph + 34);
-
-  if (f > TOTAL - 46) {
-    const t = ease((f - (TOTAL - 46)) / 20);
+  // Sign-off.
+  if (f > TOTAL - 70) {
+    const t = easeOut((f - (TOTAL - 70)) / 22);
     g.globalAlpha = t;
-    g.fillStyle = '#1a1a1c';
-    g.fillRect(0, H - 96, W, 96);
+    g.textAlign = 'center';
     g.fillStyle = '#a9bcff';
-    g.font = '600 22px ui-monospace, monospace';
-    g.fillText('npm i nocap', W / 2, H - 52);
-    g.fillStyle = '#6f6f78';
-    g.font = '400 14px Inter, system-ui, sans-serif';
-    g.fillText('never enters the DOM  ·  MIT', W / 2, H - 26);
+    g.font = '700 40px ui-monospace, monospace';
+    g.fillText('npm i nocap', W / 2, H / 2 - 4);
+    g.fillStyle = '#7c7c86';
+    g.font = '400 17px Inter, system-ui, sans-serif';
+    g.fillText('the text never enters the DOM', W / 2, H / 2 + 34);
+    g.font = '400 13px Inter, system-ui, sans-serif';
+    g.fillText('* a screen recording still beats it. everything else does not.',
+      W / 2, H - 42);
     g.globalAlpha = 1;
   }
 }
@@ -156,9 +169,8 @@ const frames = [];
 for (let f = 0; f < TOTAL; f++) {
   frame(f);
   frames.push(cv.toDataURL('image/png'));
-  if (f % 20 === 0) document.getElementById('status').textContent = `rendered ${f}/${TOTAL}`;
+  if (f % 40 === 0) document.getElementById('status').textContent = `rendered ${f}/${TOTAL}`;
 }
-// One payload, so the harness makes a single pass rather than a launch per frame.
 const sink = document.createElement('div');
 sink.id = 'frames';
 sink.textContent = frames.join('\n');
