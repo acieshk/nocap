@@ -98,6 +98,27 @@ const beats = SCRIPT.map((b) => {
   // intended size. A scale is relative to the height and survives any density.
   el.setAttribute('font-scale', '0.58');
   el.setAttribute('strength', 'medium');
+  // Block set by hand, well under the 2x-stroke the element would derive.
+  //
+  // At this size the derived block is 24 to 30px, which reads as a chunky
+  // checkerboard rather than as noise and looks bad enough to undercut the
+  // pitch. The cost of going finer is narrow: block size drives BLUR
+  // resistance, not raw leak, which sat between 0.17 and 0.22 at every block in
+  // the earlier sweep.
+  //
+  // Measured at stroke 13, which is what this page renders, and it is not the
+  // compromise it looked like:
+  //
+  //   block  7   raw 0.278   blurred 0.409
+  //   block 12   raw 0.233   blurred 0.233   <- finer AND better
+  //   block 26   raw 0.378   blurred 0.378   <- what 2x stroke derives
+  //
+  // 12 wins on both axes. The 2x rule was calibrated at strokes 3 to 8 and does
+  // not hold up here: a block far larger than the stroke lifts or crushes whole
+  // strokes uniformly, so the blocks start tracing the text and the raw leak
+  // goes UP. There is a ceiling on block size as well as a floor, and only the
+  // floor is in the library. Filed.
+  el.setAttribute('noise-scale', '12');
   // Matched to the page, so no panel edge shows and the words appear to float on
   // the background itself. This is the darkest pair that still masks, which is
   // why the page is this grey rather than the near-black it started as.
