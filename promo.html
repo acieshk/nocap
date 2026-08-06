@@ -244,6 +244,18 @@ const ENTER = {
  * One factor for the whole reel rather than per beat, so the relative weight of
  * the lines survives. Shrinking only the widest would flatten the rhythm.
  */
+/**
+ * The width the fit is computed against.
+ *
+ * `?w=390` overrides it, which exists because headless Chrome reports its own
+ * viewport whatever --window-size is passed, so phone widths could not be tested
+ * at all. Without a way to drive this, the mobile fit was only ever reasoned
+ * about. A query parameter is a small price for being able to check it.
+ */
+const VIEW = new URL(location.href).searchParams;
+const VW = +VIEW.get('w') || innerWidth;
+const VH = +VIEW.get('h') || innerHeight;
+
 // One place, so the measuring pass and the render agree. They disagreeing is
 // exactly how the line came to overflow.
 const PAD = (b) => (b.split === 'chars' ? 22 : 66);
@@ -265,10 +277,33 @@ function fitFactor() {
       units.reduce((sum, u) => sum + probe.measureText(u).width + p, 0));
     tallest = Math.max(tallest, b.size * 1.95);
   }
-  const availW = Math.max(240, innerWidth - 24);
+  const availW = Math.max(240, VW - 24);
   // Leave room for the caption under the words.
-  const availH = Math.max(220, innerHeight - 150);
-  return Math.min(1, availW / widest, availH / tallest);
+  const availH = Math.max(220, VH - 150);
+  let fit = Math.min(1, availW / widest, availH / tallest);
+
+  // Second pass, measuring at the size the type will ACTUALLY render.
+  //
+  // The first pass measures at the design size and scales, which is wrong by a
+  // few pixels per word: each element rounds its width up, and text width is not
+  // perfectly linear in font size. Those roundings accumulate across a phrase,
+  // so a four-word line came out 407px in a 430px viewport and 372 in a 390 one.
+  // Small, and an overflow either way.
+  for (let pass = 0; pass < 3 && fit > 0.05; pass++) {
+    let real = 0;
+    for (const b of SCRIPT) {
+      if (b.plain) continue;
+      const size = Math.max(13, Math.round(b.size * fit));
+      probe.font = `${b.weight} ${size}px ${b.face}`;
+      const units = b.split === 'chars' ? [...b.text] : b.text.split(' ');
+      const q = Math.max(6, Math.round(PAD(b) * fit));
+      real = Math.max(real,
+        units.reduce((sum, u) => sum + Math.ceil(probe.measureText(u).width) + q, 0));
+    }
+    if (real <= availW) break;
+    fit *= availW / real;
+  }
+  return fit;
 }
 
 let FIT = fitFactor();
@@ -437,6 +472,7 @@ function start() {
 // small height changes a mobile address bar causes as it hides.
 let lastW = innerWidth;
 addEventListener('resize', () => {
+  if (VIEW.get('w')) return;
   if (Math.abs(innerWidth - lastW) < 60) return;
   lastW = innerWidth;
   location.reload();
@@ -463,7 +499,7 @@ addEventListener('load', () => {
   const el = document.createElement('div');
   el.id = 'fitcheck';
   el.style.display = 'none';
-  el.textContent = `widest ${Math.round(worst)} of ${innerWidth} fits ${worst <= innerWidth}`;
+  el.textContent = `widest ${Math.round(worst)} of ${VW} fits ${worst <= VW - 24}`;
   document.body.appendChild(el);
 });
 </script>
