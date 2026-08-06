@@ -44,7 +44,7 @@
                        border-color:rgba(0,0,0,.22) }
   /* The install line is plain text, not a canvas. It is the one line in the reel
      that has to be readable and selectable rather than protected. */
-  .term { max-width:100%; overflow:hidden; text-overflow:ellipsis;
+  .term { max-width:100%; overflow:hidden; text-overflow:ellipsis; margin:0 8px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
           color:#4ade80; background:#0c140f; border:1px solid #1e3326;
           border-radius:10px; padding:26px 42px; white-space:nowrap;
@@ -71,7 +71,7 @@
 </style>
 </head>
 <body>
-<div id="stage"><div id="code"></div></div>
+<div id="stage"></div>
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
@@ -87,7 +87,6 @@ import './src/secret.js';
  */
 const stage = document.getElementById('stage');
 const note = document.getElementById('note');
-const codeEl = document.getElementById('code');
 const replay = document.getElementById('replay');
 
 /**
@@ -248,11 +247,11 @@ function fitFactor() {
     // assigned, since FIT is what this function returns, and the whole page
     // died on that temporal dead zone with no element rendered at all.
     probe.font = `${b.weight} ${b.size}px ${b.face}`;
-    const pad = b.split === 'chars' ? 12 : 38;
+    const pad = b.split === 'chars' ? 22 : 66;
     const units = b.split === 'chars' ? [...b.text] : b.text.split(' ');
     widest = Math.max(widest,
       units.reduce((sum, u) => sum + probe.measureText(u).width + pad, 0));
-    tallest = Math.max(tallest, b.size * 1.55);
+    tallest = Math.max(tallest, b.size * 1.95);
   }
   const availW = Math.max(240, innerWidth - 24);
   // Leave room for the caption under the words.
@@ -292,8 +291,12 @@ const beats = SCRIPT.map((b) => {
     // The spacing between words is padding inside this canvas rather than a gap
     // outside it, so adjacent words touch and the noise is unbroken.
     el.setAttribute('width',
-      String(Math.ceil(probe.measureText(word).width) + (b.split === 'chars' ? 12 : 38)));
-    el.setAttribute('height', String(Math.round(size * 1.55)));
+      // Generous padding, and it is not only cosmetic. The spacing between words
+      // lives INSIDE each canvas so adjacent blocks touch with no clean stripe
+      // between them, which means this number is the word gap as well as the
+      // margin. fitFactor accounts for it, so a phone just scales down.
+      String(Math.ceil(probe.measureText(word).width) + (b.split === 'chars' ? 22 : 66)));
+    el.setAttribute('height', String(Math.round(size * 1.95)));
     el.setAttribute('font-family', b.face);
     el.setAttribute('font-weight', String(b.weight));
     // A scale, not a size: font-size is device pixels against the canvas
@@ -338,20 +341,20 @@ const beats = SCRIPT.map((b) => {
   return { ...b, wrap };
 });
 
-const USAGE = `<span class="cmd">npm i nocap</span>
-<span class="k">import</span> <span class="s">'nocap'</span>;  <span class="c">// registers &lt;nocap-secret&gt;</span>
-
-<span class="c">&lt;nocap-secret</span> <span class="k">strength</span>=<span class="s">"medium"</span><span class="c">&gt;&lt;/nocap-secret&gt;</span>
-
-<span class="c">// write-only, and it never enters the DOM</span>
-el.<span class="k">secret</span> = <span class="k">await</span> fetchAccountNumber();`;
-
 let timer = 0;
 let stopped = false;
 
 function play(i) {
   if (stopped) return;
-  if (i >= beats.length) return showUsage();
+  // The install line is the last thing on screen and it stays there. A separate
+  // code slide after it moved the eye off the one line worth acting on, and the
+  // README is a better home for a snippet than the end of a reel.
+  if (i >= beats.length) {
+    note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
+    note.classList.add('on');
+    replay.classList.add('on');
+    return;
+  }
 
   const b = beats[i];
   document.body.style.background = pal(b).bg;
@@ -359,6 +362,11 @@ function play(i) {
   b.wrap.classList.add('on');
   note.innerHTML = b.note ?? '';
   note.classList.toggle('on', Boolean(b.note));
+
+  if (i === beats.length - 1) {
+    timer = setTimeout(() => play(i + 1), b.hold);
+    return;
+  }
 
   timer = setTimeout(() => {
     b.wrap.classList.remove('on');
@@ -383,20 +391,10 @@ function play(i) {
   }, b.hold);
 }
 
-function showUsage() {
-  document.body.style.background = '#404040';
-  document.body.classList.remove('light');
-  codeEl.innerHTML = USAGE;
-  codeEl.classList.add('on');
-  note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
-  note.classList.add('on');
-  replay.classList.add('on');
-}
 
 function start() {
   stopped = false;
   clearTimeout(timer);
-  codeEl.classList.remove('on');
   replay.classList.remove('on');
   for (const b of beats) b.wrap.classList.remove('on');
   setTimeout(() => play(0), 320);
