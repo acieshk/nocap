@@ -1333,33 +1333,30 @@ export class NocapSecret extends ElementBase {
       this.#paintForeground(kind, background);
       return;
     }
-    // pattern-strength is stated in levels that ARRIVE, not levels drawn.
+    // pattern-strength is in levels, and the number means the same thing here
+    // as it does in the CSS on the page around it.
     //
-    // A texture drawn into the canvas reaches the eye at about 0.40 of its drawn
-    // amplitude, measured across grounds from #1a1a1a to #f0f0f0 and across every
-    // noise strength: the ratio does not move with strength, so the split is not
-    // what eats it. A texture on the PAGE has nothing between it and the eye and
-    // arrives whole. So identical numbers on either side of the boundary used to
-    // land 2.5x apart, and no amount of phase alignment could close that -- the
-    // stripes lined up and one side was simply fainter.
+    // It carries intact: measured with geometry cancelled (RMS of textured minus
+    // flat, before the split over after it), the ratio is 1.00 at every
+    // amplitude from 0 to 110 and on every ground from #1a1a1a to #f0f0f0.
+    // That is what linearLight is for -- it makes the perceived mean equal the
+    // authored image, so a texture in the image survives to the eye whole.
     //
-    // Compensating here makes the attribute mean the same thing in both places,
-    // which is what lets an element be set to the page's own number and match.
-    const ARRIVES = 0.40;
-    const asked = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
-    // Cap the drawn value at what the ground can take without clipping, so a
-    // large request degrades to the strongest honest texture instead of banding.
-    const headroom = codeSwing(background);
-    // A near-black or near-white ground has almost no headroom, so it cannot
-    // carry the asked-for texture at all: on #1a1a1a a request for 20 tops out
-    // around 8. That is the ground's limit rather than a setting, and the front
-    // layer is the way to get the full number there, since it is composited
-    // after the split and never has to fit inside the swing.
-    const levels = Math.round(Math.min(headroom, asked / ARRIVES));
+    // An earlier revision divided this by 0.40 to "compensate" for an
+    // attenuation that does not exist. That figure came from a harness passing
+    // `strength` to splitFrames, which takes `amplitude`, so the option was
+    // dropped and every run silently used the defaults -- including
+    // linearLight: false, which the element never uses and which really does
+    // attenuate (0.71 at amplitude 32, 0.40 at 64, 0.11 at 110). The constant
+    // was measured off a configuration the element does not run.
+    const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
+    // Past the ground's own swing the texture clips and bands instead of getting
+    // stronger, so a large request degrades to the strongest honest version.
+    const headroom = Math.floor(codeSwing(background));
     if (levels <= 0) return;
-    if (asked > 26) {
-      warnOnce(`pattern:${asked}`,
-        `pattern-strength ${asked} is past where the texture stops being worth ` +
+    if (levels > headroom) {
+      warnOnce(`pattern:${levels}`,
+        `pattern-strength ${levels} is past what this ground can carry (${headroom}), ` +
         'its cost. Raw leak goes 0.197 flat, 0.225 at 16 levels and 0.285 at 34, ' +
         'and blurred 0.224, 0.261 and 0.380. 16 is the default and reads clearly.');
     }

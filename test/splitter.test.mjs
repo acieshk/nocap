@@ -1053,3 +1053,37 @@ test('the frame count is chosen by the mode, not pinned by the defaults', async 
   // And an explicit count still wins.
   assert.equal(splitFrames(src, resolveOptions({ mode: 'aperture', frames: '8' }, 1, 56)).length, 8);
 });
+
+test('a texture in the image survives the split intact under linearLight', () => {
+  // Pins the fact a "compensation constant" was once built on: under
+  // linearLight the perceived mean equals the authored image, so a texture
+  // drawn into it arrives whole and must NOT be scaled up to compensate.
+  //
+  // Geometry is cancelled by comparing RMS(textured - flat) before the split
+  // with the same after it, so duty, pitch and phase drop out.
+  const W = 96, H = 48;
+  const build = (drawn) => {
+    const px = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const on = ((((x - y) % 13) + 13) % 13) < 3;
+      for (let k = 0; k < 3; k++) px[i + k] = 64 + (on ? drawn : 0);
+      px[i + 3] = 255;
+    }
+    return { data: px, width: W, height: H };
+  };
+  const rms = (a, b) => {
+    let s = 0;
+    for (let i = 0; i < a.data.length; i += 4) { const d = a.data[i] - b.data[i]; s += d * d; }
+    return Math.sqrt(s / (a.data.length / 4));
+  };
+
+  for (const amplitude of [0, 64, 110]) {
+    const tex = build(35), flat = build(0);
+    const before = rms(tex, flat);
+    const o = { mode: 'amplitude', amplitude, noiseScale: 16, linearLight: true, seed: 4 };
+    const after = rms(perceivedMean(splitFrames(tex, o)), perceivedMean(splitFrames(flat, o)));
+    assert.ok(Math.abs(after / before - 1) < 0.02,
+      `texture should arrive intact at amplitude ${amplitude}, got ${(after / before).toFixed(3)}`);
+  }
+});
