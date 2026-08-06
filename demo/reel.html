@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>nocap reel generator</title>
+<style>body{margin:0;background:#111;color:#ddd;font:13px ui-monospace,monospace}</style>
+</head>
+<body>
+<div id="status">rendering…</div>
+<script type="module">
+/**
+ * Frame generator for the promo reel.
+ *
+ * A video of this technique cannot show the technique. At any frame rate a
+ * recording captures, the two planes do not fuse into their mean, so a naive
+ * capture of a running element reads as noise rather than as text. Showing the
+ * mean instead is just text, with nothing to demonstrate.
+ *
+ * So the reel shows both halves side by side. Left is the mean, which is what a
+ * viewer's visual system computes. Right is a single plane, which is exactly
+ * what one screenshot lands on. Neither is retouched and both come out of the
+ * same splitFrames call, so the comparison is the real one.
+ *
+ * Renders every frame to a data URL and hands them over in one go, rather than
+ * relaunching a browser per frame.
+ */
+import { splitFrames, perceivedMean } from '../src/splitter.js';
+
+const W = 960, H = 540, FPS = 20, SECONDS = 9;
+const TOTAL = FPS * SECONDS;
+
+// Palettes are the shipped default and two variations kept at a comparable
+// masking ratio. A promo whose "screenshot" panel is readable argues against
+// itself, and the first cut of this used a pair I had not checked.
+const SCENES = [
+  { at: 0,   value: '4471 0092 8834', label: 'card number',
+    family: '600 %PXpx ui-monospace, monospace', fg: '#9ea6b4', bg: '#6b7280' },
+  { at: 55,  value: 'sk_live_9Fk2Qw', label: 'api key',
+    family: '700 %PXpx Inter, system-ui, sans-serif', fg: '#a3aeb8', bg: '#6f767e' },
+  { at: 110, value: '+1 (555) 010-0199', label: 'phone number',
+    family: '500 %PXpx Georgia, serif', fg: '#b9a8ae', bg: '#7d6e73' },
+];
+
+const cv = document.createElement('canvas');
+cv.width = W; cv.height = H;
+const g = cv.getContext('2d', { alpha: false, willReadFrequently: true });
+
+const ease = (t) => (t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3));
+
+/** The split, rendered once per scene and reused across its frames. */
+const cache = new Map();
+function planesFor(scene, w, h) {
+  const key = scene.at + ':' + w + ':' + h;
+  if (cache.has(key)) return cache.get(key);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d', { alpha: false, willReadFrequently: true });
+  x.fillStyle = scene.bg; x.fillRect(0, 0, w, h);
+
+  // Fit the face to the panel rather than hoping. The first cut hardcoded 42px
+  // and clipped every value, which is the same silent-overflow bug the element
+  // now warns about, reproduced by hand in the promo for it.
+  let px = 56;
+  do {
+    x.font = scene.family.replace('%PX', px);
+    px -= 2;
+  } while (x.measureText(scene.value).width > w - 36 && px > 12);
+
+  x.fillStyle = scene.fg;
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(scene.value, w / 2, h / 2);
+
+  // Block from the stroke, the way the element derives it: twice the stroke is
+  // where a blur stops gaining, and a block chosen by eye was leaving the value
+  // legible in the panel that is supposed to show it hidden.
+  const stroke = Math.max(2, Math.round(px / 8));
+  let seed = 4242;
+  const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const planes = splitFrames(x.getImageData(0, 0, w, h), {
+    mode: 'amplitude', frames: 2, amplitude: 122, hardness: 1,
+    noiseScale: stroke * 2, chroma: 0, linearLight: true, gamma: 2.4, rng });
+  const out = { planes, mean: perceivedMean(planes) };
+  cache.set(key, out);
+  return out;
+}
+
+function put(img, dx, dy) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  c.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+  g.drawImage(c, dx, dy);
+}
+
+function frame(f) {
+  g.fillStyle = '#1a1a1c';
+  g.fillRect(0, 0, W, H);
+
+  // Title, typed on and held.
+  const title = 'The text you cannot capture';
+  const shown = title.slice(0, Math.min(title.length, Math.round(f * 1.1)));
+  g.fillStyle = '#ededed';
+  g.font = '700 40px Inter, system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'alphabetic';
+  g.fillText(shown, W / 2, 78);
+  if (f < 30 && Math.floor(f / 3) % 2 === 0) {
+    const wpx = g.measureText(shown).width;
+    g.fillRect(W / 2 + wpx / 2 + 4, 52, 3, 32);
+  }
+
+  const scene = [...SCENES].reverse().find((s) => f >= s.at) ?? SCENES[0];
+  const local = f - scene.at;
+  const inn = ease(local / 14);
+  if (inn <= 0) return;
+
+  const pw = 420, ph = 132;
+  const { planes, mean } = planesFor(scene, pw, ph);
+  const gap = 44;
+  const left = (W - pw * 2 - gap) / 2;
+  const y = 190 + (1 - inn) * 18;
+
+  g.globalAlpha = inn;
+  put(mean, left, y);
+  // Alternate which plane is shown, so the right panel is honestly a capture
+  // rather than one cherry-picked frame.
+  put(planes[Math.floor(f / 2) % 2], left + pw + gap, y);
+  g.globalAlpha = 1;
+
+  g.font = '600 13px Inter, system-ui, sans-serif';
+  g.fillStyle = '#8a8a90';
+  g.textAlign = 'center';
+  g.fillText('WHAT YOU SEE', left + pw / 2, y - 14);
+  g.fillText('WHAT A SCREENSHOT GETS', left + pw + gap + pw / 2, y - 14);
+
+  g.font = '500 15px ui-monospace, monospace';
+  g.fillStyle = '#6f6f78';
+  g.fillText(scene.label, W / 2, y + ph + 34);
+
+  if (f > TOTAL - 46) {
+    const t = ease((f - (TOTAL - 46)) / 20);
+    g.globalAlpha = t;
+    g.fillStyle = '#1a1a1c';
+    g.fillRect(0, H - 96, W, 96);
+    g.fillStyle = '#a9bcff';
+    g.font = '600 22px ui-monospace, monospace';
+    g.fillText('npm i nocap', W / 2, H - 52);
+    g.fillStyle = '#6f6f78';
+    g.font = '400 14px Inter, system-ui, sans-serif';
+    g.fillText('never enters the DOM  ·  MIT', W / 2, H - 26);
+    g.globalAlpha = 1;
+  }
+}
+
+const frames = [];
+for (let f = 0; f < TOTAL; f++) {
+  frame(f);
+  frames.push(cv.toDataURL('image/png'));
+  if (f % 20 === 0) document.getElementById('status').textContent = `rendered ${f}/${TOTAL}`;
+}
+// One payload, so the harness makes a single pass rather than a launch per frame.
+const sink = document.createElement('div');
+sink.id = 'frames';
+sink.textContent = frames.join('\n');
+sink.style.display = 'none';
+document.body.appendChild(sink);
+document.getElementById('status').textContent = `DONE ${TOTAL} frames ${W}x${H} @${FPS}fps`;
+</script>
+</body>
+</html>
