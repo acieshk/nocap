@@ -90,11 +90,11 @@
   /* Diagonal hatch, far coarser than any noise block, so nothing beats. */
   body.p2 #pattern { opacity:1;
     background-image:repeating-linear-gradient(45deg,
-      rgba(255,255,255,.10) 0 3px, transparent 3px 13px) }
+      rgba(255,255,255,var(--pat-a,.10)) 0 3px, transparent 3px 13px) }
   /* Dot grid. Regular, which is the opposite of the noise, so the element reads
      as the irregular thing on a tidy ground. */
   body.p3 #pattern { opacity:1;
-    background-image:radial-gradient(rgba(255,255,255,.20) 1.7px, transparent 1.8px);
+    background-image:radial-gradient(rgba(255,255,255,var(--pat-a,.20)) 1.7px, transparent 1.8px);
     background-size:16px 16px }
   /* Soft vignette. No texture at all, just depth, so the flat ground stops
      reading as a void around a lit rectangle. */
@@ -105,8 +105,8 @@
      Same texture, opposite ink. */
   body.light.p1 #pattern { filter:invert(1); opacity:.85 }
   body.light.p2 #pattern { background-image:repeating-linear-gradient(45deg,
-      rgba(0,0,0,.10) 0 3px, transparent 3px 13px) }
-  body.light.p3 #pattern { background-image:radial-gradient(rgba(0,0,0,.20) 1.7px,
+      rgba(0,0,0,var(--pat-a,.10)) 0 3px, transparent 3px 13px) }
+  body.light.p3 #pattern { background-image:radial-gradient(rgba(0,0,0,var(--pat-a,.20)) 1.7px,
       transparent 1.8px); background-size:16px 16px }
   body.light.p4 #pattern { background:radial-gradient(110% 85% at 50% 40%,
       rgba(255,255,255,.5) 0%, transparent 48%, rgba(0,0,0,.30) 100%) }
@@ -176,6 +176,27 @@ function hsl(h, s, l) {
  * a channel near 255 has nowhere left to go.
  */
 const LIGHT = { fg: '#6a6a6a', bg: '#b0b0b0' };
+
+/**
+ * How far the texture moves its ground, in levels, on BOTH sides of the
+ * element's edge.
+ *
+ * The page used a fixed .10 alpha, which is not a fixed amount of texture: over
+ * #b0b0b0 it moves 17.6 levels and over a dark beat it moves 23, so "the page's
+ * texture" was a different weight on every screen and the element could only
+ * ever coincide with it by luck. Solving the alpha per ground -- compositing c
+ * over V gives V + a*(c - V), so a = levels/span -- makes one number mean one
+ * thing everywhere, which is the only way the two can be set to match.
+ */
+const PATTERN_LEVELS = 20;
+
+/** The alpha that moves `bg` by PATTERN_LEVELS, matching what the element does. */
+function patternAlpha(bgHex, light) {
+  const v = parseInt(bgHex.slice(1), 16);
+  const V = 0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
+  const span = light ? V : 255 - V;      // light beats ink dark, dark beats ink light
+  return span > 0 ? Math.min(0.9, PATTERN_LEVELS / span) : 0;
+}
 
 const pal = (b) => (b.plain ? { fg: '#4ade80', bg: '#0c140f' }
   : b.light ? LIGHT
@@ -471,6 +492,8 @@ function play(i) {
 
   const b = beats[i];
   document.body.style.background = pal(b).bg;
+  document.body.style.setProperty('--pat-a',
+    String(patternAlpha(pal(b).bg, Boolean(b.light))));
   document.body.classList.toggle('light', Boolean(b.light));
   b.wrap.classList.add('on');
   note.innerHTML = b.note ?? '';
@@ -579,7 +602,32 @@ function setPattern(i) {
   for (const el of document.querySelectorAll('nocap-secret')) {
     if (inner) {
       el.setAttribute('pattern', inner);
-      el.setAttribute('pattern-strength', '20');
+      // 20 levels on the page, 50 on the element, and that IS the match.
+      //
+      // A level count is not a visibility. Over the page's flat ground 20 levels
+      // is the entire local contrast, so it reads plainly. Over the element the
+      // same 20 levels sits on noise already spanning 0 to 255, where the eye
+      // normalises it to nothing -- shot side by side at 20/45/70/100, the 20
+      // stripe is invisible while the page's is obvious. Equal numbers looked
+      // wrong; unequal numbers look equal.
+      //
+      // Judged by eye against the page's stripes rather than derived, because
+      // the quantity involved is perceived contrast over a noisy field and I do
+      // not have a defensible model for it. Tune it on the pairing page.
+      el.setAttribute('pattern-strength', '50');
+      // In FRONT, not in the canvas.
+      //
+      // Behind, the texture shares the canvas with noise swinging +/-127 a
+      // frame. It survives the split -- measured at ~25 levels peak-to-peak on
+      // the light screen, which is the number asked for -- but the eye only
+      // partially cancels noise that large, so a correct texture still reads as
+      // mush. In a still capture it cancels not at all and vanishes completely.
+      //
+      // In front it is composited after the split: crisp, identical to the CSS
+      // on the page, and it survives a screenshot because it was never split.
+      // It costs nothing, since adding the same thing to every frame leaves the
+      // planes averaging to the target plus a constant.
+      el.setAttribute('pattern-layer', 'front');
       alignPattern(el);
     } else {
       el.removeAttribute('pattern');

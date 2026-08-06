@@ -1450,12 +1450,20 @@ export class NocapSecret extends ElementBase {
     const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
     if (levels <= 0) return;
     const bg = toRgb(background);
-    const dir = luma(bg) < 128 ? 1 : -1;
-    // Alpha over the ground, so the same level count reads the same as it does
-    // in the canvas version.
-    const a = Math.min(0.9, levels / 255 * (dir > 0 ? 3.2 : 3.2));
-    const ink = dir > 0 ? `rgba(255,255,255,${a.toFixed(3)})`
-                        : `rgba(0,0,0,${a.toFixed(3)})`;
+    const V = luma(bg);
+    const dir = V < 128 ? 1 : -1;
+    // Solve the alpha that moves the ground by exactly `levels`, rather than
+    // guessing a coefficient. Compositing c over V gives V + a*(c - V), so for
+    // black ink a = levels/V and for white a = levels/(255 - V).
+    //
+    // The earlier levels/255*3.2 was fitted by eye and is not a calibration: on
+    // the promo's #b0b0b0 it turned a request for 20 into about 64 levels of
+    // darkening, which is why the element's hatch read three times heavier than
+    // the page's instead of continuing it.
+    const span = dir > 0 ? 255 - V : V;
+    const a = Math.min(0.9, span > 0 ? levels / span : 0);
+    const ink = dir > 0 ? `rgba(255,255,255,${a.toFixed(4)})`
+                        : `rgba(0,0,0,${a.toFixed(4)})`;
     const ox = num({ v: this.getAttribute('pattern-offset-x') }, 'v', 0);
     const oy = num({ v: this.getAttribute('pattern-offset-y') }, 'v', 0);
     const pos = `${-ox}px ${-oy}px`;
@@ -1468,7 +1476,7 @@ export class NocapSecret extends ElementBase {
       grid: `background-image:repeating-linear-gradient(${ink} 0 1px, transparent 1px 46px),
              repeating-linear-gradient(90deg, ${ink} 0 1px, transparent 1px 46px);
              background-position:${pos}`,
-      grain: `background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='${(a * 1.6).toFixed(2)}'/%3E%3C/svg%3E");
+      grain: `background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='${Math.min(0.9, a * 1.6).toFixed(2)}'/%3E%3C/svg%3E");
               background-position:${pos}`,
     }[kind];
     if (css) this.#fg.style.cssText = css;
