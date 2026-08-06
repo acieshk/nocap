@@ -89,6 +89,8 @@
       </select></label>
     <label class="f" title="The ground colour. Both the element and the page use it, so no panel edge shows."><span>Ground</span>
       <input type="color" id="bg" value="#404040"></label>
+    <label class="f" title="Draws the same texture INSIDE the element, so it continues across the boundary instead of stopping at it. This is the one place a pattern is not free: measured, 6 levels costs nothing and 34 costs a third of the protection."><span>Texture in the element <em id="pV">6</em> levels</span>
+      <input type="range" id="p" min="0" max="20" step="1" value="6"></label>
   </div>
   <div class="readout">
     <span>masking <b id="rMask">…</b></span>
@@ -130,8 +132,9 @@
 
 <h2>What does not work</h2>
 <ul>
-  <li><b>Texture inside the element.</b> It costs protection, measurably, and the
-      numbers are above. Keep the element background flat.</li>
+  <li><b>Strong texture inside the element.</b> Faint is free and costs nothing
+      at 6 levels. Past about 12 it starts buying the page's looks with the
+      element's protection, and at 34 it has spent a third of it.</li>
   <li><b>A busy photographic background.</b> Its own high-frequency detail
       competes with the noise, and the element ends up harder to read rather than
       better hidden.</li>
@@ -175,6 +178,18 @@ function paint() {
   $('stage').style.background = bg;
   $('chip').setAttribute('background', bg);
   $('chip').setAttribute('strength', $('str').value);
+  // The same family inside the element, so the texture runs across the boundary
+  // rather than stopping at it. Strength is separate and much lower, because in
+  // here the split has to carry it.
+  const inner = +$('p').value;
+  $('pV').textContent = inner;
+  const supported = ['dots', 'hatch', 'grid', 'grain'].includes(current);
+  if (inner > 0 && supported) {
+    $('chip').setAttribute('pattern', current);
+    $('chip').setAttribute('pattern-strength', String(inner));
+  } else {
+    $('chip').removeAttribute('pattern');
+  }
 
   // The element's own numbers, so it is obvious they do not move with the
   // texture slider. That independence is the claim this page rests on.
@@ -203,7 +218,7 @@ for (const [key, name, why] of FAMILIES) {
   $('swatches').appendChild(b);
 }
 
-for (const id of ['s', 'str', 'bg']) $(id).oninput = $(id).onchange = paint;
+for (const id of ['s', 'str', 'bg', 'p']) $(id).oninput = $(id).onchange = paint;
 // The value is set ONCE. Setting it inside paint() and also listening for
 // render made each render trigger a repaint that set it again: an infinite loop
 // that hung the tab rather than throwing, so the page looked simply dead.

@@ -425,16 +425,36 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
   // that silently moves every block about 17% coarser, with more shimmer and
   // nothing behind it. Either change both together or neither.
   const SATURATES = 2;
-  base.noiseScale = Math.max(2, Math.round(strokePx * (base.blockRatio ?? SATURATES)));
+  // Capped, and the ceiling is chosen for LOOKS rather than for security.
+  //
+  // Measured at stroke 11 over 30 seeds, worst of raw and blurred: block 11
+  // 0.285, 16 0.267, 20 0.282, 24 0.271, 30 0.266, all with confidence
+  // intervals of about 0.014. Every one overlaps every other. Once the block
+  // clears the saturation point, going further buys nothing measurable.
+  //
+  // What it does buy is 24 to 30px tiles on large type, which read as broken.
+  // So the cap exists, it is honest about being an aesthetic choice, and it is
+  // set well above the point where the blur radius collapses.
+  // num() directly, not the attr() helper: that is declared further down and
+  // reading it here is a temporal dead zone error, which is the second time this
+  // file has caught me that way.
+  const cap = Math.max(4, num(attrs, 'noise-scale-max', 16));
+  base.noiseScale = Math.min(cap,
+    Math.max(2, Math.round(strokePx * (base.blockRatio ?? SATURATES))));
   // blockRatio is how a preset is authored. It is not a split option, and
   // leaving it in would hand splitFrames a key it does not know.
   delete base.blockRatio;
 
   if (base.noiseScale < strokePx * SATURATES) {
+    const capped = base.noiseScale === cap;
     warnOnce(`block:${base.noiseScale}:${strokePx}`,
       `noise block ${base.noiseScale}px is under ${SATURATES}x the ${strokePx}px stroke, ` +
-      `so a blur can recover some of the value. Use ${Math.round(strokePx * SATURATES)}px ` +
-      'to close it, at the cost of more visible shimmer.');
+      `so a blur may recover some of the value. ${Math.round(strokePx * SATURATES)}px closes it.` +
+      (capped
+        ? ` This is the noise-scale-max ceiling of ${cap}px binding, which exists because`
+          + ' larger blocks read as tiles rather than noise. Raise noise-scale-max if the'
+          + ' capture matters more than the look at this size.'
+        : ''));
   }
 
   // NOT a local `num`. There was one here, with the same name and the same
@@ -526,6 +546,9 @@ export class NocapSecret extends ElementBase {
     'chroma-decoy',
     'chroma-block',
     'noise-scale',
+    'noise-scale-max',
+    'pattern',
+    'pattern-strength',
     'noise-profile',
     'ink-bias',
     'edge-fade',
@@ -1065,6 +1088,7 @@ export class NocapSecret extends ElementBase {
     const ctx = cv.getContext('2d', { alpha: false });
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, w, h);
+    this.#paintPattern(ctx, background, w, h);
     this.#paintWatermark(ctx, font, background, w, h);
     const style = this.#textStyle();
     this.#applyTextStyle(ctx, style);
@@ -1253,6 +1277,86 @@ export class NocapSecret extends ElementBase {
       }
     }
     ctx.putImageData(img, 0, 0);
+  }
+
+  /**
+   * A texture in the element's own background, so it can match the page it sits
+   * on instead of being a flat rectangle inside a patterned design.
+   *
+   * This is the one place a pattern is NOT free, and the difference is worth
+   * stating precisely. On the page it costs nothing, because the split never
+   * carries it. In here the split has to reproduce it as content, and its darker
+   * parts leave those pixels less headroom to be displaced into. Measured:
+   *
+   *   flat        raw 0.197   blurred 0.224
+   *    6 levels   raw 0.200   blurred 0.222   <- free
+   *   16 levels   raw 0.225   blurred 0.261
+   *   34 levels   raw 0.285   blurred 0.380
+   *
+   * So the strength is in CODE LEVELS rather than a vague 0..1, defaults to 6,
+   * and warns past 12. A texture you can see from a metre away is not worth a
+   * third of the protection.
+   */
+  #paintPattern(ctx, background, w, h) {
+    const kind = this.getAttribute('pattern');
+    if (!kind || kind === 'none') return;
+    const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 6));
+    if (levels <= 0) return;
+    if (levels > 12) {
+      warnOnce(`pattern:${levels}`,
+        `pattern-strength ${levels} is past the point where the texture starts ` +
+        'costing protection. At 16 levels the leak goes 0.197 to 0.225 raw and ' +
+        '0.224 to 0.261 blurred, and at 34 it is 0.285 and 0.380. Keep it under 12.');
+    }
+
+    const bg = toRgb(background);
+    // Lighter where the ground is dark and darker where it is light, so the
+    // texture reads at either end instead of vanishing into one of them.
+    const dir = luma(bg) < 128 ? 1 : -1;
+    const ink = `rgb(${bg.map((v) => Math.max(0, Math.min(255, v + dir * levels))).join(',')})`;
+    // Scaled by density, so a 16px CSS pattern on the page and this one line up.
+    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    const unit = Math.max(6, Math.round(16 * dpr));
+
+    ctx.save();
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    if (kind === 'dots') {
+      const r = Math.max(1, unit / 9);
+      for (let y = unit / 2; y < h; y += unit) {
+        for (let x = unit / 2; x < w; x += unit) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else if (kind === 'hatch') {
+      ctx.lineWidth = Math.max(1, unit / 7);
+      for (let d = -h; d < w + h; d += unit * 0.82) {
+        ctx.beginPath();
+        ctx.moveTo(d, 0);
+        ctx.lineTo(d + h, h);
+        ctx.stroke();
+      }
+    } else if (kind === 'grid') {
+      ctx.lineWidth = 1;
+      const g = unit * 2.9;
+      for (let x = 0; x < w; x += g) { ctx.fillRect(x, 0, 1, h); }
+      for (let y = 0; y < h; y += g) { ctx.fillRect(0, y, w, 1); }
+    } else if (kind === 'grain') {
+      // Deterministic, so the texture does not crawl between renders.
+      let s = 20261;
+      const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      const px = Math.max(1, Math.round(dpr));
+      for (let y = 0; y < h; y += px) {
+        for (let x = 0; x < w; x += px) {
+          if (rnd() < 0.5) continue;
+          ctx.globalAlpha = rnd() * 0.9;
+          ctx.fillRect(x, y, px, px);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   /** Put the scrambled glyphs back in order. Only for deriving a decoy shape. */

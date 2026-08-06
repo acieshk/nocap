@@ -540,6 +540,11 @@ document.addEventListener('visibilitychange', () => {
  * as content and its dark parts leave those pixels less headroom. Outside the
  * canvas there is no such constraint, so this is free.
  */
+// Which page texture maps onto which in-element pattern, so the texture runs
+// across the element boundary instead of stopping at it. Faint inside, because
+// in there the split has to carry it: 6 levels is measured free.
+const INNER = { grain: 'grain', hatch: 'hatch', dots: 'dots', depth: null, none: null };
+
 const PATTERNS = [
   ['none', 'flat, what ships today'],
   ['grain', 'fine grain, closest to the texture the element itself has'],
@@ -553,6 +558,15 @@ function setPattern(i) {
   document.body.classList.remove('p0', 'p1', 'p2', 'p3', 'p4');
   document.body.classList.add('p' + i);
   localStorage.setItem('nocap-pattern', String(i));
+  const inner = INNER[PATTERNS[i][0]];
+  for (const el of document.querySelectorAll('nocap-secret')) {
+    if (inner) {
+      el.setAttribute('pattern', inner);
+      el.setAttribute('pattern-strength', '6');
+    } else {
+      el.removeAttribute('pattern');
+    }
+  }
   for (const [k, btn] of [...document.getElementById('pick').children].entries()) {
     btn.setAttribute('aria-pressed', String(k === i));
   }

@@ -562,7 +562,7 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   const tall = 120;
   for (const dpr of [1, 2, 3]) {
     const got = resolveOptions({ strength: 'strong' }, dpr, tall).noiseScale;
-    const want = Math.round(strokeOf(dpr, tall) * STRENGTHS.strong.blockRatio);
+    const want = Math.min(16, Math.round(strokeOf(dpr, tall) * STRENGTHS.strong.blockRatio));
     assert.equal(got, want, `dpr ${dpr} should give ${want}, got ${got}`);
   }
   // A taller element has a wider stroke, so it earns a coarser block.
@@ -576,7 +576,7 @@ test('a strength preset applies all of its values, not just amplitude', async ()
   // element at dpr 2 has a 14px stroke, so it earns 28 rather than the 6 the
   // old floor pinned it to.
   const plain = resolveOptions({}, 2, 120).noiseScale;
-  assert.equal(plain, strokeOf(2, 120) * 2, `plain default: ${plain}`);
+  assert.equal(plain, Math.min(16, strokeOf(2, 120) * 2), `plain default: ${plain}`);
   assert.ok(plain > TEXT_BLOCK, 'a wide stroke must earn more than the default-size block');
 });
 
@@ -809,11 +809,19 @@ test('the noise block is twice the stroke, at every size and density', async () 
   // trim a dpr-scaled number and never raise one. At dpr 1 that made the preset
   // the answer at every font size, so a 96px font got the same 6px block as a
   // 12px one, at a quarter of the ratio it needed.
+  // Twice the stroke, until the ceiling. noise-scale-max defaults to 16 because
+  // blocks past it read as tiles, and 30 seeds at stroke 11 put every block from
+  // 11 to 30 inside one confidence interval, so the ceiling costs nothing
+  // measurable. Raising it restores the pure rule.
   for (const [px, stroke] of [[16, 2], [24, 3], [32, 4], [48, 6], [64, 8], [96, 12]]) {
     const got = resolveOptions({}, 1, 56, px).noiseScale;
-    assert.equal(got, Math.max(2, Math.round(stroke * 2)),
-      `font ${px}px has a ${stroke}px stroke and needs ${stroke * 2}, got ${got}`);
+    assert.equal(got, Math.min(16, Math.max(2, Math.round(stroke * 2))),
+      `font ${px}px has a ${stroke}px stroke, got ${got}`);
+    assert.equal(resolveOptions({ 'noise-scale-max': '99' }, 1, 56, px).noiseScale,
+      Math.max(2, Math.round(stroke * 2)), `${px}px uncapped should be 2x stroke`);
   }
+  // The ceiling actually binds, rather than sitting above everything.
+  assert.equal(resolveOptions({}, 1, 56, 160).noiseScale, 16);
 
   // Bigger font, bigger block. This is what failed before: every size gave 6.
   const small = resolveOptions({}, 1, 90, resolveText({ 'font-size': '12' }, 90).sizePx).noiseScale;
