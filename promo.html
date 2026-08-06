@@ -8,17 +8,21 @@
 <style>
   :root { color-scheme: dark }
   * { box-sizing:border-box; margin:0 }
-  body { min-height:100vh; overflow:hidden; color:#ededed; background:#404040;
+  body { min-height:100dvh; overflow:hidden; color:#ededed; background:#404040;
          font:16px/1.5 Inter,system-ui,-apple-system,sans-serif;
          transition:background 700ms cubic-bezier(.4,0,.2,1) }
-  #stage { position:relative; width:100%; height:100vh; display:grid; place-items:center }
+  /* dvh, not vh. On mobile vh is the viewport WITHOUT the address bar, so a
+     100vh stage is taller than the screen and the reel sits low with the last
+     beat cut off. dvh tracks the chrome as it hides and shows. */
+  #stage { position:relative; width:100%; height:100dvh; min-height:100vh;
+           display:grid; place-items:center; padding:0 12px }
   /* No gap, and no corner rounding. Each word is its own canvas, so any gap
      between them shows a clean stripe of page background between two noisy
      blocks, and the rounding cuts notches at every seam. The word spacing lives
      INSIDE each canvas instead, as padding around the glyphs, so the noise runs
      continuously across the whole phrase. */
   .beat { position:absolute; display:flex; flex-wrap:wrap; gap:0;
-          justify-content:center; align-items:center; max-width:93vw; pointer-events:none }
+          justify-content:center; align-items:center; max-width:100%; pointer-events:none }
   /* One element per word, each on its own delay. Only opacity and an integer
      translate ever animate: scaling or rotating a canvas resamples it, and
      resampling noise moves it toward its mean, which is the attack this whole
@@ -30,8 +34,8 @@
      stop dead, which is what reads as impact. */
   .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1) }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
-  .note { position:fixed; left:0; right:0; bottom:30px; text-align:center;
-          font-size:14px; color:#e6e6e6; opacity:0;
+  .note { position:fixed; left:0; right:0; bottom:max(24px, env(safe-area-inset-bottom));
+          padding:0 18px; text-align:center; font-size:13.5px; line-height:1.45; color:#e6e6e6; opacity:0;
           transition:opacity .5s ease, color .7s ease }
   /* Light beats flip the chrome, or the captions vanish into the page. */
   body.light .note { color:#2e2e2e } body.light .note b { color:#000 }
@@ -40,7 +44,8 @@
                        border-color:rgba(0,0,0,.22) }
   /* The install line is plain text, not a canvas. It is the one line in the reel
      that has to be readable and selectable rather than protected. */
-  .term { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
+  .term { max-width:100%; overflow:hidden; text-overflow:ellipsis;
+          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
           color:#4ade80; background:#0c140f; border:1px solid #1e3326;
           border-radius:10px; padding:26px 42px; white-space:nowrap;
           text-shadow:0 0 22px rgba(74,222,128,.4) }
@@ -223,6 +228,41 @@ const ENTER = {
 };
 
 /**
+ * How much to shrink the whole script so the widest beat fits the screen.
+ *
+ * The type CANNOT be scaled with CSS after the fact: transforming a canvas
+ * resamples it, and resampling noise moves it toward its mean, which is the
+ * attack this page exists to refuse. So the fit has to happen before anything is
+ * rendered, by choosing a smaller font and splitting at that size instead.
+ *
+ * One factor for the whole reel rather than per beat, so the relative weight of
+ * the lines survives. Shrinking only the widest would flatten the rhythm.
+ */
+function fitFactor() {
+  const probe = document.createElement('canvas').getContext('2d');
+  let widest = 1;
+  let tallest = 1;
+  for (const b of SCRIPT) {
+    if (b.plain) continue;
+    // Measured at the DESIGN size. Using FIT here would read it before it is
+    // assigned, since FIT is what this function returns, and the whole page
+    // died on that temporal dead zone with no element rendered at all.
+    probe.font = `${b.weight} ${b.size}px ${b.face}`;
+    const pad = b.split === 'chars' ? 12 : 38;
+    const units = b.split === 'chars' ? [...b.text] : b.text.split(' ');
+    widest = Math.max(widest,
+      units.reduce((sum, u) => sum + probe.measureText(u).width + pad, 0));
+    tallest = Math.max(tallest, b.size * 1.55);
+  }
+  const availW = Math.max(240, innerWidth - 24);
+  // Leave room for the caption under the words.
+  const availH = Math.max(220, innerHeight - 150);
+  return Math.min(1, availW / widest, availH / tallest);
+}
+
+let FIT = fitFactor();
+
+/**
  * One element per word. The element draws a single line, so a phrase is several
  * of them, and that is what lets each word carry its own entrance.
  */
@@ -233,7 +273,7 @@ const beats = SCRIPT.map((b) => {
   if (b.plain) {
     const term = document.createElement('div');
     term.className = 'word term';
-    term.style.fontSize = '46px';
+    term.style.fontSize = `${Math.max(19, Math.round(46 * FIT))}px`;
     term.innerHTML = '<span class="p">$</span>' + b.text;
     term.style.transform = 'translate3d(0, 26px, 0)';
     wrap.appendChild(term);
@@ -247,12 +287,13 @@ const beats = SCRIPT.map((b) => {
   words.forEach((word, i) => {
     const el = document.createElement('nocap-secret');
     const probe = document.createElement('canvas').getContext('2d');
-    probe.font = `${b.weight} ${b.size}px ${b.face}`;
+    const size = Math.max(18, Math.round(b.size * FIT));
+    probe.font = `${b.weight} ${size}px ${b.face}`;
     // The spacing between words is padding inside this canvas rather than a gap
     // outside it, so adjacent words touch and the noise is unbroken.
     el.setAttribute('width',
       String(Math.ceil(probe.measureText(word).width) + (b.split === 'chars' ? 12 : 38)));
-    el.setAttribute('height', String(Math.round(b.size * 1.55)));
+    el.setAttribute('height', String(Math.round(size * 1.55)));
     el.setAttribute('font-family', b.face);
     el.setAttribute('font-weight', String(b.weight));
     // A scale, not a size: font-size is device pixels against the canvas
@@ -264,7 +305,9 @@ const beats = SCRIPT.map((b) => {
     // 24 to 30px at this size, which reads as tiles rather than noise, and at
     // stroke 13 a 12px block measured finer AND better on both axes. It was
     // calibrated at strokes 3 to 8 and has a ceiling above them.
-    el.setAttribute('noise-scale', String(b.block));
+    // The block shrinks with the type, or a phone gets the desktop block over
+    // much smaller glyphs and it reads as tiles again.
+    el.setAttribute('noise-scale', String(Math.max(3, Math.round(b.block * FIT))));
     // NO edge-fade here, and the reason is worth keeping. It tapers the noise at
     // each element's own boundary, which is right for a lone element sitting on
     // a page. In a row of words every seam gets TWO taperings meeting, and the
@@ -349,6 +392,16 @@ function start() {
   for (const b of beats) b.wrap.classList.remove('on');
   setTimeout(() => play(0), 320);
 }
+
+// Rebuild on a real size change, since the type was baked at the old fit and
+// cannot be rescaled afterwards without resampling the canvas. Ignores the
+// small height changes a mobile address bar causes as it hides.
+let lastW = innerWidth;
+addEventListener('resize', () => {
+  if (Math.abs(innerWidth - lastW) < 60) return;
+  lastW = innerWidth;
+  location.reload();
+});
 
 replay.onclick = start;
 // A backgrounded tab should not keep cycling.
