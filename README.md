@@ -242,6 +242,17 @@ rather than reaching the canvas, because an invalid `ctx.font` or a non-finite
 `fillText` coordinate is a silent no-op that would render the wrong thing, or
 nothing at all, without an error.
 
+**`edge-fade` is for a lone element, not a row of them.** It tapers the noise to
+nothing within N px of the element's own edge, which dissolves a single block
+into the page behind it. Put two faded elements side by side and each tapers at
+the seam they share, so a quiet valley opens between them and reads as a border
+drawn around every element. Adjacent elements want a flat amplitude, `gap: 0`
+and `--nocap-radius: 0`.
+
+It is free where it does apply, unlike `ink-bias`: the margin holds no ink, and
+the taper follows the canvas rectangle rather than the content, so it gives away
+nothing an attacker cannot already see.
+
 **Corner rounding, and stacking.** The canvas is rounded by 4px. That lives
 inside a closed shadow root, so a selector cannot reach it, but a custom property
 crosses the boundary:

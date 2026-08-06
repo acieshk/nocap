@@ -227,11 +227,14 @@ const beats = SCRIPT.map((b) => {
     // stroke 13 a 12px block measured finer AND better on both axes. It was
     // calibrated at strokes 3 to 8 and has a ceiling above them.
     el.setAttribute('noise-scale', String(b.block));
-    // The noise tapers out over the padding, so a word ends in its own glyphs
-    // rather than in a hard rectangle. Free here, unlike ink-bias: the margin
-    // holds no ink, so quietening it protects nothing less. It follows the
-    // canvas edge, which an attacker can already see, not the content.
-    el.setAttribute('edge-fade', String(Math.round(b.size * 0.34)));
+    // NO edge-fade here, and the reason is worth keeping. It tapers the noise at
+    // each element's own boundary, which is right for a lone element sitting on
+    // a page. In a row of words every seam gets TWO taperings meeting, and the
+    // quiet valley between them reads as a border drawn around each word. It
+    // produced the exact rectangles it was added to remove.
+    //
+    // Adjacent elements want a flat amplitude and no rounding, which is what
+    // gap:0 plus --nocap-radius:0 already gives.
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
     // The burst releases together. Staggering it would read as a wipe rather
