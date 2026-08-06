@@ -101,12 +101,17 @@ function hsl(h, s, l) {
   return '#' + hx(f(0)) + hx(f(8)) + hx(f(4));
 }
 /**
- * Light ground, dark text. Measured rather than eyeballed: #737373 on #bfbfbf
- * comes out at 1.04 masking, better than the dark default's 1.00, because both
- * colours still sit where there is swing to spend. Push the background much
- * past #c7c7c7 and it collapses, since a channel near 255 has nowhere to go.
+ * Light ground, dark text, dimmed. #6a6a6a on #b0b0b0 measures 1.04, the same
+ * as the brighter #737373 on #bfbfbf it replaces and better than the dark
+ * default's 1.00, because both colours still sit where there is swing to spend.
+ *
+ * Dimming is not free in general and had to be swept rather than nudged: the
+ * separation has to come down with the background or the ratio goes with it.
+ * #bababa/#747474 gives 1.14, #a6a6a6/#636363 gives 1.02, and it stays near 1.0
+ * down to about #929292. Past #c7c7c7 in the other direction it collapses, since
+ * a channel near 255 has nowhere left to go.
  */
-const LIGHT = { fg: '#737373', bg: '#bfbfbf' };
+const LIGHT = { fg: '#6a6a6a', bg: '#b0b0b0' };
 
 const pal = (b) => (b.light ? LIGHT
   : b.hue === null ? { fg: '#6d6d6d', bg: '#404040' }
