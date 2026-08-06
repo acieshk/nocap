@@ -147,9 +147,19 @@ const SCRIPT = [
   // that is absolute. Now it says which half is hard and which half is not.
   { text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { text: 'A recording still wins.', size: 62, hold: 2600, hue: 345, enter: 'left',
+  { text: 'A recording still wins.', size: 62, hold: 2400, hue: 345, enter: 'left',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7,
     note: 'stills and scrapers lose. <b>video does not.</b> that is inherent, and we say so' },
+
+  // Same call and response as the rest, turned outward. The install line is
+  // rendered through the library like everything else, which is the joke and
+  // also the last demonstration: read it off the screen, then find it is not in
+  // the DOM either. The usage panel right after has it as plain copyable text,
+  // because a command nobody can paste is a worse joke than none.
+  { text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
+  { text: 'npm i nocap', size: 92, hold: 2200, hue: 210, enter: 'fan',
+    face: 'ui-monospace, SFMono-Regular, monospace', weight: 600, block: 11 },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
