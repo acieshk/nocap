@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: background pairing</title>
+<meta name="description" content="What to put behind a nocap element so it reads as deliberate rather than broken. Live, with a strength slider.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  .stage { position:relative; border:1px solid var(--line); border-radius:12px;
+           overflow:hidden; min-height:290px; display:grid; place-items:center;
+           background:#404040 }
+  .tex { position:absolute; inset:0; pointer-events:none }
+  .stage nocap-secret { position:relative; z-index:1 }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(176px,1fr));
+              gap:12px; margin:16px 0 0 }
+  .sw { border:1px solid var(--line); border-radius:10px; overflow:hidden; cursor:pointer;
+        background:none; padding:0; text-align:left; font:inherit; color:inherit }
+  .sw[aria-pressed=true] { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset }
+  .sw .prev { position:relative; height:96px; background:#404040; display:grid;
+              place-items:center; overflow:hidden }
+  .sw .prev .chip { position:relative; z-index:1; width:104px; height:26px;
+                    border-radius:3px; background:
+                    repeating-conic-gradient(#6d6d6d 0% 25%, #2f2f2f 0% 50%) 0 0/7px 7px }
+  .sw .cap { padding:9px 11px; border-top:1px solid var(--line); background:var(--panel);
+             font-size:12px; color:var(--muted) }
+  .sw .cap b { display:block; color:var(--fg); font-size:12.5px; margin-bottom:2px }
+
+  /* One strength knob drives every family, so they can be compared at the same
+     weight rather than at whatever each happened to be authored at. */
+  .t-none  { opacity:0 }
+  .t-grain { opacity:calc(var(--s) * 1.15);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.4'/%3E%3C/svg%3E") }
+  .t-hatch { background-image:repeating-linear-gradient(45deg,
+      rgba(255,255,255,calc(var(--s) * .14)) 0 3px, transparent 3px 13px) }
+  .t-dots  { background-image:radial-gradient(
+      rgba(255,255,255,calc(var(--s) * .28)) 1.7px, transparent 1.8px);
+      background-size:16px 16px }
+  .t-depth { background:radial-gradient(110% 85% at 50% 40%,
+      rgba(255,255,255,calc(var(--s) * .22)) 0%, transparent 48%,
+      rgba(0,0,0,calc(var(--s) * .7)) 100%) }
+  .t-blob  { background:
+      radial-gradient(38% 52% at 22% 30%, rgba(255,255,255,calc(var(--s) * .16)) 0%, transparent 70%),
+      radial-gradient(44% 58% at 82% 72%, rgba(255,255,255,calc(var(--s) * .13)) 0%, transparent 70%),
+      radial-gradient(30% 40% at 62% 12%, rgba(0,0,0,calc(var(--s) * .28)) 0%, transparent 72%) }
+  .t-rings { background-image:repeating-radial-gradient(circle at 50% 45%,
+      transparent 0 38px, rgba(255,255,255,calc(var(--s) * .12)) 38px 40px) }
+  .t-grid  { background-image:
+      repeating-linear-gradient(rgba(255,255,255,calc(var(--s) * .11)) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,calc(var(--s) * .11)) 0 1px, transparent 1px 46px) }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Background pairing</h1>
+<p class="lede">
+  A nocap element is a rectangle of moving noise. On a flat ground that reads as
+  a rendering fault. Put it on something with texture and the same rectangle
+  reads as a deliberate treatment, without a single change to the split.
+</p>
+
+<div class="note">
+  <b>This is free, and that is the point.</b> The masking constraint applies to
+  what the split has to carry, and the page is not that. Measured on a pattern
+  <i>inside</i> the element background: 0.197 raw when flat, 0.200 at 6 levels,
+  and 0.285 raw with 0.380 blurred at 34 levels, because the split reproduces the
+  pattern as content and its dark parts leave those pixels less headroom. Outside
+  the canvas none of that applies, so put the texture on the page and keep the
+  element background flat.
+</div>
+
+<div class="rig">
+  <div class="stage" id="stage">
+    <div class="tex" id="tex"></div>
+    <nocap-secret id="chip" width="330" height="66" strength="medium"
+                  color="#6d6d6d" background="#404040"></nocap-secret>
+  </div>
+  <div class="knobs">
+    <label class="f" title="How strongly the page texture is drawn. It costs nothing in protection, so the only limit is taste."><span>Texture strength <em id="sV">1.00</em></span>
+      <input type="range" id="s" min="0" max="2.5" step="0.05" value="1"></label>
+    <label class="f" title="The element's own masking strength. Independent of the background, which is the whole point of pairing."><span>Element strength</span>
+      <select id="str">
+        <option value="weak">weak</option>
+        <option value="medium" selected>medium</option>
+        <option value="strong">strong</option>
+      </select></label>
+    <label class="f" title="The ground colour. Both the element and the page use it, so no panel edge shows."><span>Ground</span>
+      <input type="color" id="bg" value="#404040"></label>
+  </div>
+  <div class="readout">
+    <span>masking <b id="rMask">…</b></span>
+    <span>one frame <b id="rLeak">…</b></span>
+    <span>texture costs <b class="ok">nothing</b></span>
+  </div>
+</div>
+
+<h2>Pick a pairing</h2>
+<div class="swatches" id="swatches"></div>
+
+<h2>What actually helps, and why</h2>
+<p>
+  <b>Match the scale, avoid the frequency.</b> The single rule worth following.
+  A texture near the noise block beats against it and produces moiré that looks
+  far worse than either alone. Blocks in normal use run 4 to 16px, so a page
+  texture wants to be either much finer, like grain, or much coarser, like a 46px
+  grid. Nothing in between.
+</p>
+<p>
+  <b>Texture beats colour.</b> Changing the ground colour does not help, because
+  the element already matches it. What makes the rectangle disappear is the page
+  having a surface at all: the eye stops treating a patch of static as anomalous
+  when the whole page has grain.
+</p>
+<p>
+  <b>Regular against irregular reads as intentional.</b> A dot grid or a line
+  grid is obviously deliberate, so a viewer files the element's irregular texture
+  as another deliberate thing. Grain does the opposite and hides it by
+  similarity. Both work, and they are different design languages rather than
+  better and worse.
+</p>
+<p>
+  <b>Hero shapes work on the edges rather than the surface.</b> Large soft blobs
+  and rings do not disguise the noise up close, but they stop the page reading as
+  a void with one lit rectangle in it, which is most of why the element looks
+  stark. Pair one with grain if you want both.
+</p>
+
+<h2>What does not work</h2>
+<ul>
+  <li><b>Texture inside the element.</b> It costs protection, measurably, and the
+      numbers are above. Keep the element background flat.</li>
+  <li><b>A busy photographic background.</b> Its own high-frequency detail
+      competes with the noise, and the element ends up harder to read rather than
+      better hidden.</li>
+  <li><b>Anything animated.</b> The element is already moving at refresh rate.
+      A second moving thing next to it is exhausting.</li>
+  <li><b>High contrast in the texture.</b> Not because it costs masking outside
+      the canvas, but because the element boundary becomes visible again wherever
+      a strong pattern edge stops at it.</li>
+</ul>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { checkPalette, splitFrames, averageFrames, denoisedLeak } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+
+const FAMILIES = [
+  ['none', 'None', 'Flat. The rectangle is at its most obvious here.'],
+  ['grain', 'Grain', 'Hides by similarity. Closest to the element texture.'],
+  ['hatch', 'Hatch', 'Diagonal at 13px, well clear of any block.'],
+  ['dots', 'Dots', 'Regular against irregular. Reads as deliberate.'],
+  ['grid', 'Grid', 'Coarse 46px rule. Structure without competing.'],
+  ['depth', 'Depth', 'Vignette only. Stops the page reading as a void.'],
+  ['blob', 'Hero blobs', 'Large soft shapes. Works on the edges, not the surface.'],
+  ['rings', 'Hero rings', 'Concentric, 40px pitch. Coarse enough not to beat.'],
+];
+
+let current = 'grain';
+
+function paint() {
+  const s = +$('s').value;
+  const bg = $('bg').value;
+  $('sV').textContent = s.toFixed(2);
+  document.documentElement.style.setProperty('--s', s);
+
+  $('tex').className = 'tex t-' + current;
+  $('stage').style.background = bg;
+  $('chip').setAttribute('background', bg);
+  $('chip').setAttribute('strength', $('str').value);
+
+  // The element's own numbers, so it is obvious they do not move with the
+  // texture slider. That independence is the claim this page rests on.
+  const pal = checkPalette({ color: $('chip').getAttribute('color'), background: bg });
+  $('rMask').textContent = pal.ratio.toFixed(2);
+  $('rMask').className = pal.ratio >= 1 ? 'ok' : pal.ratio >= 0.7 ? 'warn' : 'bad';
+  const leak = $('chip').measureLeak();
+  if (leak != null) {
+    $('rLeak').textContent = leak.toFixed(2);
+    $('rLeak').className = leak < 0.32 ? 'ok' : leak < 0.55 ? 'warn' : 'bad';
+  }
+}
+
+for (const [key, name, why] of FAMILIES) {
+  const b = document.createElement('button');
+  b.className = 'sw';
+  b.setAttribute('aria-pressed', String(key === current));
+  b.innerHTML = `<div class="prev"><div class="tex t-${key}"></div><div class="chip"></div></div>
+    <div class="cap"><b>${name}</b>${why}</div>`;
+  b.onclick = () => {
+    current = key;
+    for (const other of $('swatches').children) other.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-pressed', 'true');
+    paint();
+  };
+  $('swatches').appendChild(b);
+}
+
+for (const id of ['s', 'str', 'bg']) $(id).oninput = $(id).onchange = paint;
+// The value is set ONCE. Setting it inside paint() and also listening for
+// render made each render trigger a repaint that set it again: an infinite loop
+// that hung the tab rather than throwing, so the page looked simply dead.
+$('chip').secret = '4471-0092-8834';
+$('chip').addEventListener('render', () => {
+  const leak = $('chip').measureLeak();
+  if (leak == null) return;
+  $('rLeak').textContent = leak.toFixed(2);
+  $('rLeak').className = leak < 0.32 ? 'ok' : leak < 0.55 ? 'warn' : 'bad';
+}, { once: false });
+paint();
+</script>
+</body>
+</html>

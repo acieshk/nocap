@@ -11,6 +11,7 @@ const PAGES = [
   ['api.html', 'API'],
   ['sandbox.html', 'Sandbox'],
   ['styling.html', 'Styling'],
+  ['pairing.html', 'Background pairing'],
   ['contrast.html', 'Contrast'],
   ['scenarios.html', 'Scenarios'],
   ['algorithms.html', 'Algorithms & comfort'],
