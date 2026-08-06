@@ -104,6 +104,9 @@ const TEXT_DEFAULTS = {
   // tracing an outline, but nothing stops the trade itself, so this is opt-in
   // and anything past about 0.3 wants measuring on your own content first.
   inkBias: 0,
+  // Off, since an element on its own panel wants a crisp edge. Set it when
+  // blocks sit next to each other or the background matches the page.
+  edgeFade: 0,
   bankSize: 6,
 };
 
@@ -486,6 +489,7 @@ export function resolveOptions(attrs = {}, dpr = 1, height = 56, fontSizePx = nu
     mode,
     noiseProfile: attrs['noise-profile'] ?? base.noiseProfile,
     inkBias: attr('ink-bias', base.inkBias),
+    edgeFade: attr('edge-fade', base.edgeFade),
     chroma: attr('chroma', base.chroma),
     gamma: attr('gamma', base.gamma),
     hardness: attr('hardness', base.hardness),
@@ -524,6 +528,7 @@ export class NocapSecret extends ElementBase {
     'noise-scale',
     'noise-profile',
     'ink-bias',
+    'edge-fade',
     'chroma',
     'hardness',
     'gamma',

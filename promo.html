@@ -135,10 +135,14 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
     note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
 
-  // The asterisk, kept in the reel rather than saved for the small print.
-  { text: 'Hard, not impossible.', size: 58, hold: 2500, hue: 345, enter: 'up',
+  // The caveat, and it has to name what it applies to. Sitting straight after
+  // "The DOM is empty" it read as qualifying that, which is the one claim here
+  // that is absolute. Now it says which half is hard and which half is not.
+  { text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
+  { text: 'A recording still wins.', size: 62, hold: 2600, hue: 345, enter: 'left',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7,
-    note: 'a <b>screen recording</b> still beats it. that is inherent, and we say so' },
+    note: 'stills and scrapers lose. <b>video does not.</b> that is inherent, and we say so' },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
@@ -183,6 +187,11 @@ const beats = SCRIPT.map((b) => {
     // stroke 13 a 12px block measured finer AND better on both axes. It was
     // calibrated at strokes 3 to 8 and has a ceiling above them.
     el.setAttribute('noise-scale', String(b.block));
+    // The noise tapers out over the padding, so a word ends in its own glyphs
+    // rather than in a hard rectangle. Free here, unlike ink-bias: the margin
+    // holds no ink, so quietening it protects nothing less. It follows the
+    // canvas edge, which an attacker can already see, not the content.
+    el.setAttribute('edge-fade', String(Math.round(b.size * 0.34)));
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
     el.style.transitionDelay = `${i * 70}ms`;

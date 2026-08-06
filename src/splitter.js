@@ -130,6 +130,17 @@ function resolveCfg(opts = {}) {
     // reason, the ink map is blurred before use so it cannot follow an edge, and
     // the leak cost is measured on the comfort page rather than assumed away.
     inkBias: clamp(opts.inkBias ?? 0, 0, 1),
+    // Taper the noise to nothing within this many pixels of the canvas edge, so
+    // the block dissolves into whatever is behind it instead of ending on a
+    // hard rectangle.
+    //
+    // Unlike inkBias this is FREE, and the difference is worth being precise
+    // about. inkBias follows the content, so pushed far enough the amplitude map
+    // traces the glyphs and gives their shape away. This follows the canvas
+    // RECTANGLE, which an attacker already has: they can see exactly where the
+    // element is. Quietening a margin that holds no ink costs no protection,
+    // because there was nothing there to protect.
+    edgeFade: Math.max(0, opts.edgeFade ?? 0),
     decoy: opts.decoy ?? null,
     rng: opts.rng ?? Math.random,
   };
@@ -240,6 +251,25 @@ function fillModulated(planes, target, cfg) {
   // how loud each region gets changes.
   const weights = inkWeights(target, cfg);
 
+  // Smoothstep in from each edge, so the taper has no visible band where it
+  // starts. Precomputed per axis: the weight is separable, so this is two
+  // lookups per pixel rather than a distance calculation.
+  let fadeX = null;
+  let fadeY = null;
+  if (cfg.edgeFade > 0) {
+    const ramp = (n, span) => {
+      const a = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const d = Math.min(i, n - 1 - i) / span;
+        const s = d >= 1 ? 1 : d * d * (3 - 2 * d);
+        a[i] = s;
+      }
+      return a;
+    };
+    fadeX = ramp(w, cfg.edgeFade);
+    fadeY = ramp(h, cfg.edgeFade);
+  }
+
   const draws = cfg.mode === 'decoy'
     ? decoyDraws(cfg.decoy, w, h)
     : randomDraws(w, h, cfg);
@@ -256,7 +286,8 @@ function fillModulated(planes, target, cfg) {
         // a given budget. n > 2 -> r*cos(2*PI*(phase + k/n)), which sums to
         // exactly zero and never leaves a plane holding a clean pixel.
         const r = (cfg.hardness + (1 - cfg.hardness) * mag)
-          * (weights ? weights[y * w + x] : 1);
+          * (weights ? weights[y * w + x] : 1)
+          * (fadeX ? fadeX[x] * fadeY[y] : 1);
         if (n === 2) {
           off[0] = phase < 0.5 ? -r : r;
           off[1] = -off[0];
