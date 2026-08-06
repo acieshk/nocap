@@ -38,6 +38,13 @@
   body.light #hint { color:#575757 }
   body.light #replay { background:rgba(0,0,0,.09); color:#2b2b2b;
                        border-color:rgba(0,0,0,.22) }
+  /* The install line is plain text, not a canvas. It is the one line in the reel
+     that has to be readable and selectable rather than protected. */
+  .term { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
+          color:#4ade80; background:#0c140f; border:1px solid #1e3326;
+          border-radius:10px; padding:26px 42px; white-space:nowrap;
+          text-shadow:0 0 22px rgba(74,222,128,.4) }
+  .term .p { color:#3f7a56; margin-right:14px }
   .note.on { opacity:1 }
   .note b { color:#fff; font-weight:600 }
   #code { position:absolute; opacity:0; transition:opacity .6s ease; text-align:left;
@@ -113,7 +120,8 @@ function hsl(h, s, l) {
  */
 const LIGHT = { fg: '#6a6a6a', bg: '#b0b0b0' };
 
-const pal = (b) => (b.light ? LIGHT
+const pal = (b) => (b.plain ? { fg: '#4ade80', bg: '#0c140f' }
+  : b.light ? LIGHT
   : b.hue === null ? { fg: '#6d6d6d', bg: '#404040' }
   : { fg: hsl(b.hue, b.sat ?? SAT, 0.427), bg: hsl(b.hue, b.sat ?? SAT, 0.251) });
 
@@ -189,8 +197,15 @@ const SCRIPT = [
   // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
   // by 0.30 the pair is down to 0.46 masking and a bright phosphor green does
   // not exist at any usable ratio. This is the most green the technique allows.
-  { text: 'npm i nocap', size: 92, hold: 2400, hue: 140, sat: 0.11, enter: 'fan',
-    face: 'ui-monospace, SFMono-Regular, monospace', weight: 600, block: 11 },
+  // NOT rendered through the library, and that is the right call rather than a
+  // shortcut. It is an install command: it has to be read and typed, so it wants
+  // maximum legibility, and it is not a secret so there is nothing to protect.
+  //
+  // It also buys the look. A true dark ground has no swing to spend, so terminal
+  // green on near-black cannot mask: measured, #326744 on #1b281f comes out at
+  // 0.39 and the best dark pair I found reached 0.68. Rendering it as plain text
+  // means no compromise on either side, instead of a bad ratio AND a muted green.
+  { text: 'npm i nocap', hold: 2600, hue: 140, sat: 0.11, plain: true },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
@@ -215,6 +230,17 @@ const beats = SCRIPT.map((b) => {
   const wrap = document.createElement('div');
   wrap.className = 'beat';
   const { fg, bg } = pal(b);
+  if (b.plain) {
+    const term = document.createElement('div');
+    term.className = 'word term';
+    term.style.fontSize = '46px';
+    term.innerHTML = '<span class="p">$</span>' + b.text;
+    term.style.transform = 'translate3d(0, 26px, 0)';
+    wrap.appendChild(term);
+    stage.appendChild(wrap);
+    return { ...b, wrap };
+  }
+
   if (b.enter === 'burst') wrap.classList.add('burst');
   const words = b.split === 'chars' ? [...b.text] : b.text.split(' ');
 
@@ -287,6 +313,13 @@ function play(i) {
     // Put the start offsets back once it has faded, so the next loop enters the
     // same way rather than appearing from wherever it stopped.
     setTimeout(() => {
+      if (b.plain) {
+        const el = b.wrap.firstChild;
+        el.style.transition = 'none';
+        el.style.transform = 'translate3d(0, 26px, 0)';
+        requestAnimationFrame(() => { el.style.transition = ''; });
+        return;
+      }
       const words = [...b.wrap.children];
       words.forEach((el, k) => {
         el.style.transition = 'none';
