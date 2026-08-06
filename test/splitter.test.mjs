@@ -9,6 +9,7 @@ import {
   boxBlur,
   denoisedLeak,
   maxAmplitudeFor,
+  perceivedMean,
 } from '../src/splitter.js';
 
 /** Digit-like strokes: the feature size that decides legibility. */
