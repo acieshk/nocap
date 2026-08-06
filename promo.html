@@ -85,22 +85,32 @@
   body.p0 #pattern { opacity:0 }
   /* Fine grain. Closest to the element's own texture, so the block reads as part
      of the surface rather than as a patch on it. */
-  body.p1 #pattern { opacity:.5;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E") }
+  body.p1 #pattern { opacity:1;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E") }
   /* Diagonal hatch, far coarser than any noise block, so nothing beats. */
-  body.p2 #pattern { opacity:.55;
+  body.p2 #pattern { opacity:1;
     background-image:repeating-linear-gradient(45deg,
-      rgba(255,255,255,.045) 0 2px, transparent 2px 11px) }
+      rgba(255,255,255,.10) 0 3px, transparent 3px 13px) }
   /* Dot grid. Regular, which is the opposite of the noise, so the element reads
      as the irregular thing on a tidy ground. */
-  body.p3 #pattern { opacity:.6;
-    background-image:radial-gradient(rgba(255,255,255,.08) 1.1px, transparent 1.2px);
-    background-size:14px 14px }
+  body.p3 #pattern { opacity:1;
+    background-image:radial-gradient(rgba(255,255,255,.20) 1.7px, transparent 1.8px);
+    background-size:16px 16px }
   /* Soft vignette. No texture at all, just depth, so the flat ground stops
      reading as a void around a lit rectangle. */
   body.p4 #pattern { opacity:1;
-    background:radial-gradient(120% 90% at 50% 42%,
-      rgba(255,255,255,.07) 0%, transparent 55%, rgba(0,0,0,.28) 100%) }
+    background:radial-gradient(110% 85% at 50% 40%,
+      rgba(255,255,255,.16) 0%, transparent 48%, rgba(0,0,0,.55) 100%) }
+  /* On a light beat a white pattern disappears into the ground, so it inverts.
+     Same texture, opposite ink. */
+  body.light.p1 #pattern { filter:invert(1); opacity:.85 }
+  body.light.p2 #pattern { background-image:repeating-linear-gradient(45deg,
+      rgba(0,0,0,.10) 0 3px, transparent 3px 13px) }
+  body.light.p3 #pattern { background-image:radial-gradient(rgba(0,0,0,.20) 1.7px,
+      transparent 1.8px); background-size:16px 16px }
+  body.light.p4 #pattern { background:radial-gradient(110% 85% at 50% 40%,
+      rgba(255,255,255,.5) 0%, transparent 48%, rgba(0,0,0,.30) 100%) }
+
   #pick { position:fixed; left:24px; bottom:24px; z-index:3; display:flex; gap:6px }
   #pick button { background:rgba(255,255,255,.12); color:#fff; font:inherit;
                  font-size:12px; border:1px solid rgba(255,255,255,.26);
