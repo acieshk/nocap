@@ -75,10 +75,46 @@
   @media (prefers-reduced-motion: reduce) {
     .word { transition:opacity .3s ease } body { transition:none }
   }
+  /* Candidate page textures. All are translucent overlays rather than colours,
+     so they sit over whatever hue the current beat set without being retinted.
+     Behind the words: this is about the ground the element sits on, not about
+     putting anything over the canvas. */
+  #pattern { position:fixed; inset:0; pointer-events:none; z-index:0;
+             transition:opacity .5s ease }
+  #stage { position:relative; z-index:1 }
+  body.p0 #pattern { opacity:0 }
+  /* Fine grain. Closest to the element's own texture, so the block reads as part
+     of the surface rather than as a patch on it. */
+  body.p1 #pattern { opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E") }
+  /* Diagonal hatch, far coarser than any noise block, so nothing beats. */
+  body.p2 #pattern { opacity:.55;
+    background-image:repeating-linear-gradient(45deg,
+      rgba(255,255,255,.045) 0 2px, transparent 2px 11px) }
+  /* Dot grid. Regular, which is the opposite of the noise, so the element reads
+     as the irregular thing on a tidy ground. */
+  body.p3 #pattern { opacity:.6;
+    background-image:radial-gradient(rgba(255,255,255,.08) 1.1px, transparent 1.2px);
+    background-size:14px 14px }
+  /* Soft vignette. No texture at all, just depth, so the flat ground stops
+     reading as a void around a lit rectangle. */
+  body.p4 #pattern { opacity:1;
+    background:radial-gradient(120% 90% at 50% 42%,
+      rgba(255,255,255,.07) 0%, transparent 55%, rgba(0,0,0,.28) 100%) }
+  #pick { position:fixed; left:24px; bottom:24px; z-index:3; display:flex; gap:6px }
+  #pick button { background:rgba(255,255,255,.12); color:#fff; font:inherit;
+                 font-size:12px; border:1px solid rgba(255,255,255,.26);
+                 border-radius:6px; padding:6px 10px; cursor:pointer }
+  #pick button[aria-pressed=true] { background:#fff; color:#111; border-color:#fff }
+  body.light #pick button { background:rgba(0,0,0,.09); color:#2b2b2b;
+                            border-color:rgba(0,0,0,.22) }
+  body.light #pick button[aria-pressed=true] { background:#222; color:#fff }
 </style>
 </head>
 <body>
+<div id="pattern"></div>
 <div id="stage"></div>
+<div id="pick"></div>
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
@@ -484,6 +520,43 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { stopped = true; clearTimeout(timer); }
   else start();
 });
+/**
+ * Page texture, switchable, so the choice can be made by looking rather than
+ * argued about.
+ *
+ * The pattern is on the PAGE and never inside the element. Measured: a pattern
+ * in the element's own background costs nothing at 6 levels, 0.197 to 0.200
+ * raw, but 0.285 raw and 0.380 blurred at 34, because the split has to carry it
+ * as content and its dark parts leave those pixels less headroom. Outside the
+ * canvas there is no such constraint, so this is free.
+ */
+const PATTERNS = [
+  ['none', 'flat, what ships today'],
+  ['grain', 'fine grain, closest to the texture the element itself has'],
+  ['hatch', 'diagonal, far coarser than any block so nothing beats'],
+  ['dots', 'regular grid, so the element is the irregular thing'],
+  ['depth', 'vignette only, no texture'],
+];
+const savedPattern = +(localStorage.getItem('nocap-pattern') ?? 1);
+
+function setPattern(i) {
+  document.body.classList.remove('p0', 'p1', 'p2', 'p3', 'p4');
+  document.body.classList.add('p' + i);
+  localStorage.setItem('nocap-pattern', String(i));
+  for (const [k, btn] of [...document.getElementById('pick').children].entries()) {
+    btn.setAttribute('aria-pressed', String(k === i));
+  }
+}
+
+PATTERNS.forEach(([name, why], i) => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.title = why;
+  b.onclick = () => setPattern(i);
+  document.getElementById('pick').appendChild(b);
+});
+setPattern(savedPattern);
+
 start();
 
 // Reports the widest laid-out beat against the viewport, so the fit can be
