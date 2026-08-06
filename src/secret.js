@@ -549,6 +549,9 @@ export class NocapSecret extends ElementBase {
     'noise-scale-max',
     'pattern',
     'pattern-strength',
+    'pattern-offset-x',
+    'pattern-offset-y',
+    'pattern-layer',
     'noise-profile',
     'ink-bias',
     'edge-fade',
@@ -585,6 +588,7 @@ export class NocapSecret extends ElementBase {
   #watermarkWarned = false;
   #scratch = null;      // { mask, ctx, raf, pointer }
   #hint = null;         // the scratch affordance, an overlay rather than canvas
+  #fg = null;           // pattern-layer="front": texture over the canvas, free
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -612,6 +616,14 @@ export class NocapSecret extends ElementBase {
          it would be split and masked along with the value, and the one thing it
          must never be is hidden. pointer-events stays off so it cannot swallow
          the gesture it is asking for. */
+      /* The texture, composited OVER the canvas rather than drawn into it.
+         Free, because the split never carries it: it is added identically to
+         every frame, so the planes still average to the target plus a constant.
+         An attacker who knows the pattern can subtract it, which is why it adds
+         no protection either, and neither does it take any away.
+         The cost is legibility, not security. A texture stronger than the
+         text-to-background separation will fight the glyphs. */
+      .fg { position: absolute; inset: 0; pointer-events: none; }
       .hint { position: absolute; inset: 0; display: grid; place-items: center;
               font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
               letter-spacing: .04em; text-align: center; padding: 0 10px;
@@ -622,6 +634,10 @@ export class NocapSecret extends ElementBase {
 
     this.#canvas = document.createElement('canvas');
     root.append(this.#canvas);
+
+    this.#fg = document.createElement('div');
+    this.#fg.className = 'fg';
+    root.append(this.#fg);
 
     this.#hint = document.createElement('div');
     this.#hint.className = 'hint';
@@ -1308,7 +1324,15 @@ export class NocapSecret extends ElementBase {
    */
   #paintPattern(ctx, background, w, h) {
     const kind = this.getAttribute('pattern');
+    if (this.#fg) this.#fg.style.cssText = '';
     if (!kind || kind === 'none') return;
+    // In front, the texture is a CSS layer over the canvas rather than content
+    // the split has to carry, so it is free and can run at any strength the
+    // design wants. Behind, it is in the image and costs what the numbers say.
+    if (this.getAttribute('pattern-layer') === 'front') {
+      this.#paintForeground(kind, background);
+      return;
+    }
     const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
     if (levels <= 0) return;
     if (levels > 26) {
@@ -1325,23 +1349,44 @@ export class NocapSecret extends ElementBase {
     const ink = `rgb(${bg.map((v) => Math.max(0, Math.min(255, v + dir * levels))).join(',')})`;
     // Scaled by density, so a 16px CSS pattern on the page and this one line up.
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    const unit = Math.max(6, Math.round(16 * dpr));
+    // EXACT pitches, matching the CSS the demo pages use. These were 16, 13.12
+    // and 46.4 against the page's 16, 13 and 46, and a 0.12px error per stripe
+    // accumulates into a visible drift across a 300px block: the two patterns
+    // start aligned at one edge and are half a stripe out by the other.
+    const unit = Math.max(6, Math.round(16 * dpr));   // dots
+    const hatchPitch = Math.max(5, Math.round(13 * dpr));
+    const gridPitch = Math.max(12, Math.round(46 * dpr));
 
+    // Phase, so the texture CONTINUES the page's rather than restarting.
+    //
+    // Pitch alone is not enough and this is the part that looks wrong without
+    // it: the element draws from its own top-left while the page draws from the
+    // page's, so two patterns at identical spacing still meet out of step at the
+    // boundary and read as a patch rather than a continuation.
+    //
+    // The offset is the element's position within whatever the page texture is
+    // anchored to, in CSS px, which only the caller knows. Given here rather
+    // than guessed, because the element cannot see its own surroundings.
+    const ox = num({ v: this.getAttribute('pattern-offset-x') }, 'v', 0) * dpr;
+    const oy = num({ v: this.getAttribute('pattern-offset-y') }, 'v', 0) * dpr;
+
+    const period = kind === 'hatch' ? hatchPitch : kind === 'grid' ? gridPitch : unit;
     ctx.save();
+    ctx.translate(-((ox % period) + period) % period, -((oy % period) + period) % period);
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
     if (kind === 'dots') {
       const r = Math.max(1, unit / 9);
-      for (let y = unit / 2; y < h; y += unit) {
-        for (let x = unit / 2; x < w; x += unit) {
+      for (let y = unit / 2; y < h + unit; y += unit) {
+        for (let x = unit / 2; x < w + unit; x += unit) {
           ctx.beginPath();
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
     } else if (kind === 'hatch') {
-      ctx.lineWidth = Math.max(1, unit / 7);
-      for (let d = -h; d < w + h; d += unit * 0.82) {
+      ctx.lineWidth = Math.max(1, Math.round(3 * dpr));
+      for (let d = -h - hatchPitch; d < w + h + hatchPitch; d += hatchPitch) {
         ctx.beginPath();
         ctx.moveTo(d, 0);
         ctx.lineTo(d + h, h);
@@ -1349,16 +1394,16 @@ export class NocapSecret extends ElementBase {
       }
     } else if (kind === 'grid') {
       ctx.lineWidth = 1;
-      const g = unit * 2.9;
-      for (let x = 0; x < w; x += g) { ctx.fillRect(x, 0, 1, h); }
-      for (let y = 0; y < h; y += g) { ctx.fillRect(0, y, w, 1); }
+      const g = gridPitch;
+      for (let x = 0; x < w + g; x += g) { ctx.fillRect(x, 0, 1, h + unit); }
+      for (let y = 0; y < h + g; y += g) { ctx.fillRect(0, y, w + unit, 1); }
     } else if (kind === 'grain') {
       // Deterministic, so the texture does not crawl between renders.
       let s = 20261;
       const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
       const px = Math.max(1, Math.round(dpr));
-      for (let y = 0; y < h; y += px) {
-        for (let x = 0; x < w; x += px) {
+      for (let y = 0; y < h + px; y += px) {
+        for (let x = 0; x < w + px; x += px) {
           if (rnd() < 0.5) continue;
           ctx.globalAlpha = rnd() * 0.9;
           ctx.fillRect(x, y, px, px);
@@ -1366,6 +1411,48 @@ export class NocapSecret extends ElementBase {
       }
     }
     ctx.restore();
+  }
+
+  /**
+   * The same texture, over the canvas instead of inside it.
+   *
+   * This is the version that can actually match a page: it is composited after
+   * the split, so it costs nothing and runs at whatever strength the design
+   * uses. The in-canvas version is capped by what the split can afford to carry,
+   * which is why it can never be as strong as the texture around it.
+   *
+   * The trade moves rather than disappearing. A texture over the glyphs competes
+   * with them, and the default palette separates text from ground by 45 levels,
+   * so anything approaching that makes the value harder for a VIEWER to read
+   * while doing nothing to an attacker. Legibility, not security.
+   */
+  #paintForeground(kind, background) {
+    if (!this.#fg) return;
+    const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
+    if (levels <= 0) return;
+    const bg = toRgb(background);
+    const dir = luma(bg) < 128 ? 1 : -1;
+    // Alpha over the ground, so the same level count reads the same as it does
+    // in the canvas version.
+    const a = Math.min(0.9, levels / 255 * (dir > 0 ? 3.2 : 3.2));
+    const ink = dir > 0 ? `rgba(255,255,255,${a.toFixed(3)})`
+                        : `rgba(0,0,0,${a.toFixed(3)})`;
+    const ox = num({ v: this.getAttribute('pattern-offset-x') }, 'v', 0);
+    const oy = num({ v: this.getAttribute('pattern-offset-y') }, 'v', 0);
+    const pos = `${-ox}px ${-oy}px`;
+
+    const css = {
+      dots: `background-image:radial-gradient(${ink} 1.7px, transparent 1.8px);
+             background-size:16px 16px; background-position:${pos}`,
+      hatch: `background-image:repeating-linear-gradient(45deg,
+              ${ink} 0 3px, transparent 3px 13px); background-position:${pos}`,
+      grid: `background-image:repeating-linear-gradient(${ink} 0 1px, transparent 1px 46px),
+             repeating-linear-gradient(90deg, ${ink} 0 1px, transparent 1px 46px);
+             background-position:${pos}`,
+      grain: `background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='${(a * 1.6).toFixed(2)}'/%3E%3C/svg%3E");
+              background-position:${pos}`,
+    }[kind];
+    if (css) this.#fg.style.cssText = css;
   }
 
   /** Put the scrambled glyphs back in order. Only for deriving a decoy shape. */

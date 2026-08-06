@@ -89,6 +89,9 @@
       </select></label>
     <label class="f" title="The ground colour. Both the element and the page use it, so no panel edge shows."><span>Ground</span>
       <input type="color" id="bg" value="#404040"></label>
+    <label class="f" title="Where the element's own texture goes. Behind means drawn into the canvas, which the split must carry, so it is capped by what it can afford. In front means composited over the canvas: free, and able to run at the same strength as the page, at the cost of competing with the glyphs."><span>Texture layer</span>
+      <select id="layer"><option value="back">behind, in the canvas</option>
+        <option value="front">in front, over the canvas</option></select></label>
     <label class="f" title="Draws the same texture INSIDE the element so it continues across the boundary. The one place a pattern is not free: 6 levels is free and invisible, 16 reads and costs about 15% of the leak margin, 34 costs a third. Judge it live, not from a screenshot."><span>Texture in the element <em id="pV">16</em> levels</span>
       <input type="range" id="p" min="0" max="34" step="1" value="16"></label>
   </div>
@@ -191,6 +194,13 @@ function paint() {
   if (inner > 0 && supported) {
     $('chip').setAttribute('pattern', current);
     $('chip').setAttribute('pattern-strength', String(inner));
+    $('chip').setAttribute('pattern-layer', $('layer').value);
+    // Where the element sits inside the stage, which is what .tex is anchored
+    // to. Without this the two patterns share a pitch and meet out of phase.
+    const a = $('chip').getBoundingClientRect();
+    const b = $('stage').getBoundingClientRect();
+    $('chip').setAttribute('pattern-offset-x', String(Math.round(a.left - b.left)));
+    $('chip').setAttribute('pattern-offset-y', String(Math.round(a.top - b.top)));
   } else {
     $('chip').removeAttribute('pattern');
   }
@@ -222,7 +232,7 @@ for (const [key, name, why] of FAMILIES) {
   $('swatches').appendChild(b);
 }
 
-for (const id of ['s', 'str', 'bg', 'p']) $(id).oninput = $(id).onchange = paint;
+for (const id of ['s', 'str', 'bg', 'p', 'layer']) $(id).oninput = $(id).onchange = paint;
 // The value is set ONCE. Setting it inside paint() and also listening for
 // render made each render trigger a repaint that set it again: an infinite loop
 // that hung the tab rather than throwing, so the page looked simply dead.

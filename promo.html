@@ -554,6 +554,23 @@ const PATTERNS = [
 ];
 const savedPattern = +(localStorage.getItem('nocap-pattern') ?? 1);
 
+/**
+ * Phase the element's texture to the page's.
+ *
+ * #pattern is fixed to the viewport, so the offset is the element's viewport
+ * position. Without it both patterns share a pitch and still meet out of step
+ * at the boundary, which reads as a patch rather than a continuation.
+ *
+ * Measured where the element RESTS. Each beat animates in on a transform, so it
+ * is briefly out of phase while moving and correct once it settles, which is
+ * where it is looked at.
+ */
+function alignPattern(el) {
+  const r = el.getBoundingClientRect();
+  el.setAttribute('pattern-offset-x', String(Math.round(r.left)));
+  el.setAttribute('pattern-offset-y', String(Math.round(r.top)));
+}
+
 function setPattern(i) {
   document.body.classList.remove('p0', 'p1', 'p2', 'p3', 'p4');
   document.body.classList.add('p' + i);
@@ -563,6 +580,7 @@ function setPattern(i) {
     if (inner) {
       el.setAttribute('pattern', inner);
       el.setAttribute('pattern-strength', '16');
+      alignPattern(el);
     } else {
       el.removeAttribute('pattern');
     }
