@@ -12,14 +12,19 @@
          font:16px/1.5 Inter,system-ui,-apple-system,sans-serif;
          transition:background 700ms cubic-bezier(.4,0,.2,1) }
   #stage { position:relative; width:100%; height:100vh; display:grid; place-items:center }
-  .beat { position:absolute; display:flex; flex-wrap:wrap; gap:0 10px;
+  /* No gap, and no corner rounding. Each word is its own canvas, so any gap
+     between them shows a clean stripe of page background between two noisy
+     blocks, and the rounding cuts notches at every seam. The word spacing lives
+     INSIDE each canvas instead, as padding around the glyphs, so the noise runs
+     continuously across the whole phrase. */
+  .beat { position:absolute; display:flex; flex-wrap:wrap; gap:0;
           justify-content:center; align-items:center; max-width:93vw; pointer-events:none }
   /* One element per word, each on its own delay. Only opacity and an integer
      translate ever animate: scaling or rotating a canvas resamples it, and
      resampling noise moves it toward its mean, which is the attack this whole
      thing defends against. A promo animating with scale would be demonstrating
      the bypass. */
-  .word { opacity:0; will-change:opacity, transform;
+  .word { opacity:0; will-change:opacity, transform; --nocap-radius:0;
           transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1) }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
   .note { position:fixed; left:0; right:0; bottom:30px; text-align:center;
@@ -96,29 +101,44 @@ const pal = (hue) => (hue === null
  * lighter type wants a finer block on both aesthetic and measured grounds.
  */
 const SCRIPT = [
-  { text: 'Hi', size: 104, hold: 1400, hue: null, enter: 'up',
+  { text: 'Hi', size: 104, hold: 1200, hue: null, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 9 },
-  { text: 'This is nocap', size: 88, hold: 2000, hue: 210, enter: 'up',
+  { text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { text: 'Text', size: 118, hold: 1200, hue: 210, enter: 'fan',
-    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 10 },
-  { text: 'that you cannot', size: 70, hold: 1500, hue: 190, enter: 'left',
+
+  // The setup. Everything after this is only interesting because this is true.
+  { text: 'You can read this.', size: 74, hold: 2000, hue: 210, enter: 'up',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8 },
-  { text: 'capture.', size: 124, hold: 2300, hue: 150, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 700, block: 13 },
-  { text: 'Try taking a picture', size: 60, hold: 2500, hue: 35, enter: 'alt',
-    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7,
+
+  // Call and response. The questions breathe, the answers land and get out.
+  { text: 'Take a picture?', size: 68, hold: 1500, hue: 190, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  { text: 'or screen-capture it', size: 60, hold: 2500, hue: 35, enter: 'alt',
-    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7,
-    note: 'a still gets noise. a <b>recording</b> still wins, and that is inherent' },
-  { text: 'It makes AI scraping', size: 58, hold: 1600, hue: 275, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 7 },
-  { text: 'hard as well', size: 92, hold: 1900, hue: 275, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 700, block: 11,
-    note: 'the text never enters the DOM, so there is nothing to scrape' },
-  { text: 'hard, not impossible', size: 56, hold: 2400, hue: 345, enter: 'up',
-    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7 },
+  { text: 'No.', size: 148, hold: 1000, hue: 190, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 15 },
+
+  { text: 'Screen-capture it?', size: 66, hold: 1500, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
+  { text: 'Also no.', size: 128, hold: 1100, hue: 150, enter: 'fan',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 14 },
+
+  { text: 'Scrape it with AI?', size: 66, hold: 1600, hue: 35, enter: 'alt',
+    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7 },
+  { text: 'Nothing to scrape.', size: 76, hold: 2100, hue: 35, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
+    note: 'not obfuscated. <b>absent.</b> there is no text to find' },
+
+  // The payoff, and the one claim here that is absolute.
+  { text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, enter: 'left',
+    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 8 },
+  { text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
+    note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
+
+  // The asterisk, kept in the reel rather than saved for the small print.
+  { text: 'Hard, not impossible.', size: 58, hold: 2500, hue: 345, enter: 'up',
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7,
+    note: 'a <b>screen recording</b> still beats it. that is inherent, and we say so' },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
@@ -147,7 +167,9 @@ const beats = SCRIPT.map((b) => {
     const el = document.createElement('nocap-secret');
     const probe = document.createElement('canvas').getContext('2d');
     probe.font = `${b.weight} ${b.size}px ${b.face}`;
-    el.setAttribute('width', String(Math.ceil(probe.measureText(word).width) + 30));
+    // The spacing between words is padding inside this canvas rather than a gap
+    // outside it, so adjacent words touch and the noise is unbroken.
+    el.setAttribute('width', String(Math.ceil(probe.measureText(word).width) + 38));
     el.setAttribute('height', String(Math.round(b.size * 1.55)));
     el.setAttribute('font-family', b.face);
     el.setAttribute('font-weight', String(b.weight));
