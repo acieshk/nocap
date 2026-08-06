@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap</title>
+<meta name="description" content="Text you cannot capture. Try screenshotting this page.">
+<style>
+  :root { color-scheme: dark }
+  * { box-sizing:border-box; margin:0 }
+  body { background:#111114; color:#ededed; min-height:100vh; overflow:hidden;
+         font:16px/1.5 Inter,system-ui,-apple-system,sans-serif;
+         display:grid; place-items:center }
+  #stage { position:relative; width:100%; height:100vh; display:grid; place-items:center }
+  /* Every beat is absolutely placed and centred, so only opacity and an integer
+     translate ever animate. Scaling or rotating the canvas would resample the
+     noise toward its mean and quietly undo the protection, which is the one
+     thing a page demonstrating the protection must not do. */
+  .beat { position:absolute; opacity:0; will-change:opacity, transform;
+          transition:opacity .45s ease, transform .45s cubic-bezier(.2,.7,.3,1) }
+  .beat.on { opacity:1 }
+  .note { position:fixed; left:0; right:0; bottom:26px; text-align:center;
+          font-size:13.5px; color:#6f6f78; opacity:0; transition:opacity .6s ease }
+  .note.on { opacity:1 }
+  .note b { color:#a9bcff; font-weight:600 }
+  #hint { position:fixed; top:22px; right:24px; font-size:12px; color:#55555e;
+          font-family:ui-monospace,monospace }
+  #replay { position:fixed; bottom:24px; right:24px; background:#2a2a30; color:#c9c9d2;
+            border:1px solid #45454e; border-radius:7px; padding:7px 13px; font:inherit;
+            font-size:13px; cursor:pointer; opacity:0; transition:opacity .4s ease }
+  #replay.on { opacity:1 }
+  @media (prefers-reduced-motion: reduce) { .beat { transition:opacity .3s ease } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="note" id="note"></div>
+<div id="hint">screenshot me</div>
+<button id="replay">replay</button>
+
+<script type="module">
+import './src/secret.js';
+
+/**
+ * The live reel.
+ *
+ * A recording of this cannot show it, which is why this page exists. The effect
+ * only happens at the display's refresh rate: the eye integrates two planes into
+ * their mean and any capture lands on one plane. Filmed, that becomes either
+ * flat text (the mean) or noise (a plane), and neither is the thing.
+ *
+ * So it runs live and asks the viewer to attack it, which is the only honest
+ * demonstration available.
+ */
+const stage = document.getElementById('stage');
+
+const SCRIPT = [
+  { text: 'Hi',                    size: 92,  hold: 1500, from: [0, 26] },
+  { text: 'This is nocap',         size: 86,  hold: 2100, from: [0, 22] },
+  { text: 'Text',                  size: 104, hold: 1300, from: [-40, 0] },
+  { text: 'that you cannot',       size: 70,  hold: 1500, from: [40, 0] },
+  { text: 'capture.',              size: 116, hold: 2400, from: [0, 20] },
+  { text: 'Try taking a picture',  size: 62,  hold: 2600, from: [0, 18],
+    note: 'go on. <b>Print Screen</b>, or point your phone at it' },
+  { text: 'or screen-capture it',  size: 62,  hold: 2600, from: [0, 18],
+    note: 'a still gets noise. a <b>recording</b> still wins, and that is inherent' },
+  { text: 'It makes AI scraping',  size: 62,  hold: 1700, from: [-30, 0] },
+  { text: 'hard as well',          size: 86,  hold: 2000, from: [30, 0],
+    note: 'the text never enters the DOM, so there is nothing to scrape' },
+  { text: 'hard, not impossible',  size: 58,  hold: 2600, from: [0, 16],
+    note: '<b>npm i nocap</b>' },
+];
+
+// Built once. Creating an element per beat per loop would restart a flicker on
+// every pass and show as a stutter at the moment each line appears.
+const beats = SCRIPT.map((b) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'beat';
+  wrap.style.transform = `translate3d(${b.from[0]}px, ${b.from[1]}px, 0)`;
+
+  const el = document.createElement('nocap-secret');
+  // Sized to the text rather than guessed, or the element clips what it draws
+  // and says so in the console.
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `700 ${b.size}px Inter, system-ui, sans-serif`;
+  el.setAttribute('width', String(Math.ceil(probe.measureText(b.text).width) + 70));
+  el.setAttribute('height', String(Math.round(b.size * 1.7)));
+  el.setAttribute('font-family', 'Inter, system-ui, sans-serif');
+  el.setAttribute('font-weight', '700');
+  // font-scale, NOT font-size. font-size is measured in DEVICE pixels against
+  // the canvas height, so on a 2x display every line would come out half the
+  // intended size. A scale is relative to the height and survives any density.
+  el.setAttribute('font-scale', '0.58');
+  el.setAttribute('strength', 'medium');
+  wrap.appendChild(el);
+  stage.appendChild(wrap);
+  el.secret = b.text;
+  return { ...b, wrap };
+});
+
+const note = document.getElementById('note');
+const replay = document.getElementById('replay');
+let timer = 0;
+let stopped = false;
+
+function play(i) {
+  if (stopped) return;
+  if (i >= beats.length) {
+    replay.classList.add('on');
+    return;
+  }
+  const b = beats[i];
+  // Land on the centre. Only opacity and an integer translate move, so the
+  // canvas is never resampled and the noise stays exactly as rendered.
+  b.wrap.classList.add('on');
+  b.wrap.style.transform = 'translate3d(0, 0, 0)';
+  note.innerHTML = b.note ?? '';
+  note.classList.toggle('on', Boolean(b.note));
+
+  timer = setTimeout(() => {
+    b.wrap.classList.remove('on');
+    b.wrap.style.transform = `translate3d(${-b.from[0]}px, ${-b.from[1]}px, 0)`;
+    setTimeout(() => {
+      // Reset for the next loop without a visible jump.
+      b.wrap.style.transition = 'none';
+      b.wrap.style.transform = `translate3d(${b.from[0]}px, ${b.from[1]}px, 0)`;
+      requestAnimationFrame(() => { b.wrap.style.transition = ''; });
+    }, 460);
+    play(i + 1);
+  }, b.hold);
+}
+
+function start() {
+  stopped = false;
+  clearTimeout(timer);
+  replay.classList.remove('on');
+  for (const b of beats) b.wrap.classList.remove('on');
+  setTimeout(() => play(0), 300);
+}
+
+replay.onclick = start;
+// Pause when the tab is hidden, so a backgrounded page is not still cycling.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopped = true; clearTimeout(timer); }
+  else start();
+});
+start();
+</script>
+</body>
+</html>
