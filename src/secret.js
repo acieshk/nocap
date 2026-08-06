@@ -1289,24 +1289,33 @@ export class NocapSecret extends ElementBase {
    * parts leave those pixels less headroom to be displaced into. Measured:
    *
    *   flat        raw 0.197   blurred 0.224
-   *    6 levels   raw 0.200   blurred 0.222   <- free
-   *   16 levels   raw 0.225   blurred 0.261
-   *   34 levels   raw 0.285   blurred 0.380
+   *    6 levels   raw 0.200   blurred 0.222   free, and invisible
+   *   16 levels   raw 0.225   blurred 0.261   the default
+   *   34 levels   raw 0.285   blurred 0.380   a third of the margin gone
    *
-   * So the strength is in CODE LEVELS rather than a vague 0..1, defaults to 6,
-   * and warns past 12. A texture you can see from a metre away is not worth a
-   * third of the protection.
+   * The default is 16 rather than the free 6, which was the wrong number for a
+   * reason worth recording. 6 costs nothing and cannot be seen, so it bought
+   * exactly nothing: a texture that is not visible is not a texture. 16 is where
+   * it reads in the perceived mean, and it costs about 15% of the leak margin.
+   *
+   * Judge it LIVE rather than from a screenshot. The pattern survives into the
+   * mean at full strength, spread 20 at 20 levels whether the amplitude is 0 or
+   * 110, but one captured frame spans 117 levels and buries it completely. A
+   * screenshot will show no texture at any setting, and that is not a bug.
+   *
+   * Strength is in CODE LEVELS rather than a vague 0..1, so the numbers above
+   * are directly comparable to it.
    */
   #paintPattern(ctx, background, w, h) {
     const kind = this.getAttribute('pattern');
     if (!kind || kind === 'none') return;
-    const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 6));
+    const levels = Math.max(0, num({ s: this.getAttribute('pattern-strength') }, 's', 16));
     if (levels <= 0) return;
-    if (levels > 12) {
+    if (levels > 26) {
       warnOnce(`pattern:${levels}`,
-        `pattern-strength ${levels} is past the point where the texture starts ` +
-        'costing protection. At 16 levels the leak goes 0.197 to 0.225 raw and ' +
-        '0.224 to 0.261 blurred, and at 34 it is 0.285 and 0.380. Keep it under 12.');
+        `pattern-strength ${levels} is past where the texture stops being worth ` +
+        'its cost. Raw leak goes 0.197 flat, 0.225 at 16 levels and 0.285 at 34, ' +
+        'and blurred 0.224, 0.261 and 0.380. 16 is the default and reads clearly.');
     }
 
     const bg = toRgb(background);

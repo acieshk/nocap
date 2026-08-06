@@ -70,7 +70,7 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 <table class="api">
   <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
   <tr><td>amplitude</td><td>110</td><td>How far each pixel is displaced, as a fraction of the headroom its colour allows. The biggest lever on raw leak. Capped by the palette, not by this number.</td></tr>
-  <tr><td>noise-scale</td><td>2 × stroke</td><td>Block size in device px. Its <b>only</b> job is blur resistance: raw leak barely moves with it. Derived rather than set, because the right block follows the stroke. Warns if you go under twice the stroke.</td></tr>
+  <tr><td>noise-scale</td><td>2 × stroke, max 16</td><td>Block size in device px. Its <b>only</b> job is blur resistance: raw leak barely moves with it. Derived rather than set, because the right block follows the stroke, then capped by <code>noise-scale-max</code>. Warns when it lands under twice the stroke.</td></tr>
   <tr><td>hardness</td><td>1</td><td>1 puts every pixel at full amplitude. Lower spreads the magnitudes and measures ~20% worse both raw and blurred, so 1 is right.</td></tr>
   <tr><td>chroma</td><td>0</td><td>0 shares one draw across R/G/B, putting the whole budget into luminance, which is what the eye and OCR key on. 1 is per channel: rainbow static, and weaker. Measured 0.227 → 0.279 at block 12.</td></tr>
   <tr><td>noise-profile</td><td>white</td><td><code>blue</code> high-passes the lattice, removing about a third of the low-frequency energy. Security unchanged. <b>Not true blue noise</b>, which needs void-and-cluster.</td></tr>
@@ -78,6 +78,9 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><td>gamma</td><td>2.4</td><td>Display EOTF. Decides where plane centres are solved, so a wrong value shifts the perceived colour.</td></tr>
   <tr><td>contrast</td><td>1</td><td>Pre-emphasis. Not needed under linear light, which does not compress.</td></tr>
   <tr><td>ink-bias</td><td>0</td><td>Leans amplitude toward the content. <b>The trap:</b> where the noise is, is where the text is. Measured 0.263 → 0.304 → 0.441 → 0.732 across its range. Past 0.3, measure on your own content.</td></tr>
+  <tr><td>pattern</td><td>none</td><td><code>dots</code>, <code>hatch</code>, <code>grid</code> or <code>grain</code> drawn into the element background, so a page texture continues across the boundary. <b>Not free</b>, unlike a page texture: the split carries it as content.</td></tr>
+  <tr><td>pattern-strength</td><td>16</td><td>In code levels. 6 is free and invisible, 16 reads and costs ~15% of the leak margin, 34 costs a third. <b>Judge it live:</b> it survives into the mean at full strength, but one frame spans ~117 levels and buries it, so a screenshot shows nothing at any setting.</td></tr>
+  <tr><td>noise-scale-max</td><td>16</td><td>Ceiling on the derived block. Chosen for looks, not security: at stroke 11 over 30 seeds every block from 11 to 30 sat inside one confidence interval, while blocks past ~16 read as tiles.</td></tr>
   <tr><td>edge-fade</td><td>0</td><td>Tapers noise to nothing within N px of the element edge, so a lone block dissolves. <b>Free</b>, unlike ink-bias: it follows the canvas rectangle, which an attacker already sees. <b>Not for adjacent elements</b> — two taperings meet at a seam and read as a border.</td></tr>
 </table>
 

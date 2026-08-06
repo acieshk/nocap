@@ -89,8 +89,8 @@
       </select></label>
     <label class="f" title="The ground colour. Both the element and the page use it, so no panel edge shows."><span>Ground</span>
       <input type="color" id="bg" value="#404040"></label>
-    <label class="f" title="Draws the same texture INSIDE the element, so it continues across the boundary instead of stopping at it. This is the one place a pattern is not free: measured, 6 levels costs nothing and 34 costs a third of the protection."><span>Texture in the element <em id="pV">6</em> levels</span>
-      <input type="range" id="p" min="0" max="20" step="1" value="6"></label>
+    <label class="f" title="Draws the same texture INSIDE the element so it continues across the boundary. The one place a pattern is not free: 6 levels is free and invisible, 16 reads and costs about 15% of the leak margin, 34 costs a third. Judge it live, not from a screenshot."><span>Texture in the element <em id="pV">16</em> levels</span>
+      <input type="range" id="p" min="0" max="34" step="1" value="16"></label>
   </div>
   <div class="readout">
     <span>masking <b id="rMask">…</b></span>
@@ -132,9 +132,13 @@
 
 <h2>What does not work</h2>
 <ul>
-  <li><b>Strong texture inside the element.</b> Faint is free and costs nothing
-      at 6 levels. Past about 12 it starts buying the page's looks with the
-      element's protection, and at 34 it has spent a third of it.</li>
+  <li><b>Judging the in-element texture from a screenshot.</b> It survives into
+      the perceived mean at full strength, but one captured frame spans about 117
+      levels and buries a 20-level texture completely. A screenshot shows no
+      texture at any setting, and that is not a bug. Look at it running.</li>
+  <li><b>Pushing the in-element texture past about 26 levels.</b> By 34 it has
+      spent a third of the protection on something the page could have done for
+      free outside the canvas.</li>
   <li><b>A busy photographic background.</b> Its own high-frequency detail
       competes with the noise, and the element ends up harder to read rather than
       better hidden.</li>
