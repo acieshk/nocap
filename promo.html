@@ -143,6 +143,37 @@
   /* Lift the command so the captures have room beneath it. Translate only, and
      the install line is plain text rather than a canvas, so nothing resamples. */
   body.ending .beat.on { transform:translateY(-27vh); transition:transform .7s cubic-bezier(.16,.9,.3,1) }
+  /* A nudge toward the replay button. The reel just asserted something about
+     capture; the only honest close is to invite the viewer to test it, and the
+     button they need is easy to miss in a corner. Bottom-right so its tail
+     points at the thing it is talking about. */
+  #nudge { position:fixed; right:24px; bottom:72px; z-index:6;
+           max-width:min(74vw, 236px); background:#fff; color:#141414;
+           border-radius:11px; padding:11px 14px; font-size:13px; line-height:1.45;
+           opacity:0; pointer-events:none; box-shadow:0 8px 26px rgba(0,0,0,.4);
+           transition:opacity .55s ease 1.2s }
+  #nudge b { display:block; margin-bottom:2px }
+  #nudge::after { content:''; position:absolute; right:28px; bottom:-6px;
+                  width:13px; height:13px; background:#fff; transform:rotate(45deg);
+                  border-radius:2px }
+  body.light #nudge { background:#141414; color:#f4f4f4 }
+  body.light #nudge::after { background:#141414 }
+  body.ending #nudge { opacity:1; animation:nudgebob 2.8s ease-in-out 1.9s infinite }
+  @keyframes nudgebob { 0%,100% { translate:0 0 } 50% { translate:0 -5px } }
+  @media (prefers-reduced-motion: reduce) {
+    body.ending #nudge { animation:none }
+  }
+  /* On a narrow screen the stack and the bubble both want the bottom, so the
+     stack gives way rather than being overlapped. */
+  @media (max-width: 640px) {
+    /* The stack and the bubble both want the bottom of a phone. The stack gives
+       way and shrinks, and the bubble collapses to one line, or the lowest
+       capture ends up underneath it. */
+    #shots { bottom:20vh; gap:6px }
+    #shots canvas { max-height:min(8vh, 58px) }
+    #nudge { bottom:72px; max-width:min(76vw, 230px); padding:9px 12px }
+    #nudge b { display:inline; margin:0 }
+  }
 </style>
 </head>
 <body>
@@ -152,6 +183,7 @@
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
 <div id="shots"></div>
+<div id="nudge"><b>Not convinced?</b>Replay it and take your own screenshot.</div>
 
 <script type="module">
 import './src/secret.js';
