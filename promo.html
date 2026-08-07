@@ -119,6 +119,26 @@
       repeating-linear-gradient(90deg, rgba(0,0,0,var(--pat-a,.11)) 0 1px, transparent 1px 46px);
     background-size:46px 46px }
 
+
+  /* The capture panel. Sits over the reel, holds the image that came back. */
+  #shotbtn { position:fixed; left:50%; transform:translateX(-50%);
+             bottom:max(74px, calc(env(safe-area-inset-bottom) + 60px)); z-index:4;
+             background:#fff; color:#111; border:0; border-radius:8px;
+             padding:11px 20px; font:inherit; font-size:14px; font-weight:600;
+             cursor:pointer; opacity:0; pointer-events:none;
+             transition:opacity .4s ease }
+  #shotbtn.on { opacity:1; pointer-events:auto }
+  body.light #shotbtn { background:#111; color:#fff }
+  #shot { position:fixed; inset:0; z-index:5; display:grid; place-items:center;
+          background:rgba(0,0,0,.82); opacity:0; pointer-events:none;
+          transition:opacity .45s ease; padding:24px }
+  #shot.on { opacity:1; pointer-events:auto }
+  #shot figure { max-width:92vw; text-align:center }
+  #shot img, #shot canvas { max-width:92vw; max-height:66vh; border-radius:8px;
+                            border:1px solid rgba(255,255,255,.28); display:block; margin:0 auto }
+  #shot figcaption { margin-top:16px; font-size:14px; color:#e8e8e8; line-height:1.5 }
+  #shot figcaption b { color:#fff }
+  #shot .sub { display:block; margin-top:6px; font-size:12.5px; color:#a9a9a9 }
 </style>
 </head>
 <body>
@@ -127,6 +147,8 @@
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
+<button id="shotbtn">Screenshot this screen &rarr;</button>
+<div id="shot"><figure><div id="shotimg"></div><figcaption id="shotcap"></figcaption></figure></div>
 
 <script type="module">
 import './src/secret.js';
@@ -209,105 +231,79 @@ const pal = (b) => (b.plain ? { fg: '#4ade80', bg: '#0c140f' }
  * lighter type wants a finer block on both aesthetic and measured grounds.
  */
 const SCRIPT = [
-  // The first impression, so it lands hardest. Heaviest weight in the reel and
-  // the largest type, split per character and released together so the letters
-  // drive apart and stop dead rather than easing in.
-  //
-  // Block 16 is a deliberate compromise. A stem this thick would take a coarser
-  // block by the derivation, and coarser reads as tiles at this size, which is
-  // the opposite of impact. 16 keeps the noise looking like noise.
-  { pattern: 'dots', text: 'Hi!', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
+  // Impact opener. Split per character and released together so the letters
+  // converge and stop dead. Block 16 is a compromise: a stem this thick would
+  // take a coarser block by the derivation, and coarser reads as tiles at this
+  // size, which is the opposite of impact.
+  { pattern: 'dots', text: 'Hi!', size: 190, hold: 1500, hue: null, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 16 },
-  { pattern: 'dots', text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
+
+  // From here the reel is mixed lines, and the plain half always comes FIRST.
+  //
+  // Leading with real type gives the eye somewhere to land before it hits the
+  // block, so the block reads as "this part is protected" rather than as a
+  // broken image. Lead with noise and the line has no anchor -- the reader is
+  // decoding before they know what they are looking at.
+  //
+  // Mixing is also the only way the effect is legible AS an effect. A wall of
+  // noise looks like a rendering fault. The same noise beside real text at the
+  // same size is obviously deliberate, and the cost in legibility is right
+  // there to judge instead of being asserted.
+  { pattern: 'dots', mix: [{ t: 'This is' }, { n: 'nocap' }],
+    text: 'This is nocap', size: 84, hold: 1700, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
 
-  // The claim. Everything after this is only interesting because this is true,
-  // and the caption is what makes it land: you are reading the thing it says
-  // cannot be captured. Light ground, so the reel is not one long dark slab.
-  // The whole product in six words, split across two beats so the turn lands.
-  //
-  // It was one line, 'Text you cannot capture', which states only the negative
-  // and misreads: the 'you' is the viewer, who at that moment is reading it
-  // perfectly well. Worse, the positive half was never said anywhere -- the
-  // three demonstrations each prove a PIECE of 'nothing else can' without the
-  // proposition ever being made, so a viewer had to assemble it themselves.
-  //
-  // Light ground for the human half and dark for the turn, so the flip between
-  // them carries the contrast the words are making.
-  { pattern: 'dots', text: 'You can read this.', size: 78, hold: 1800, hue: 210, light: true, enter: 'up',
+  // The demonstration IS the sentence. A capture keeps the plain words and
+  // replaces the protected one with a block, so the camera's copy reads
+  // "You can read ___" -- the line disproving itself, in the camera's own words.
+  { pattern: 'dots', mix: [{ t: 'You can read' }, { n: 'this.' }],
+    text: 'You can read this.', size: 76, hold: 2000, hue: 210, light: true, enter: 'up',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8,
     note: 'ordinary reading. <b>no plugin, no glasses, no effort</b>' },
-  { pattern: 'dots', text: 'Nothing else can.', size: 94, hold: 2200, hue: 210, enter: 'up',
+
+  // The turn, and the one beat that is deliberately all noise: it is the claim
+  // about what machines get, so it is delivered in what machines get.
+  { pattern: 'dots', text: 'Nothing else can.', size: 94, hold: 2100, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 700, block: 12,
     note: 'not your camera. not the DOM. <b>not a scraper</b>' },
 
-  // One challenge, not two. 'Take a picture?' and 'Screen-capture it?' were the
-  // same objection -- both are stills -- so four beats went to proving one
-  // thing and it read as repetition rather than escalation. An imperative also
-  // beats a question here: it tells the viewer to act, and the answer says what
-  // they GET rather than merely refusing.
-  { pattern: 'hatch', text: 'Screenshot it.', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
+  // Wordplay: the block literally is the nothing. In a capture the line reads
+  // "Your camera reads: ___", which is both the claim and its evidence.
+  { pattern: 'hatch', mix: [{ t: 'Your camera reads:' }, { n: 'nothing' }],
+    text: 'Your camera reads: nothing', size: 64, hold: 2200, hue: 190, chroma: 0.4, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  // 'Static', not 'Noise'. Noise is our word for it and means nothing to someone
-  // who has not read the README -- it needs the concept explained before it can
-  // land. Everyone has seen static, it is literally what appears in the capture,
-  // and it keeps the claim honest: you DO get an image back, it is just static.
-  // 'Nothing' hits harder and overclaims, which is not the trade this reel makes.
-  { pattern: 'hatch', text: 'Static.', size: 148, hold: 1300, hue: 190, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 700, block: 15,
-    note: 'your camera got pixels. <b>not the number</b>' },
 
-  // The strongest material in the reel, moved earlier. This is the part a
-  // developer screenshots and sends to someone, and it used to arrive at beat
-  // ten, after the energy had already peaked.
-  { pattern: 'grid', text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
-  { pattern: 'grid', text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11,
+  { pattern: 'grid', mix: [{ t: 'Open DevTools.' }, { n: 'Nothing there.' }],
+    text: 'Open DevTools. Nothing there.', size: 62, hold: 2300, hue: 275, light: true, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
     note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
 
-  // Now the scraping question, AFTER the empty DOM rather than before it. An
-  // empty DOM is the REASON scraping is hard, so asking first inverted the
-  // logic and forced the answer to explain a reveal that had not happened yet.
-  { pattern: 'hatch', text: 'AI scraping?', size: 66, hold: 1600, hue: 35, chroma: 0.4, enter: 'alt',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
-  { pattern: 'hatch', text: 'HARD', size: 150, hold: 1500, hue: 35, enter: 'burst', split: 'chars',
-    face: 'Inter, system-ui, sans-serif', weight: 800, block: 15,
-    note: 'no text to lift. a scraper would have to <b>run OCR on video</b>' },
-
-  // What it is FOR. The reel never said, so a viewer without the problem never
-  // learned they had it. One per screen and held short: three quick cuts read
-  // as a list building, where one crowded line reads as small print.
-  { pattern: 'grid', text: 'Account numbers.', size: 86, hold: 900, hue: 150, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { pattern: 'grid', text: 'API keys.', size: 86, hold: 900, hue: 150, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { pattern: 'grid', text: 'Shared screens.', size: 86, hold: 1300, hue: 150, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11,
-    note: 'anywhere a value is on screen and should not leave it' },
-
-  // Plain text and nocap on ONE line, which is how it actually gets used. The
-  // label is an ordinary text node -- selectable, searchable, in the DOM -- and
-  // only the value is protected. Every other beat is wall-to-wall noise, which
-  // makes the technique look like something you apply to a whole page. You
-  // don't. You apply it to the one field that matters.
-  //
-  // It is also the honest picture of the cost: the noise sits next to real type,
-  // at the same size, so the difference in legibility is right there rather than
-  // being asserted.
-  { pattern: 'dots', mix: [{ t: 'API key' }, { n: 'sk-live-9f2a4c81b73e' }],
-    text: 'API key sk-live-9f2a4c81b73e',
-    size: 58, hold: 2600, hue: 200, enter: 'left',
+  { pattern: 'grid', mix: [{ t: 'A scraper finds' }, { n: 'no text.' }],
+    text: 'A scraper finds no text.', size: 66, hold: 1900, hue: 35, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
+    note: 'not obfuscated. <b>absent.</b> there is nothing to lift' },
+
+  // What it is for, in the shape it is actually used: a label you can read and
+  // a value you cannot.
+  { pattern: 'grid', mix: [{ t: 'Account number' }, { n: '4111 1111 1111 1111' }],
+    text: 'Account number 4111 1111 1111 1111', size: 54, hold: 2000, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 7 },
+  { pattern: 'grid', mix: [{ t: 'API key' }, { n: 'sk-live-9f2a4c81b73e' }],
+    text: 'API key sk-live-9f2a4c81b73e', size: 54, hold: 2000, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 7,
     note: 'the label is ordinary text. <b>only the value is protected</b>' },
 
-  // The admission. Kept, because a security claim that names its own limit is
-  // worth more than one that does not.
-  { pattern: 'dots', text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { pattern: 'dots', text: 'A recording still wins.', size: 62, hold: 2400, hue: 345, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
+  // The proof, taken on the viewer's own machine. The line is written so the
+  // capture completes it: what comes back reads "This half survives. ___".
+  { pattern: 'hatch', mix: [{ t: 'This half survives.' }, { n: 'This half does not.' }],
+    text: 'This half survives. This half does not.', size: 54, hold: 14000, hue: 200, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, capture: true,
+    note: 'take a real screenshot of this screen, and look at what came back' },
+
+  { pattern: 'dots', mix: [{ t: 'One catch:' }, { n: 'a recording still wins.' }],
+    text: 'One catch: a recording still wins.', size: 60, hold: 2400, hue: 345, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
     note: 'stills and scrapers lose. <b>video does not.</b> inherent, and we do not hide it' },
 
   { pattern: 'hatch', text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
@@ -566,6 +562,66 @@ const beats = SCRIPT.map((b) => {
 let timer = 0;
 let stopped = false;
 
+
+/**
+ * Take a real screenshot of the viewer's own screen and show it back.
+ *
+ * getDisplayMedia is the only way a page can see what the compositor actually
+ * put on the glass, and that is the whole point: a frame it hands back is one
+ * plane, which is exactly what any screenshot lands on. Nothing here is staged.
+ *
+ * It needs a click (browsers will not hand over the screen otherwise) and it is
+ * absent on iOS Safari, so there is a fallback -- and the fallback is not a
+ * simulation. Pausing the element freezes it on a single plane, so the line in
+ * front of you BECOMES what a capture contains. Same truth, no permission.
+ */
+async function captureScreen() {
+  const stream = await navigator.mediaDevices.getDisplayMedia({
+    video: { displaySurface: 'browser' }, audio: false, preferCurrentTab: true,
+  });
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.muted = true;
+  await video.play();
+  // One rAF, so the first painted frame is real rather than a blank buffer.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const cv = document.createElement('canvas');
+  cv.width = video.videoWidth;
+  cv.height = video.videoHeight;
+  cv.getContext('2d').drawImage(video, 0, 0);
+  for (const t of stream.getTracks()) t.stop();
+  return cv;
+}
+
+/** Freeze every element on this beat, which is the no-permission version. */
+function freezeBeat(b) {
+  for (const el of b.wrap.children) el.setAttribute('paused', '');
+}
+
+async function runCapture(b, onDone) {
+  const btn = document.getElementById('shotbtn');
+  btn.classList.remove('on');
+  const panel = document.getElementById('shot');
+  const holder = document.getElementById('shotimg');
+  const cap = document.getElementById('shotcap');
+  try {
+    const cv = await captureScreen();
+    holder.replaceChildren(cv);
+    cap.innerHTML = 'This is your screenshot. <b>The protected half did not come through.</b>'
+      + '<span class="sub">one frame off your own compositor, not a mock-up</span>';
+    panel.classList.add('on');
+  } catch {
+    // Denied, unsupported, or dismissed. Freeze instead: the line on screen
+    // becomes the single plane a capture would have caught.
+    freezeBeat(b);
+    cap.innerHTML = 'Frozen on a single frame. <b>That is what a capture contains.</b>'
+      + '<span class="sub">screen capture was unavailable here, so the line itself is held on one plane</span>';
+    holder.replaceChildren();
+    panel.classList.add('on');
+  }
+  setTimeout(() => { panel.classList.remove('on'); onDone(); }, 7000);
+}
+
 function play(i) {
   if (stopped) return;
   // The install line is the last thing on screen and it stays there. A separate
@@ -600,6 +656,20 @@ function play(i) {
   b.wrap.classList.add('on');
   note.innerHTML = b.note ?? '';
   note.classList.toggle('on', Boolean(b.note));
+
+  if (b.capture) {
+    // The reel waits here. Clicking takes the shot and holds the result up;
+    // ignoring it just lets the beat run out like any other.
+    const btn = document.getElementById('shotbtn');
+    btn.classList.add('on');
+    btn.onclick = () => {
+      clearTimeout(timer);
+      btn.classList.remove('on');
+      runCapture(b, () => play(i + 1));
+    };
+    timer = setTimeout(() => { btn.classList.remove('on'); play(i + 1); }, b.hold);
+    return;
+  }
 
   if (i === beats.length - 1) {
     timer = setTimeout(() => play(i + 1), b.hold);
