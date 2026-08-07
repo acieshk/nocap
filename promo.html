@@ -187,6 +187,7 @@
 
 <script type="module">
 import './src/secret.js';
+import { fakeLike } from './src/fake.js';
 
 /**
  * The live reel. A recording cannot show this, which is the whole reason the
@@ -332,11 +333,23 @@ const SCRIPT = [
 
   // What it is for, in the shape it is actually used: a label you can read and
   // a value you cannot.
-  { pattern: 'grid', mix: [{ t: 'Account number' }, { n: '4111 1111 1111 1111' }],
-    text: 'Account number 4111 1111 1111 1111', size: 54, hold: 2000, hue: 150, enter: 'left',
+  // Generated per load, never written here.
+  //
+  // A public page cannot hide the text it renders -- the browser needs it, so
+  // the viewer has it, and obfuscating it only buys the minutes it takes to
+  // open DevTools. What a page CAN do is not ship a value at all. These two are
+  // the only strings in the reel that look like secrets, and grepping the
+  // source for them used to find them instantly, which reads as sloppy however
+  // fake they are. Now the source holds a shape and a generator; the digits are
+  // made by CSPRNG at runtime and differ every visit.
+  //
+  // The copy is a separate matter and stays readable. 'You can read this.' is
+  // marketing, not a secret, and hiding it would be theatre.
+  { pattern: 'grid', mix: [{ t: 'Account number' }, { n: () => fakeLike('0000 0000 0000 0000') }],
+    text: 'Account number 0000 0000 0000 0000', size: 54, hold: 2000, hue: 150, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true },
-  { pattern: 'grid', mix: [{ t: 'API key' }, { n: 'sk-live-9f2a4c81b73e' }],
-    text: 'API key sk-live-9f2a4c81b73e', size: 54, hold: 2000, hue: 150, enter: 'left',
+  { pattern: 'grid', mix: [{ t: 'API key' }, { n: () => 'sk-live-' + fakeLike('9f2a4c81b73e') }],
+    text: 'API key sk-live-000000000000', size: 54, hold: 2000, hue: 150, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true,
     note: 'the label is ordinary text. <b>only the value is protected</b>' },
 
@@ -517,7 +530,10 @@ const beats = SCRIPT.map((b) => {
   const delayFor = (k) => (b.enter === 'burst' ? '0ms' : `${k * 70}ms`);
 
   words.forEach((part, i) => {
-    const word = typeof part === 'string' ? part : part.n;
+    // A part may name its value or produce one. Producing it keeps the value
+    // out of the source entirely.
+    const raw = typeof part === 'string' ? part : part.n;
+    const word = typeof raw === 'function' ? raw() : raw;
     if (part && part.t !== undefined) {
       // Ordinary text, and deliberately so: it is in the DOM, it is selectable,
       // and a scraper gets it. That is the point of showing it beside the part
