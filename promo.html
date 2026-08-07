@@ -235,7 +235,18 @@ const SCRIPT = [
   // converge and stop dead. Block 16 is a compromise: a stem this thick would
   // take a coarser block by the derivation, and coarser reads as tiles at this
   // size, which is the opposite of impact.
-  { pattern: 'dots', text: 'Hi!', size: 190, hold: 1500, hue: null, enter: 'burst', split: 'chars',
+  // Ordinary type, and the only beat in the reel that is. A greeting has nothing
+  // to protect, so protecting it would be theatre -- and it buys something: as
+  // plain text it is free of the masking palette, so it can run at full contrast
+  // where every protected beat is pinned near 1.9:1.
+  //
+  // It also sets the terms. The reel opens legible, and the first thing that
+  // turns to noise is the product name one beat later, which is the moment the
+  // effect introduces itself rather than being on screen before it is explained.
+  //
+  // Still split per character and burst, so the letters converge and stop dead.
+  { pattern: 'dots', text: 'Hi!', plainText: true, ink: '#f2f2f2',
+    size: 190, hold: 1500, hue: null, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 16 },
 
   // From here the reel is mixed lines, and the plain half always comes FIRST.
@@ -460,7 +471,8 @@ const beats = SCRIPT.map((b) => {
   // names which are plain text and which are not.
   const words = b.mix
     ? b.mix
-    : (b.split === 'chars' ? [...b.text] : b.text.split(' ')).map((w) => ({ n: w }));
+    : (b.split === 'chars' ? [...b.text] : b.text.split(' '))
+        .map((w) => (b.plainText ? { t: w } : { n: w }));
 
   words.forEach((part, i) => {
     const word = typeof part === 'string' ? part : part.n;
@@ -472,10 +484,24 @@ const beats = SCRIPT.map((b) => {
       span.textContent = part.t;
       span.className = 'word plain';
       const size = Math.max(13, Math.round(b.size * FIT));
+      // The padding is WORD spacing, so a per-character split must not get it
+      // or the letters fly apart into separate words.
+      const gap = b.split === 'chars' ? 0 : Math.round(size * 0.42);
+      // Plain text is not carrying noise, so nothing constrains its contrast.
+      //
+      // It was inheriting the element's colour, which sits near 1.9:1 because
+      // that is what masking leaves once the palette is fitted. On protected
+      // type that is the price of the effect; on ordinary type it is just dim,
+      // and it made the surviving half recede into the ground -- the exact
+      // opposite of the point, since the whole line exists to contrast what
+      // stays with what does not.
+      //
+      // Full contrast against the beat's own ground instead.
       span.style.cssText =
         `font-family:${b.face}; font-weight:${b.weight}; font-size:${size}px;` +
-        `color:${fg}; line-height:1; vertical-align:middle;` +
-        `padding-right:${Math.round(size * 0.42)}px; white-space:pre`;
+        `color:${b.ink ?? (b.light ? '#1c1c1c' : '#f1f1f1')};` +
+        `line-height:1; vertical-align:middle;` +
+        `padding-right:${gap}px; white-space:pre`;
       span.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
       span.style.transitionDelay = `${i * 70}ms`;
       wrap.appendChild(span);
