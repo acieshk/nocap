@@ -224,9 +224,22 @@ const SCRIPT = [
   // The claim. Everything after this is only interesting because this is true,
   // and the caption is what makes it land: you are reading the thing it says
   // cannot be captured. Light ground, so the reel is not one long dark slab.
-  { pattern: 'dots', text: 'Text you cannot capture.', size: 74, hold: 2000, hue: 210, light: true, enter: 'up',
+  // The whole product in six words, split across two beats so the turn lands.
+  //
+  // It was one line, 'Text you cannot capture', which states only the negative
+  // and misreads: the 'you' is the viewer, who at that moment is reading it
+  // perfectly well. Worse, the positive half was never said anywhere -- the
+  // three demonstrations each prove a PIECE of 'nothing else can' without the
+  // proposition ever being made, so a viewer had to assemble it themselves.
+  //
+  // Light ground for the human half and dark for the turn, so the flip between
+  // them carries the contrast the words are making.
+  { pattern: 'dots', text: 'You can read this.', size: 78, hold: 1800, hue: 210, light: true, enter: 'up',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8,
-    note: 'you are reading it right now. <b>your camera will not</b>' },
+    note: 'ordinary reading. <b>no plugin, no glasses, no effort</b>' },
+  { pattern: 'dots', text: 'Nothing else can.', size: 94, hold: 2200, hue: 210, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 12,
+    note: 'not your camera. not the DOM. <b>not a scraper</b>' },
 
   // One challenge, not two. 'Take a picture?' and 'Screen-capture it?' were the
   // same objection -- both are stills -- so four beats went to proving one
@@ -236,8 +249,14 @@ const SCRIPT = [
   { pattern: 'hatch', text: 'Screenshot it.', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  { pattern: 'hatch', text: 'Noise.', size: 148, hold: 1100, hue: 190, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 700, block: 15 },
+  // 'Static', not 'Noise'. Noise is our word for it and means nothing to someone
+  // who has not read the README -- it needs the concept explained before it can
+  // land. Everyone has seen static, it is literally what appears in the capture,
+  // and it keeps the claim honest: you DO get an image back, it is just static.
+  // 'Nothing' hits harder and overclaims, which is not the trade this reel makes.
+  { pattern: 'hatch', text: 'Static.', size: 148, hold: 1300, hue: 190, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 700, block: 15,
+    note: 'your camera got pixels. <b>not the number</b>' },
 
   // The strongest material in the reel, moved earlier. This is the part a
   // developer screenshots and sends to someone, and it used to arrive at beat
