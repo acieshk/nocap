@@ -125,21 +125,24 @@
      captures stack underneath it, so the last thing on screen is the command
      plus the evidence for it. An overlay covered the command, which is the one
      line worth acting on. */
-  #shots { position:fixed; left:0; right:0; bottom:12vh; z-index:4;
-           display:flex; flex-direction:column; align-items:center; gap:12px;
+  #shots { position:fixed; left:0; right:0; bottom:5vh; z-index:4;
+           display:flex; flex-direction:column; align-items:center; gap:7px;
            opacity:0; pointer-events:none; transition:opacity .7s ease .3s;
            padding:0 16px }
   body.ending #shots { opacity:1 }
-  #shots canvas { max-width:min(86vw, 560px); height:auto; border-radius:7px;
+  /* Bounded on BOTH axes: four strips have to clear the command above them, and
+     width alone would let a wide one push the stack off the bottom. */
+  #shots canvas { max-width:min(88vw, 520px); max-height:min(11vh, 82px);
+                  width:auto; height:auto; border-radius:6px;
                   border:1px solid rgba(255,255,255,.22); display:block }
   body.light #shots canvas { border-color:rgba(0,0,0,.22) }
-  #shotcap { font-size:12.5px; color:#a9a9a9; text-align:center; line-height:1.5;
-             max-width:min(86vw, 560px) }
+  #shotcap { font-size:12px; color:#a9a9a9; text-align:center; line-height:1.4;
+             max-width:min(88vw, 520px); margin-top:2px }
   #shotcap b { color:#e9e9e9 }
   body.light #shotcap { color:#5a5a5a } body.light #shotcap b { color:#1c1c1c }
   /* Lift the command so the captures have room beneath it. Translate only, and
      the install line is plain text rather than a canvas, so nothing resamples. */
-  body.ending .beat.on { transform:translateY(-19vh); transition:transform .7s cubic-bezier(.16,.9,.3,1) }
+  body.ending .beat.on { transform:translateY(-27vh); transition:transform .7s cubic-bezier(.16,.9,.3,1) }
 </style>
 </head>
 <body>
@@ -269,7 +272,7 @@ const SCRIPT = [
   // "You can read ___" -- the line disproving itself, in the camera's own words.
   { pattern: 'dots', mix: [{ t: 'You can read' }, { n: 'this.' }],
     text: 'You can read this.', size: 76, hold: 2000, hue: 210, light: true, enter: 'up',
-    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8,
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8, shot: true,
     note: 'ordinary reading. <b>no plugin, no glasses, no effort</b>' },
 
   // The turn, and the one beat that is deliberately all noise: it is the claim
@@ -302,7 +305,7 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true },
   { pattern: 'grid', mix: [{ t: 'API key' }, { n: 'sk-live-9f2a4c81b73e' }],
     text: 'API key sk-live-9f2a4c81b73e', size: 54, hold: 2000, hue: 150, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 400, block: 7,
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true,
     note: 'the label is ordinary text. <b>only the value is protected</b>' },
 
   // The proof, taken on the viewer's own machine. The line is written so the
@@ -733,10 +736,10 @@ function play(i) {
       const box = document.getElementById('shots');
       const cap = document.createElement('div');
       cap.id = 'shotcap';
-      cap.innerHTML = 'What a screenshot of those lines contains. '
-        + '<b>The label survives. The value never does.</b><br>'
-        + 'each noisy half is one real plane off the element, the same pixels a '
-        + 'capture lands on &mdash; we composited these, your OS did not';
+      // One line. The stack of captures is the argument; a paragraph under it
+      // just competes with the command for the last thing read.
+      cap.innerHTML = 'what a screenshot gets &mdash; '
+        + '<b>the label survives, the value never does</b>';
       box.replaceChildren(...shots, cap);
       document.body.classList.add('ending');
     }
