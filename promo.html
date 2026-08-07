@@ -36,7 +36,8 @@
           transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1) }
   /* Fast out and then nothing. No overshoot, no settle: the letters travel and
      stop dead, which is what reads as impact. */
-  .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1) }
+  .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1);
+                      --nocap-enter-dur:.36s; --nocap-enter-delay:.04s }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
   .note { position:fixed; left:0; right:0; bottom:max(24px, env(safe-area-inset-bottom));
           padding:0 18px; text-align:center; font-size:13.5px; line-height:1.45; color:#e6e6e6; opacity:0;
@@ -73,6 +74,7 @@
             opacity:0; transition:opacity .4s ease }
   #replay.on { opacity:1; pointer-events:auto }
   @media (prefers-reduced-motion: reduce) {
+    /* Reduced motion: no wipe, the texture is simply there. */
     .word { transition:opacity .3s ease } body { transition:none }
   }
   /* Candidate page textures. All are translucent overlays rather than colours,
@@ -82,49 +84,45 @@
   #pattern { position:fixed; inset:0; pointer-events:none; z-index:0;
              transition:opacity .5s ease }
   #stage { position:relative; z-index:1 }
-  body.p0 #pattern { opacity:0 }
-  /* Fine grain. Closest to the element's own texture, so the block reads as part
-     of the surface rather than as a patch on it. */
-  body.p1 #pattern { opacity:1;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E") }
+  /* Three textures, all of which the element can reproduce in its own layer:
+     hatch, dots, grid. Grain and the vignette were dropped -- grain is too fine
+     to survive as a foreground over noise, and the vignette is not a texture at
+     all, so neither could be continued INTO the element, which is the whole
+     point of pairing a pattern with it. */
   /* Diagonal hatch, far coarser than any noise block, so nothing beats. */
-  body.p2 #pattern { opacity:1;
+  body.p-hatch #pattern { opacity:1;
     background-image:repeating-linear-gradient(45deg,
-      rgba(255,255,255,var(--pat-a,.10)) 0 3px, transparent 3px 13px) }
+      rgba(255,255,255,var(--pat-a,.10)) 0 3px, transparent 3px 13px);
+    background-size:18.3848px 18.3848px }
   /* Dot grid. Regular, which is the opposite of the noise, so the element reads
      as the irregular thing on a tidy ground. */
-  body.p3 #pattern { opacity:1;
+  body.p-dots #pattern { opacity:1;
     background-image:radial-gradient(rgba(255,255,255,var(--pat-a,.20)) 1.7px, transparent 1.8px);
     background-size:16px 16px }
-  /* Soft vignette. No texture at all, just depth, so the flat ground stops
-     reading as a void around a lit rectangle. */
-  body.p4 #pattern { opacity:1;
-    background:radial-gradient(110% 85% at 50% 40%,
-      rgba(255,255,255,.16) 0%, transparent 48%, rgba(0,0,0,.55) 100%) }
+  /* Square grid. The most architectural of the three, and the one that makes an
+     unaligned element most obvious, which is why it is worth having. */
+  body.p-grid #pattern { opacity:1;
+    background-image:
+      repeating-linear-gradient(rgba(255,255,255,var(--pat-a,.11)) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,var(--pat-a,.11)) 0 1px, transparent 1px 46px);
+    background-size:46px 46px }
   /* On a light beat a white pattern disappears into the ground, so it inverts.
      Same texture, opposite ink. */
-  body.light.p1 #pattern { filter:invert(1); opacity:.85 }
-  body.light.p2 #pattern { background-image:repeating-linear-gradient(45deg,
-      rgba(0,0,0,var(--pat-a,.10)) 0 3px, transparent 3px 13px) }
-  body.light.p3 #pattern { background-image:radial-gradient(rgba(0,0,0,var(--pat-a,.20)) 1.7px,
+  body.light.p-hatch #pattern { background-image:repeating-linear-gradient(45deg,
+      rgba(0,0,0,var(--pat-a,.10)) 0 3px, transparent 3px 13px);
+    background-size:18.3848px 18.3848px }
+  body.light.p-dots #pattern { background-image:radial-gradient(rgba(0,0,0,var(--pat-a,.20)) 1.7px,
       transparent 1.8px); background-size:16px 16px }
-  body.light.p4 #pattern { background:radial-gradient(110% 85% at 50% 40%,
-      rgba(255,255,255,.5) 0%, transparent 48%, rgba(0,0,0,.30) 100%) }
+  body.light.p-grid #pattern { background-image:
+      repeating-linear-gradient(rgba(0,0,0,var(--pat-a,.11)) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,var(--pat-a,.11)) 0 1px, transparent 1px 46px);
+    background-size:46px 46px }
 
-  #pick { position:fixed; left:24px; bottom:24px; z-index:3; display:flex; gap:6px }
-  #pick button { background:rgba(255,255,255,.12); color:#fff; font:inherit;
-                 font-size:12px; border:1px solid rgba(255,255,255,.26);
-                 border-radius:6px; padding:6px 10px; cursor:pointer }
-  #pick button[aria-pressed=true] { background:#fff; color:#111; border-color:#fff }
-  body.light #pick button { background:rgba(0,0,0,.09); color:#2b2b2b;
-                            border-color:rgba(0,0,0,.22) }
-  body.light #pick button[aria-pressed=true] { background:#222; color:#fff }
 </style>
 </head>
 <body>
 <div id="pattern"></div>
 <div id="stage"></div>
-<div id="pick"></div>
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
@@ -217,60 +215,61 @@ const SCRIPT = [
   // Block 16 is a deliberate compromise. A stem this thick would take a coarser
   // block by the derivation, and coarser reads as tiles at this size, which is
   // the opposite of impact. 16 keeps the noise looking like noise.
-  { text: 'Hi', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
+  { pattern: 'dots', text: 'Hi', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 16 },
-  { text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
+  { pattern: 'dots', text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
 
   // The setup. Everything after this is only interesting because this is true.
   // Light ground, so the reel is not one long dark slab.
-  { text: 'You can read this.', size: 74, hold: 2000, hue: 210, light: true, enter: 'up',
-    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8 },
+  { pattern: 'dots', text: 'Text you cannot capture.', size: 74, hold: 2000, hue: 210, light: true, enter: 'up',
+    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8,
+    note: 'you are reading it right now. <b>your camera will not</b>' },
 
   // Call and response. The questions breathe, the answers land and get out.
-  { text: 'Take a picture?', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
+  { pattern: 'hatch', text: 'Take a picture?', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  { text: 'No.', size: 148, hold: 1000, hue: 190, enter: 'up',
+  { pattern: 'hatch', text: 'No.', size: 148, hold: 1000, hue: 190, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 700, block: 15 },
 
-  { text: 'Screen-capture it?', size: 66, hold: 1500, hue: 150, enter: 'left',
+  { pattern: 'hatch', text: 'Screen-capture it?', size: 66, hold: 1500, hue: 150, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
-  { text: 'Also no.', size: 128, hold: 1100, hue: 150, chroma: 0.4, enter: 'fan',
+  { pattern: 'hatch', text: 'Also no.', size: 128, hold: 1100, hue: 150, chroma: 0.4, enter: 'fan',
     face: 'Inter, system-ui, sans-serif', weight: 700, block: 14 },
 
-  { text: 'Scrape it with AI?', size: 66, hold: 1600, hue: 35, chroma: 0.4, enter: 'alt',
+  { pattern: 'hatch', text: 'AI scraping?', size: 66, hold: 1600, hue: 35, chroma: 0.4, enter: 'alt',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7 },
   // Per CHARACTER rather than per word, because the expansion has to be visible
   // between the letters. A CSS scale would do it in one element and would also
   // resample the canvas, turning the noise toward its mean, so the letters move
   // apart instead: same read, and not a single pixel of noise is touched.
-  { text: 'HARD', size: 150, hold: 1500, hue: 35, enter: 'burst', split: 'chars',
+  { pattern: 'hatch', text: 'HARD', size: 150, hold: 1500, hue: 35, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 15,
-    note: 'not obfuscated. <b>absent.</b> there is no text to find' },
+    note: 'no text to lift. a scraper would have to <b>run OCR on video</b>' },
 
   // The payoff, and the one claim here that is absolute.
-  { text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
+  { pattern: 'grid', text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
     face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 8 },
-  { text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
+  { pattern: 'grid', text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
     note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
 
   // The caveat, and it has to name what it applies to. Sitting straight after
   // "The DOM is empty" it read as qualifying that, which is the one claim here
   // that is absolute. Now it says which half is hard and which half is not.
-  { text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
+  { pattern: 'dots', text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
-  { text: 'A recording still wins.', size: 62, hold: 2400, hue: 345, enter: 'left',
+  { pattern: 'dots', text: 'A recording still wins.', size: 62, hold: 2400, hue: 345, enter: 'left',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7,
-    note: 'stills and scrapers lose. <b>video does not.</b> that is inherent, and we say so' },
+    note: 'stills and scrapers lose. <b>video does not.</b> inherent, and we do not hide it' },
 
   // Same call and response as the rest, turned outward. The install line is
   // rendered through the library like everything else, which is the joke and
   // also the last demonstration: read it off the screen, then find it is not in
   // the DOM either. The usage panel right after has it as plain copyable text,
   // because a command nobody can paste is a worse joke than none.
-  { text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
+  { pattern: 'hatch', text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
   // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
   // by 0.30 the pair is down to 0.46 masking and a bright phosphor green does
@@ -283,7 +282,7 @@ const SCRIPT = [
   // green on near-black cannot mask: measured, #326744 on #1b281f comes out at
   // 0.39 and the best dark pair I found reached 0.68. Rendering it as plain text
   // means no compromise on either side, instead of a bad ratio AND a muted green.
-  { text: 'npm i nocap', hold: 2600, hue: 140, sat: 0.11, plain: true },
+  { pattern: 'hatch', text: 'npm i nocap', hold: 2600, hue: 140, sat: 0.11, plain: true },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
@@ -299,6 +298,16 @@ const ENTER = {
   // Stacked at the centre, so releasing them reads as the word expanding out.
   burst: (i, n) => `translate3d(${((n - 1) / 2 - i) * 74}px, 0, 0)`,
 };
+
+/**
+ * Which way the texture wipes in, per entrance.
+ *
+ * The words already travel from somewhere; the texture arriving from the same
+ * side makes the two read as one movement instead of a panel that shows up
+ * already dressed. 'fan' and 'burst' open outward from the middle, so those get
+ * a radial reveal rather than a directional one.
+ */
+const ENTER_WIPE = { up: 'up', left: 'left', alt: 'up', fan: 'center', burst: 'center' };
 
 /**
  * How much to shrink the whole script so the widest beat fits the screen.
@@ -462,6 +471,22 @@ const beats = SCRIPT.map((b) => {
     //
     // Adjacent elements want a flat amplitude and no rounding, which is what
     // gap:0 plus --nocap-radius:0 already gives.
+    // The texture goes on BEFORE the secret, because that is what triggers the
+    // first render. attributeChangedCallback only repaints a revealed element,
+    // so a pattern set afterwards was accepted, stored, and never drawn -- the
+    // element carried pattern-layer="front" and painted nothing.
+    el.setAttribute('pattern', b.pattern);
+    el.setAttribute('pattern-layer', 'front');
+    // 50 against the page's 20. A level count is not a visibility: over the flat
+    // page 20 levels is the whole local contrast, while over noise spanning 0 to
+    // 255 the eye normalises it away. Shot at 20/45/70/100, 20 is invisible and
+    // 50 matches. Unequal numbers are what look equal.
+    el.setAttribute('pattern-strength', '50');
+    el.setAttribute('pattern-enter', ENTER_WIPE[b.enter] ?? 'up');
+    // Paused until its beat is on screen. Thirty-nine canvases animating at
+    // once pulled the page to ~41Hz, which puts the two-plane cycle at 21Hz --
+    // squarely in the band the flicker warning exists to complain about.
+    el.setAttribute('paused', '');
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
     // The burst releases together. Staggering it would read as a wipe rather
@@ -494,6 +519,20 @@ function play(i) {
   document.body.style.background = pal(b).bg;
   document.body.style.setProperty('--pat-a',
     String(patternAlpha(pal(b).bg, Boolean(b.light))));
+  // The page's ground follows the beat, so the texture cuts with the type.
+  document.body.classList.remove('p-hatch', 'p-dots', 'p-grid');
+  document.body.classList.add('p-' + b.pattern);
+  // Phase now, not at build: the words are laid out by then, so their resting
+  // positions are real. Cheap, and it re-runs on resize through the same path.
+  for (const el of b.wrap.children) {
+    el.removeAttribute('paused');
+    alignPattern(el);
+    // Removing and re-adding restarts the animation, so a replayed reel wipes
+    // again instead of showing an already-finished texture.
+    el.removeAttribute('pattern-playing');
+    void el.offsetWidth;
+    el.setAttribute('pattern-playing', '');
+  }
   document.body.classList.toggle('light', Boolean(b.light));
   b.wrap.classList.add('on');
   note.innerHTML = b.note ?? '';
@@ -509,6 +548,10 @@ function play(i) {
     // Put the start offsets back once it has faded, so the next loop enters the
     // same way rather than appearing from wherever it stopped.
     setTimeout(() => {
+      // Faded out now, so it can stop animating. Doing this in play() paused it
+      // while it was still visible, and a frozen plane is raw noise -- the
+      // coloured block that was left behind on every exit.
+      for (const el of b.wrap.children) el.setAttribute('paused', '');
       if (b.plain) {
         const el = b.wrap.firstChild;
         el.style.transition = 'none';
@@ -566,86 +609,52 @@ document.addEventListener('visibilitychange', () => {
 // Which page texture maps onto which in-element pattern, so the texture runs
 // across the element boundary instead of stopping at it. Faint inside, because
 // in there the split has to carry it: 6 levels is measured free.
-const INNER = { grain: 'grain', hatch: 'hatch', dots: 'dots', depth: null, none: null };
-
-const PATTERNS = [
-  ['none', 'flat, what ships today'],
-  ['grain', 'fine grain, closest to the texture the element itself has'],
-  ['hatch', 'diagonal, far coarser than any block so nothing beats'],
-  ['dots', 'regular grid, so the element is the irregular thing'],
-  ['depth', 'vignette only, no texture'],
-];
-const savedPattern = +(localStorage.getItem('nocap-pattern') ?? 1);
+/**
+ * The texture is a property of the BEAT, not a control.
+ *
+ * A picker asked the viewer to choose the ground for a reel that is thirty
+ * seconds long -- nobody chooses, everybody watches the default, and the
+ * default was the only version that ever got seen. Assigning per beat also
+ * lets the texture change WITH the cut instead of sitting under all of it, so
+ * it enters alongside the type rather than persisting through it.
+ *
+ * The arc: dots to open (regular, calm, establishes a ground), hatch through
+ * the refusals (diagonal and adversarial, escalating with the copy), grid for
+ * the DevTools proof (architectural, and the most technical-reading of the
+ * three), dots again for the honest caveat, hatch to close on the invitation.
+ */
 
 /**
- * Phase the element's texture to the page's.
+ * Three textures, and every one of them is reproducible by the element itself.
  *
- * #pattern is fixed to the viewport, so the offset is the element's viewport
- * position. Without it both patterns share a pitch and still meet out of step
- * at the boundary, which reads as a patch rather than a continuation.
- *
- * Measured where the element RESTS. Each beat animates in on a transform, so it
- * is briefly out of phase while moving and correct once it settles, which is
- * where it is looked at.
+ * That is the selection rule, not taste. Grain was too fine to survive as a
+ * foreground over the noise, and the vignette is a gradient rather than a
+ * texture, so neither could be continued INTO the block -- which is the only
+ * reason to pair a pattern with this element at all. A pattern the element
+ * cannot echo just draws a rectangle around it.
  */
+/**
+ * Point the page's own texture at the beat's, and phase the element to match.
+ *
+ * The page layer is position:fixed, so its origin is the viewport and the
+ * offsets are simply the element's viewport position -- measured WITHOUT the
+ * entrance transform, since the pattern has to line up where the word comes to
+ * rest, not where it starts. offsetLeft/offsetTop walk the layout box and
+ * ignore transforms, which getBoundingClientRect does not.
+ */
+function restOffset(el) {
+  let x = 0, y = 0;
+  for (let n = el; n; n = n.offsetParent) { x += n.offsetLeft; y += n.offsetTop; }
+  return [x, y];
+}
+
 function alignPattern(el) {
-  const r = el.getBoundingClientRect();
-  el.setAttribute('pattern-offset-x', String(Math.round(r.left)));
-  el.setAttribute('pattern-offset-y', String(Math.round(r.top)));
+  const [x, y] = restOffset(el);
+  // Custom properties, so this lands without needing a repaint.
+  el.style.setProperty('--nocap-pattern-ox', x + 'px');
+  el.style.setProperty('--nocap-pattern-oy', y + 'px');
 }
 
-function setPattern(i) {
-  document.body.classList.remove('p0', 'p1', 'p2', 'p3', 'p4');
-  document.body.classList.add('p' + i);
-  localStorage.setItem('nocap-pattern', String(i));
-  const inner = INNER[PATTERNS[i][0]];
-  for (const el of document.querySelectorAll('nocap-secret')) {
-    if (inner) {
-      el.setAttribute('pattern', inner);
-      // 20 levels on the page, 50 on the element, and that IS the match.
-      //
-      // A level count is not a visibility. Over the page's flat ground 20 levels
-      // is the entire local contrast, so it reads plainly. Over the element the
-      // same 20 levels sits on noise already spanning 0 to 255, where the eye
-      // normalises it to nothing -- shot side by side at 20/45/70/100, the 20
-      // stripe is invisible while the page's is obvious. Equal numbers looked
-      // wrong; unequal numbers look equal.
-      //
-      // Judged by eye against the page's stripes rather than derived, because
-      // the quantity involved is perceived contrast over a noisy field and I do
-      // not have a defensible model for it. Tune it on the pairing page.
-      el.setAttribute('pattern-strength', '50');
-      // In FRONT, not in the canvas.
-      //
-      // Behind, the texture shares the canvas with noise swinging +/-127 a
-      // frame. It survives the split -- measured at ~25 levels peak-to-peak on
-      // the light screen, which is the number asked for -- but the eye only
-      // partially cancels noise that large, so a correct texture still reads as
-      // mush. In a still capture it cancels not at all and vanishes completely.
-      //
-      // In front it is composited after the split: crisp, identical to the CSS
-      // on the page, and it survives a screenshot because it was never split.
-      // It costs nothing, since adding the same thing to every frame leaves the
-      // planes averaging to the target plus a constant.
-      el.setAttribute('pattern-layer', 'front');
-      alignPattern(el);
-    } else {
-      el.removeAttribute('pattern');
-    }
-  }
-  for (const [k, btn] of [...document.getElementById('pick').children].entries()) {
-    btn.setAttribute('aria-pressed', String(k === i));
-  }
-}
-
-PATTERNS.forEach(([name, why], i) => {
-  const b = document.createElement('button');
-  b.textContent = name;
-  b.title = why;
-  b.onclick = () => setPattern(i);
-  document.getElementById('pick').appendChild(b);
-});
-setPattern(savedPattern);
 
 start();
 

@@ -552,6 +552,9 @@ export class NocapSecret extends ElementBase {
     'pattern-offset-x',
     'pattern-offset-y',
     'pattern-layer',
+    'pattern-enter',
+    'pattern-playing',
+    'paused',
     'noise-profile',
     'ink-bias',
     'edge-fade',
@@ -624,6 +627,35 @@ export class NocapSecret extends ElementBase {
          The cost is legibility, not security. A texture stronger than the
          text-to-background separation will fight the glyphs. */
       .fg { position: absolute; inset: 0; pointer-events: none; }
+      /* The texture wipes in from the direction the words travel from, so the
+         two read as one movement rather than a panel arriving already dressed.
+         Runs while [pattern-playing] is set; removing and re-adding it replays.
+
+         clip-path rather than an animated mask driven by a custom property.
+         That was the first design and it does not work: a transition on a
+         registered custom property never advanced here -- measured at 0 well
+         past its own duration, and 1 the moment the transition was removed --
+         so the mask stayed shut and the texture was simply invisible. It also
+         had the failure backwards, defaulting to hidden. Without the attribute
+         the texture is fully shown, so the worst case is no animation rather
+         than no texture. */
+      @keyframes nocap-wipe-left   { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0) } }
+      @keyframes nocap-wipe-right  { from { clip-path: inset(0 0 0 100%) } to { clip-path: inset(0) } }
+      @keyframes nocap-wipe-up     { from { clip-path: inset(100% 0 0 0) } to { clip-path: inset(0) } }
+      @keyframes nocap-wipe-down   { from { clip-path: inset(0 0 100% 0) } to { clip-path: inset(0) } }
+      @keyframes nocap-wipe-center { from { clip-path: circle(0% at 50% 50%) }
+                                     to   { clip-path: circle(78% at 50% 50%) } }
+      :host([pattern-enter][pattern-playing]) .fg {
+        animation: var(--nocap-enter-dur, .62s) cubic-bezier(.16, .9, .3, 1)
+                   var(--nocap-enter-delay, .1s) both; }
+      :host([pattern-enter="left"][pattern-playing])   .fg { animation-name: nocap-wipe-left }
+      :host([pattern-enter="right"][pattern-playing])  .fg { animation-name: nocap-wipe-right }
+      :host([pattern-enter="up"][pattern-playing])     .fg { animation-name: nocap-wipe-up }
+      :host([pattern-enter="down"][pattern-playing])   .fg { animation-name: nocap-wipe-down }
+      :host([pattern-enter="center"][pattern-playing]) .fg { animation-name: nocap-wipe-center }
+      @media (prefers-reduced-motion: reduce) {
+        :host([pattern-enter][pattern-playing]) .fg { animation: none }
+      }
       .hint { position: absolute; inset: 0; display: grid; place-items: center;
               font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
               letter-spacing: .04em; text-align: center; padding: 0 10px;
@@ -665,8 +697,22 @@ export class NocapSecret extends ElementBase {
     this.#canvas = null;
   }
 
-  attributeChangedCallback() {
+  attributeChangedCallback(name) {
     if (!this.#flicker) return;
+    // An element that is not being looked at has no reason to burn a frame.
+    // Thirty-nine of them animating at once dragged the whole page to ~41Hz,
+    // which puts the two-plane cycle at 21Hz -- inside the band the flicker
+    // warning exists to complain about. Pausing the ones that are not on
+    // screen is what keeps the visible ones at full rate.
+    if (name === 'paused') {
+      if (this.hasAttribute('paused')) this.#flicker.stop();
+      else this.#flicker.start();
+      return;
+    }
+    // Presentational only: these drive CSS inside the shadow root and change
+    // nothing about the split, so reconfiguring and repainting for them is
+    // pure waste.
+    if (name === 'pattern-enter' || name === 'pattern-playing') return;
     this.#flicker.configure(this.#options());
     if (this.#revealed) this.render();
   }
@@ -1373,7 +1419,17 @@ export class NocapSecret extends ElementBase {
     // accumulates into a visible drift across a 300px block: the two patterns
     // start aligned at one edge and are half a stripe out by the other.
     const unit = Math.max(6, Math.round(16 * dpr));   // dots
+    // 13px is the PERPENDICULAR spacing, which is what a CSS
+    // repeating-linear-gradient(45deg, ... 13px) means -- its stops run along
+    // the gradient axis, at right angles to the stripes.
+    //
+    // These lines are stepped along x instead, and two parallel 45deg lines
+    // offset horizontally by D sit only D/sqrt(2) apart. Stepping by 13 put them
+    // 9.2px apart against the page's 13, so the canvas hatch came out 1.41x too
+    // dense: measured by FFT across the boundary, 12.94px horizontal period
+    // inside against 18.42px outside. Same angle, same ink, visibly finer mesh.
     const hatchPitch = Math.max(5, Math.round(13 * dpr));
+    const hatchStepX = hatchPitch * Math.SQRT2;
     const gridPitch = Math.max(12, Math.round(46 * dpr));
 
     // Phase, so the texture CONTINUES the page's rather than restarting.
@@ -1389,9 +1445,27 @@ export class NocapSecret extends ElementBase {
     const ox = num({ v: this.getAttribute('pattern-offset-x') }, 'v', 0) * dpr;
     const oy = num({ v: this.getAttribute('pattern-offset-y') }, 'v', 0) * dpr;
 
-    const period = kind === 'hatch' ? hatchPitch : kind === 'grid' ? gridPitch : unit;
+    const wrap = (v, m) => ((v % m) + m) % m;
+    const period = kind === 'hatch' ? hatchStepX : kind === 'grid' ? gridPitch : unit;
     ctx.save();
-    ctx.translate(-((ox % period) + period) % period, -((oy % period) + period) % period);
+    ctx.translate(-wrap(ox, period), -wrap(oy, period));
+    // NOTE: this phases the separable patterns (dots, grid) but NOT the hatch.
+    //
+    // Measured by FFT across the boundary, with the element placed at five
+    // different positions, the hatch's residual phase error swings 15px out of
+    // an 18.38px period -- it varies with position, so it is the phase model
+    // that is wrong and not a missing constant. Two attempts at deriving it
+    // (a (ox - oy) single phase variable, and a half-stripe centring term) both
+    // failed to reduce it, and the stripes were confirmed to run the same
+    // diagonal on both sides, so it is not a direction error either.
+    //
+    // What IS fixed here is the pitch: 18.33px against the page's 18.42px,
+    // where it used to be 12.94px. Same angle, same spacing, free phase.
+    //
+    // pattern-layer="front" phase-locks properly (1.13px residual, ~6% of a
+    // period, consistent with rounding the offset to whole pixels) because it
+    // is the same CSS gradient on the same pinned tile as the page. Use front
+    // when the texture has to line up with the page's.
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
     if (kind === 'dots') {
@@ -1405,7 +1479,7 @@ export class NocapSecret extends ElementBase {
       }
     } else if (kind === 'hatch') {
       ctx.lineWidth = Math.max(1, Math.round(3 * dpr));
-      for (let d = -h - hatchPitch; d < w + h + hatchPitch; d += hatchPitch) {
+      for (let d = -h - hatchStepX; d < w + h + hatchStepX; d += hatchStepX) {
         ctx.beginPath();
         ctx.moveTo(d, 0);
         ctx.lineTo(d + h, h);
@@ -1464,18 +1538,48 @@ export class NocapSecret extends ElementBase {
     const a = Math.min(0.9, span > 0 ? levels / span : 0);
     const ink = dir > 0 ? `rgba(255,255,255,${a.toFixed(4)})`
                         : `rgba(0,0,0,${a.toFixed(4)})`;
-    const ox = num({ v: this.getAttribute('pattern-offset-x') }, 'v', 0);
-    const oy = num({ v: this.getAttribute('pattern-offset-y') }, 'v', 0);
-    const pos = `${-ox}px ${-oy}px`;
+    // Phase comes from CSS custom properties, not from the attributes.
+    //
+    // attributeChangedCallback only repaints when the element is revealed, so
+    // an offset set after the first render silently did nothing -- which is how
+    // the promo ended up with pattern-layer="front" and no texture at all.
+    // A custom property needs no repaint: the page writes it whenever layout
+    // settles and this layer picks it up live.
+    //
+    // The canvas path still reads the attributes, because it has to repaint to
+    // apply them regardless.
+    const pos = 'calc(-1 * var(--nocap-pattern-ox, 0px)) '
+              + 'calc(-1 * var(--nocap-pattern-oy, 0px))';
+    // Grid lines need weight to survive over noise. At the page's 1px they are
+    // ~4% coverage in one-pixel features and vanish entirely; swept over real
+    // noise at 1/2/3px, 2px is where they read. Tied to strength so the page's
+    // thin version and the element's thick one come from one number.
+    const linePx = Math.max(1, Math.round(levels / 25));
 
     const css = {
       dots: `background-image:radial-gradient(${ink} 1.7px, transparent 1.8px);
              background-size:16px 16px; background-position:${pos}`,
+      // background-size PINS the tile.
+      //
+      // Without it a linear-gradient computes its axis from its own box: the
+      // line runs through the box centre and its length is (w+h)/sqrt(2), so
+      // two boxes of different sizes start their stripes at different places
+      // and background-position cannot reconcile them. Measured across the
+      // boundary, the element sat 6.87px out of a 18.38px period -- right pitch,
+      // wrong phase, which is the exact failure this whole exercise started on.
+      //
+      // 13*sqrt(2) = 18.3848 is the square lattice a 45deg hatch of
+      // perpendicular spacing 13 repeats on. The gradient line across that tile
+      // is 26px, exactly two 13px periods, so it tiles seamlessly and phase
+      // then depends only on background-position. The page must set the same
+      // background-size for its side, or it is comparing tiles to a stretched
+      // gradient again.
       hatch: `background-image:repeating-linear-gradient(45deg,
-              ${ink} 0 3px, transparent 3px 13px); background-position:${pos}`,
-      grid: `background-image:repeating-linear-gradient(${ink} 0 1px, transparent 1px 46px),
-             repeating-linear-gradient(90deg, ${ink} 0 1px, transparent 1px 46px);
-             background-position:${pos}`,
+              ${ink} 0 3px, transparent 3px 13px);
+              background-size:18.3848px 18.3848px; background-position:${pos}`,
+      grid: `background-image:repeating-linear-gradient(${ink} 0 ${linePx}px, transparent ${linePx}px 46px),
+             repeating-linear-gradient(90deg, ${ink} 0 ${linePx}px, transparent ${linePx}px 46px);
+             background-size:46px 46px; background-position:${pos}`,
       grain: `background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='${Math.min(0.9, a * 1.6).toFixed(2)}'/%3E%3C/svg%3E");
               background-position:${pos}`,
     }[kind];
