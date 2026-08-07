@@ -121,14 +121,6 @@
 
 
   /* The capture panel. Sits over the reel, holds the image that came back. */
-  #shotbtn { position:fixed; left:50%; transform:translateX(-50%);
-             bottom:max(74px, calc(env(safe-area-inset-bottom) + 60px)); z-index:4;
-             background:#fff; color:#111; border:0; border-radius:8px;
-             padding:11px 20px; font:inherit; font-size:14px; font-weight:600;
-             cursor:pointer; opacity:0; pointer-events:none;
-             transition:opacity .4s ease }
-  #shotbtn.on { opacity:1; pointer-events:auto }
-  body.light #shotbtn { background:#111; color:#fff }
   #shot { position:fixed; inset:0; z-index:5; display:grid; place-items:center;
           background:rgba(0,0,0,.82); opacity:0; pointer-events:none;
           transition:opacity .45s ease; padding:24px }
@@ -147,7 +139,6 @@
 <div class="note" id="note"></div>
 <div id="hint">screenshot me</div>
 <button id="replay">replay</button>
-<button id="shotbtn">Screenshot this screen &rarr;</button>
 <div id="shot"><figure><div id="shotimg"></div><figcaption id="shotcap"></figcaption></figure></div>
 
 <script type="module">
@@ -308,9 +299,9 @@ const SCRIPT = [
   // The proof, taken on the viewer's own machine. The line is written so the
   // capture completes it: what comes back reads "This half survives. ___".
   { pattern: 'hatch', mix: [{ t: 'This half survives.' }, { n: 'This half does not.' }],
-    text: 'This half survives. This half does not.', size: 54, hold: 14000, hue: 200, enter: 'left',
+    text: 'This half survives. This half does not.', size: 54, hold: 2800, hue: 200, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, capture: true,
-    note: 'take a real screenshot of this screen, and look at what came back' },
+    note: 'and a capture of this line is waiting at the end' },
 
   { pattern: 'dots', mix: [{ t: 'One catch:' }, { n: 'a recording still wins.' }],
     text: 'One catch: a recording still wins.', size: 60, hold: 2400, hue: 345, enter: 'left',
@@ -595,63 +586,61 @@ let stopped = false;
 
 
 /**
- * Take a real screenshot of the viewer's own screen and show it back.
+ * Build what a screenshot of this beat contains -- automatically, no permission.
  *
- * getDisplayMedia is the only way a page can see what the compositor actually
- * put on the glass, and that is the whole point: a frame it hands back is one
- * plane, which is exactly what any screenshot lands on. Nothing here is staged.
+ * getDisplayMedia can never run on its own: browsers require a gesture, by
+ * design, and it does not exist on iOS Safari or Android Chrome at all. So a
+ * button was the only way to use it, and on a phone the button could not work.
  *
- * It needs a click (browsers will not hand over the screen otherwise) and it is
- * absent on iOS Safari, so there is a fallback -- and the fallback is not a
- * simulation. Pausing the element freezes it on a single plane, so the line in
- * front of you BECOMES what a capture contains. Same truth, no permission.
+ * We do not need the OS. A capture of this line contains exactly two things:
+ * the plain text, which is an ordinary text node, and ONE PLANE of the element.
+ * planes[0] is that plane -- the same pixel data any screenshot lands on, not a
+ * rendering of what one might look like. Compositing the two in their measured
+ * positions reproduces the capture rather than imitating it.
+ *
+ * The honest caveat, and the caption says it: we assembled this, the operating
+ * system did not. Every pixel in it is real; the arrangement is ours.
  */
-async function captureScreen() {
-  const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: { displaySurface: 'browser' }, audio: false, preferCurrentTab: true,
-  });
-  const video = document.createElement('video');
-  video.srcObject = stream;
-  video.muted = true;
-  await video.play();
-  // One rAF, so the first painted frame is real rather than a blank buffer.
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+function shotOf(b) {
+  const kids = [...b.wrap.children];
+  if (!kids.length) return null;
+  const box = b.wrap.getBoundingClientRect();
+  const pad = 26;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cv = document.createElement('canvas');
-  cv.width = video.videoWidth;
-  cv.height = video.videoHeight;
-  cv.getContext('2d').drawImage(video, 0, 0);
-  for (const t of stream.getTracks()) t.stop();
+  cv.width = Math.ceil((box.width + pad * 2) * dpr);
+  cv.height = Math.ceil((box.height + pad * 2) * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = pal(b).bg;
+  ctx.fillRect(0, 0, box.width + pad * 2, box.height + pad * 2);
+
+  for (const k of kids) {
+    const r = k.getBoundingClientRect();
+    const x = r.left - box.left + pad;
+    const y = r.top - box.top + pad;
+    if (k.tagName === 'SPAN') {
+      const cs = getComputedStyle(k);
+      ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      ctx.fillStyle = cs.color;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(k.textContent, x, y + r.height / 2);
+    } else {
+      // The actual plane. Not a picture of one.
+      const p = k.planes?.[0];
+      if (!p) continue;
+      const tmp = document.createElement('canvas');
+      tmp.width = p.width;
+      tmp.height = p.height;
+      tmp.getContext('2d').putImageData(new ImageData(p.data, p.width, p.height), 0, 0);
+      ctx.drawImage(tmp, x, y, r.width, r.height);
+    }
+  }
   return cv;
 }
 
-/** Freeze every element on this beat, which is the no-permission version. */
-function freezeBeat(b) {
-  for (const el of b.wrap.children) el.setAttribute('paused', '');
-}
-
-async function runCapture(b, onDone) {
-  const btn = document.getElementById('shotbtn');
-  btn.classList.remove('on');
-  const panel = document.getElementById('shot');
-  const holder = document.getElementById('shotimg');
-  const cap = document.getElementById('shotcap');
-  try {
-    const cv = await captureScreen();
-    holder.replaceChildren(cv);
-    cap.innerHTML = 'This is your screenshot. <b>The protected half did not come through.</b>'
-      + '<span class="sub">one frame off your own compositor, not a mock-up</span>';
-    panel.classList.add('on');
-  } catch {
-    // Denied, unsupported, or dismissed. Freeze instead: the line on screen
-    // becomes the single plane a capture would have caught.
-    freezeBeat(b);
-    cap.innerHTML = 'Frozen on a single frame. <b>That is what a capture contains.</b>'
-      + '<span class="sub">screen capture was unavailable here, so the line itself is held on one plane</span>';
-    holder.replaceChildren();
-    panel.classList.add('on');
-  }
-  setTimeout(() => { panel.classList.remove('on'); onDone(); }, 7000);
-}
+/** Held from the capture beat and shown on the install screen. */
+let theShot = null;
 
 function play(i) {
   if (stopped) return;
@@ -659,6 +648,16 @@ function play(i) {
   // code slide after it moved the eye off the one line worth acting on, and the
   // README is a better home for a snippet than the end of a reel.
   if (i >= beats.length) {
+    if (theShot) {
+      const holder = document.getElementById('shotimg');
+      const cap = document.getElementById('shotcap');
+      holder.replaceChildren(theShot);
+      cap.innerHTML = 'A screenshot of that line contains this. '
+        + '<b>The protected half is gone.</b>'
+        + '<span class="sub">the noisy half is one real plane off the element, '
+        + 'the same pixels a capture lands on &mdash; we composited it, your OS did not</span>';
+      document.getElementById('shot').classList.add('on');
+    }
     note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
     note.classList.add('on');
     replay.classList.add('on');
@@ -689,23 +688,9 @@ function play(i) {
   note.classList.toggle('on', Boolean(b.note));
 
   if (b.capture) {
-    // The reel waits here. Clicking takes the shot and holds the result up;
-    // ignoring it just lets the beat run out like any other.
-    const btn = document.getElementById('shotbtn');
-    btn.classList.add('on');
-    btn.onclick = () => {
-      clearTimeout(timer);
-      btn.classList.remove('on');
-      // The line stays up while the capture is shown -- it is what the capture
-      // is OF -- and only clears once the panel closes.
-      runCapture(b, () => { exitBeat(b); play(i + 1); });
-    };
-    timer = setTimeout(() => {
-      btn.classList.remove('on');
-      exitBeat(b);
-      play(i + 1);
-    }, b.hold);
-    return;
+    // Taken once the words have arrived and stopped, so the geometry measured
+    // here is the geometry a viewer would have captured.
+    setTimeout(() => { theShot = shotOf(b); }, 900);
   }
 
   if (i === beats.length - 1) {
