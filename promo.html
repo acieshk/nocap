@@ -474,6 +474,13 @@ const beats = SCRIPT.map((b) => {
     : (b.split === 'chars' ? [...b.text] : b.text.split(' '))
         .map((w) => (b.plainText ? { t: w } : { n: w }));
 
+  // Shared by both kinds of part, because it drifted once already: the plain
+  // branch staggered a burst that the element branch released together, so 'Hi!'
+  // arrived letter by letter over 140ms instead of snapping shut. A burst reads
+  // as impact only when the pieces stop at the same instant; stagger it and it
+  // becomes a wipe, which looks like lag rather than intent.
+  const delayFor = (k) => (b.enter === 'burst' ? '0ms' : `${k * 70}ms`);
+
   words.forEach((part, i) => {
     const word = typeof part === 'string' ? part : part.n;
     if (part && part.t !== undefined) {
@@ -503,7 +510,7 @@ const beats = SCRIPT.map((b) => {
         `line-height:1; vertical-align:middle;` +
         `padding-right:${gap}px; white-space:pre`;
       span.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
-      span.style.transitionDelay = `${i * 70}ms`;
+      span.style.transitionDelay = delayFor(i);
       wrap.appendChild(span);
       return;
     }
@@ -574,9 +581,7 @@ const beats = SCRIPT.map((b) => {
     el.setAttribute('paused', '');
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
-    // The burst releases together. Staggering it would read as a wipe rather
-    // than as one word snapping open.
-    el.style.transitionDelay = b.enter === 'burst' ? '0ms' : `${i * 70}ms`;
+    el.style.transitionDelay = delayFor(i);
     wrap.appendChild(el);
     el.secret = word;
   });
@@ -691,9 +696,15 @@ function play(i) {
     btn.onclick = () => {
       clearTimeout(timer);
       btn.classList.remove('on');
-      runCapture(b, () => play(i + 1));
+      // The line stays up while the capture is shown -- it is what the capture
+      // is OF -- and only clears once the panel closes.
+      runCapture(b, () => { exitBeat(b); play(i + 1); });
     };
-    timer = setTimeout(() => { btn.classList.remove('on'); play(i + 1); }, b.hold);
+    timer = setTimeout(() => {
+      btn.classList.remove('on');
+      exitBeat(b);
+      play(i + 1);
+    }, b.hold);
     return;
   }
 
@@ -703,6 +714,21 @@ function play(i) {
   }
 
   timer = setTimeout(() => {
+    exitBeat(b);
+    play(i + 1);
+  }, b.hold);
+}
+
+/**
+ * Fade a beat out and put it back the way it started.
+ *
+ * Every path that leaves a beat has to come through here. The capture beat did
+ * not -- it returned early with its own timer and never dropped the `on` class,
+ * so it stayed lit behind every beat that followed and its noise blocks sat
+ * under the rest of the reel. It looked like a stacking bug and it was a missing
+ * teardown.
+ */
+function exitBeat(b) {
     b.wrap.classList.remove('on');
     // Put the start offsets back once it has faded, so the next loop enters the
     // same way rather than appearing from wherever it stopped.
@@ -725,8 +751,6 @@ function play(i) {
         requestAnimationFrame(() => { el.style.transition = ''; });
       });
     }, 440);
-    play(i + 1);
-  }, b.hold);
 }
 
 
