@@ -33,6 +33,7 @@
      thing defends against. A promo animating with scale would be demonstrating
      the bypass. */
   .word { opacity:0; will-change:opacity, transform; --nocap-radius:0;
+          vertical-align:middle;
           transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1) }
   /* Fast out and then nothing. No overshoot, no settle: the letters travel and
      stop dead, which is what reads as impact. */
@@ -209,66 +210,87 @@ const pal = (b) => (b.plain ? { fg: '#4ade80', bg: '#0c140f' }
  */
 const SCRIPT = [
   // The first impression, so it lands hardest. Heaviest weight in the reel and
-  // the largest type, split per character and released together so the two
-  // letters drive apart and stop dead rather than easing in.
+  // the largest type, split per character and released together so the letters
+  // drive apart and stop dead rather than easing in.
   //
   // Block 16 is a deliberate compromise. A stem this thick would take a coarser
   // block by the derivation, and coarser reads as tiles at this size, which is
   // the opposite of impact. 16 keeps the noise looking like noise.
-  { pattern: 'dots', text: 'Hi', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
+  { pattern: 'dots', text: 'Hi!', size: 190, hold: 1600, hue: null, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 16 },
   { pattern: 'dots', text: 'This is nocap', size: 90, hold: 1700, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
 
-  // The setup. Everything after this is only interesting because this is true.
-  // Light ground, so the reel is not one long dark slab.
+  // The claim. Everything after this is only interesting because this is true,
+  // and the caption is what makes it land: you are reading the thing it says
+  // cannot be captured. Light ground, so the reel is not one long dark slab.
   { pattern: 'dots', text: 'Text you cannot capture.', size: 74, hold: 2000, hue: 210, light: true, enter: 'up',
     face: 'Georgia, "Times New Roman", serif', weight: 400, block: 8,
     note: 'you are reading it right now. <b>your camera will not</b>' },
 
-  // Call and response. The questions breathe, the answers land and get out.
-  { pattern: 'hatch', text: 'Take a picture?', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
+  // One challenge, not two. 'Take a picture?' and 'Screen-capture it?' were the
+  // same objection -- both are stills -- so four beats went to proving one
+  // thing and it read as repetition rather than escalation. An imperative also
+  // beats a question here: it tells the viewer to act, and the answer says what
+  // they GET rather than merely refusing.
+  { pattern: 'hatch', text: 'Screenshot it.', size: 68, hold: 1500, hue: 190, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
-  { pattern: 'hatch', text: 'No.', size: 148, hold: 1000, hue: 190, enter: 'up',
+  { pattern: 'hatch', text: 'Noise.', size: 148, hold: 1100, hue: 190, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 700, block: 15 },
 
-  { pattern: 'hatch', text: 'Screen-capture it?', size: 66, hold: 1500, hue: 150, enter: 'left',
+  // The strongest material in the reel, moved earlier. This is the part a
+  // developer screenshots and sends to someone, and it used to arrive at beat
+  // ten, after the energy had already peaked.
+  { pattern: 'grid', text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
-  { pattern: 'hatch', text: 'Also no.', size: 128, hold: 1100, hue: 150, chroma: 0.4, enter: 'fan',
-    face: 'Inter, system-ui, sans-serif', weight: 700, block: 14 },
+  { pattern: 'grid', text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11,
+    note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
 
+  // Now the scraping question, AFTER the empty DOM rather than before it. An
+  // empty DOM is the REASON scraping is hard, so asking first inverted the
+  // logic and forced the answer to explain a reveal that had not happened yet.
   { pattern: 'hatch', text: 'AI scraping?', size: 66, hold: 1600, hue: 35, chroma: 0.4, enter: 'alt',
-    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 7 },
-  // Per CHARACTER rather than per word, because the expansion has to be visible
-  // between the letters. A CSS scale would do it in one element and would also
-  // resample the canvas, turning the noise toward its mean, so the letters move
-  // apart instead: same read, and not a single pixel of noise is touched.
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8 },
   { pattern: 'hatch', text: 'HARD', size: 150, hold: 1500, hue: 35, enter: 'burst', split: 'chars',
     face: 'Inter, system-ui, sans-serif', weight: 800, block: 15,
     note: 'no text to lift. a scraper would have to <b>run OCR on video</b>' },
 
-  // The payoff, and the one claim here that is absolute.
-  { pattern: 'grid', text: 'Open DevTools.', size: 72, hold: 1600, hue: 275, light: true, enter: 'left',
-    face: 'ui-monospace, SFMono-Regular, monospace', weight: 400, block: 8 },
-  { pattern: 'grid', text: 'The DOM is empty.', size: 78, hold: 2300, hue: 275, chroma: 0.4, enter: 'up',
-    face: 'Inter, system-ui, sans-serif', weight: 600, block: 9,
-    note: 'no text node, no aria-label, no innerText. a <code>&lt;canvas&gt;</code> and nothing else' },
+  // What it is FOR. The reel never said, so a viewer without the problem never
+  // learned they had it. One per screen and held short: three quick cuts read
+  // as a list building, where one crowded line reads as small print.
+  { pattern: 'grid', text: 'Account numbers.', size: 86, hold: 900, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
+  { pattern: 'grid', text: 'API keys.', size: 86, hold: 900, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
+  { pattern: 'grid', text: 'Shared screens.', size: 86, hold: 1300, hue: 150, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 600, block: 11,
+    note: 'anywhere a value is on screen and should not leave it' },
 
-  // The caveat, and it has to name what it applies to. Sitting straight after
-  // "The DOM is empty" it read as qualifying that, which is the one claim here
-  // that is absolute. Now it says which half is hard and which half is not.
+  // Plain text and nocap on ONE line, which is how it actually gets used. The
+  // label is an ordinary text node -- selectable, searchable, in the DOM -- and
+  // only the value is protected. Every other beat is wall-to-wall noise, which
+  // makes the technique look like something you apply to a whole page. You
+  // don't. You apply it to the one field that matters.
+  //
+  // It is also the honest picture of the cost: the noise sits next to real type,
+  // at the same size, so the difference in legibility is right there rather than
+  // being asserted.
+  { pattern: 'dots', mix: [{ t: 'API key' }, { n: 'sk-live-9f2a4c81b73e' }],
+    text: 'API key sk-live-9f2a4c81b73e',
+    size: 58, hold: 2600, hue: 200, enter: 'left',
+    face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
+    note: 'the label is ordinary text. <b>only the value is protected</b>' },
+
+  // The admission. Kept, because a security claim that names its own limit is
+  // worth more than one that does not.
   { pattern: 'dots', text: 'One catch.', size: 92, hold: 1400, hue: 345, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 600, block: 11 },
   { pattern: 'dots', text: 'A recording still wins.', size: 62, hold: 2400, hue: 345, enter: 'left',
-    face: 'Georgia, "Times New Roman", serif', weight: 400, block: 7,
+    face: 'Inter, system-ui, sans-serif', weight: 300, block: 8,
     note: 'stills and scrapers lose. <b>video does not.</b> inherent, and we do not hide it' },
 
-  // Same call and response as the rest, turned outward. The install line is
-  // rendered through the library like everything else, which is the joke and
-  // also the last demonstration: read it off the screen, then find it is not in
-  // the DOM either. The usage panel right after has it as plain copyable text,
-  // because a command nobody can paste is a worse joke than none.
   { pattern: 'hatch', text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
   // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
@@ -419,9 +441,31 @@ const beats = SCRIPT.map((b) => {
   }
 
   if (b.enter === 'burst') wrap.classList.add('burst');
-  const words = b.split === 'chars' ? [...b.text] : b.text.split(' ');
+  // A beat is a list of parts. Normally every part is protected; a `mix` beat
+  // names which are plain text and which are not.
+  const words = b.mix
+    ? b.mix
+    : (b.split === 'chars' ? [...b.text] : b.text.split(' ')).map((w) => ({ n: w }));
 
-  words.forEach((word, i) => {
+  words.forEach((part, i) => {
+    const word = typeof part === 'string' ? part : part.n;
+    if (part && part.t !== undefined) {
+      // Ordinary text, and deliberately so: it is in the DOM, it is selectable,
+      // and a scraper gets it. That is the point of showing it beside the part
+      // that is not.
+      const span = document.createElement('span');
+      span.textContent = part.t;
+      span.className = 'word plain';
+      const size = Math.max(13, Math.round(b.size * FIT));
+      span.style.cssText =
+        `font-family:${b.face}; font-weight:${b.weight}; font-size:${size}px;` +
+        `color:${fg}; line-height:1; vertical-align:middle;` +
+        `padding-right:${Math.round(size * 0.42)}px; white-space:pre`;
+      span.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
+      span.style.transitionDelay = `${i * 70}ms`;
+      wrap.appendChild(span);
+      return;
+    }
     const el = document.createElement('nocap-secret');
     const probe = document.createElement('canvas').getContext('2d');
     const size = Math.max(13, Math.round(b.size * FIT));
