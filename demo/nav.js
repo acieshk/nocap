@@ -45,7 +45,8 @@ document.querySelector('.side').innerHTML = `
     `<span class="grp">${label}</span>` + pages.map(([href, text]) =>
       `<a href="${href}"${href.toLowerCase() === here ? ' aria-current="page"' : ''}>${text}</a>`
     ).join('')
-  ).join('')}</nav>
+  ).join('')
+  }<a class="reel" href="promo.html">Promo reel</a></nav>
   <div class="foot">
     <a href="promo.html">Promo reel</a> &middot;
     <a href="https://github.com/acieshk/nocap">GitHub</a> &middot;
