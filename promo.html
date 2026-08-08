@@ -69,11 +69,25 @@
   #hint { position:fixed; top:22px; right:24px; font-size:12px; color:#cfcfcf;
           transition:color .7s ease;
           font-family:ui-monospace,monospace; letter-spacing:.04em }
-  #replay { position:fixed; bottom:24px; right:24px; background:rgba(255,255,255,.14);
-            color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:7px;
-            padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
-            opacity:0; transition:opacity .4s ease }
+  /* Three things made this button read as unresponsive on a phone, none of
+     them the handler. It was invisible but tappable for the whole reel -- the
+     base style never said pointer-events:none, so a stray tap in the corner
+     silently restarted everything. It was a ~60x32 target at bottom:24px, half
+     inside the iPhone home-indicator zone where taps are swallowed (the .note
+     already knew about env(safe-area-inset-bottom); this forgot). And with no
+     :active state, a registered tap looked identical to a missed one, because
+     phones do not hover. */
+  #replay { position:fixed;
+            right:max(18px, env(safe-area-inset-right, 0px) + 12px);
+            bottom:max(18px, env(safe-area-inset-bottom, 0px) + 12px);
+            background:rgba(255,255,255,.14);
+            color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:9px;
+            padding:11px 18px; min-height:44px; font:inherit; font-size:14px;
+            cursor:pointer; touch-action:manipulation;
+            opacity:0; pointer-events:none;
+            transition:opacity .4s ease, transform .1s ease }
   #replay.on { opacity:1; pointer-events:auto }
+  #replay:active { transform:scale(.93); filter:brightness(1.4) }
   @media (prefers-reduced-motion: reduce) {
     /* Reduced motion: no wipe, the texture is simply there. */
     .word { transition:opacity .3s ease } body { transition:none }
@@ -147,7 +161,8 @@
      capture; the only honest close is to invite the viewer to test it, and the
      button they need is easy to miss in a corner. Bottom-right so its tail
      points at the thing it is talking about. */
-  #nudge { position:fixed; right:24px; bottom:72px; z-index:6;
+  #nudge { position:fixed; right:24px; z-index:6;
+           bottom:calc(max(18px, env(safe-area-inset-bottom, 0px) + 12px) + 58px);
            max-width:min(74vw, 236px); background:#fff; color:#141414;
            border-radius:11px; padding:11px 14px; font-size:13px; line-height:1.45;
            opacity:0; pointer-events:none; box-shadow:0 8px 26px rgba(0,0,0,.4);
@@ -171,7 +186,7 @@
        capture ends up underneath it. */
     #shots { bottom:20vh; gap:6px }
     #shots canvas { max-height:min(8vh, 58px) }
-    #nudge { bottom:72px; max-width:min(76vw, 230px); padding:9px 12px }
+    #nudge { max-width:min(76vw, 230px); padding:9px 12px }
     #nudge b { display:inline; margin:0 }
   }
 </style>
