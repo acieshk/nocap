@@ -630,6 +630,13 @@ const beats = SCRIPT.map((b) => {
     // once pulled the page to ~41Hz, which puts the two-plane cycle at 21Hz --
     // squarely in the band the flicker warning exists to complain about.
     el.setAttribute('paused', '');
+    // Cap the render density. Noise gains nothing from a dpr-3 panel -- the
+    // blocks are chunky and the canvas is pixelated on purpose -- but split
+    // cost, bitmap memory and every per-frame draw scale with dpr squared, so
+    // on a dpr-3 phone this is 2.25x less work for the same look. The type
+    // here is reel-sized, where dpr 2 and 3 are indistinguishable; body-sized
+    // text on a page with one element should not copy this.
+    el.setAttribute('max-dpr', '2');
     el.className = 'word';
     el.style.transform = (ENTER[b.enter] ?? ENTER.up)(i, words.length);
     el.style.transitionDelay = delayFor(i);

@@ -171,6 +171,7 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 <h2 id="playback">Playback</h2>
 <table class="api">
   <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>max-dpr</td><td>uncapped</td><td>Ceiling on the devicePixelRatio the canvas renders at. Split cost, bitmap memory and every per-frame draw scale with dpr <b>squared</b>, and the noise is deliberately chunky, so a dpr-3 phone does 2.25× the work of dpr-2 for a look that is indistinguishable at reel-sized type. The promo sets 2. Leave it uncapped for body-sized text, where glyph edges still buy something.</td></tr>
   <tr><td>paused</td><td>—</td><td>Stops the frame cycle. <b>A paused element freezes on ONE plane</b>, which is a full-amplitude noise frame — exactly what a capture contains, which makes it the honest "what a screenshot gets" demo. Pause anything off screen: thirty-nine running canvases pulled a page to ~41Hz, putting the cycle at 21Hz, squarely in the discomfort band. Pause only <i>after</i> a fade-out, or the frozen plane is visible mid-fade.</td></tr>
 </table>
 

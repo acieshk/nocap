@@ -555,6 +555,7 @@ export class NocapSecret extends ElementBase {
     'pattern-enter',
     'pattern-playing',
     'paused',
+    'max-dpr',
     'noise-profile',
     'ink-bias',
     'edge-fade',
@@ -677,7 +678,8 @@ export class NocapSecret extends ElementBase {
 
     this.#flicker = new Flicker(this.#canvas, this.#options()).resize(
       +(this.getAttribute('width') ?? 260),
-      +(this.getAttribute('height') ?? 56)
+      +(this.getAttribute('height') ?? 56),
+      this.#dpr()
     );
 
     // A value can be set before the element is in the document, and on re-attach
@@ -708,6 +710,14 @@ export class NocapSecret extends ElementBase {
       if (this.hasAttribute('paused')) this.#flicker.stop();
       else this.#flicker.start();
       return;
+    }
+    if (name === 'max-dpr') {
+      // The cap changes the device size of the canvas, which resize owns.
+      this.#flicker.resize(
+        +(this.getAttribute('width') ?? 260),
+        +(this.getAttribute('height') ?? 56),
+        this.#dpr()
+      );
     }
     // Presentational only: these drive CSS inside the shadow root and change
     // nothing about the split, so reconfiguring and repainting for them is
@@ -807,7 +817,16 @@ export class NocapSecret extends ElementBase {
     this.#warnPalette();
     this.#syncScratch();
     this.#revealed = true;
-    this.#flicker.start();
+    // Paused means paused, including on first render. This line used to start
+    // the cycle unconditionally, and the attribute could not intervene: set
+    // before connect it found no flicker to stop, and setting the value then
+    // triggered render, which started it anyway. On the promo that meant all
+    // thirty-seven canvases animated from load until their beat had played
+    // once, and the paused/running counts looked right the whole time because
+    // they were counts of the attribute, not of the animation.
+    // Held on plane 0 instead: one plane is what paused shows by definition.
+    if (this.hasAttribute('paused')) this.#flicker.showPlane(0);
+    else this.#flicker.start();
     this.#adaptBlock();
     this.dispatchEvent(new CustomEvent('render'));
   };
@@ -887,7 +906,7 @@ export class NocapSecret extends ElementBase {
     const state = { mask, ctx, raf: 0, x: -1, y: -1, down: false };
     this.#scratch = state;
 
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    const dpr = this.#dpr();
 
     // Brush size in CSS pixels, so it looks the same on every display. The mask
     // is a device-pixel buffer, hence the scale. Without it the same number drew
@@ -1413,7 +1432,7 @@ export class NocapSecret extends ElementBase {
     const dir = luma(bg) < 128 ? 1 : -1;
     const ink = `rgb(${bg.map((v) => Math.max(0, Math.min(255, v + dir * levels))).join(',')})`;
     // Scaled by density, so a 16px CSS pattern on the page and this one line up.
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    const dpr = this.#dpr();
     // EXACT pitches, matching the CSS the demo pages use. These were 16, 13.12
     // and 46.4 against the page's 16, 13 and 46, and a 0.12px error per stripe
     // accumulates into a visible drift across a 300px block: the two patterns
@@ -1926,13 +1945,28 @@ export class NocapSecret extends ElementBase {
     return w / 2;
   }
 
+  /**
+   * The dpr everything renders at, capped by `max-dpr`.
+   *
+   * Noise gains nothing from a 3x display: the blocks are deliberately chunky
+   * and the canvas is image-rendering:pixelated, but the split, the bitmap
+   * bank and every per-frame draw all scale with dpr squared, so a dpr-3 phone
+   * does 2.25x the work of dpr-2 for the same look. A page with many elements
+   * caps it; a page with one showing small type probably should not, which is
+   * why the default is uncapped rather than 2.
+   */
+  #dpr() {
+    const raw = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    const cap = parseFloat(this.getAttribute('max-dpr') ?? '');
+    return Number.isFinite(cap) && cap > 0 ? Math.min(raw, Math.max(1, cap)) : raw;
+  }
+
   #options() {
     const attrs = {};
     for (const name of NocapSecret.observedAttributes) {
       if (this.hasAttribute(name)) attrs[name] = this.getAttribute(name);
     }
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    return resolveOptions(attrs, dpr, +(this.getAttribute('height') ?? 56));
+    return resolveOptions(attrs, this.#dpr(), +(this.getAttribute('height') ?? 56));
   }
 
   /**
