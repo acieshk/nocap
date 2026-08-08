@@ -77,7 +77,7 @@
      already knew about env(safe-area-inset-bottom); this forgot). And with no
      :active state, a registered tap looked identical to a missed one, because
      phones do not hover. */
-  #replay { position:fixed;
+  #replay { position:fixed; z-index:7;
             right:max(18px, env(safe-area-inset-right, 0px) + 12px);
             bottom:max(18px, env(safe-area-inset-bottom, 0px) + 12px);
             background:rgba(255,255,255,.14);
@@ -98,7 +98,13 @@
      putting anything over the canvas. */
   #pattern { position:fixed; inset:0; pointer-events:none; z-index:0;
              transition:opacity .5s ease }
-  #stage { position:relative; z-index:1 }
+  /* The stage sits above the ground pattern -- and it is a full-viewport box,
+     so the moment it gained z-index:1 it also sat above every z-auto fixed
+     control and ate their taps. That is what actually broke the replay button;
+     the earlier size/safe-area work fixed real things but not this. The stage
+     is scenery: it takes no pointer events, and the one interactive thing
+     inside it, the copiable npm line, re-enables itself. */
+  #stage { position:relative; z-index:1; pointer-events:none }
   /* Three textures, all of which the element can reproduce in its own layer:
      hatch, dots, grid. Grain and the vignette were dropped -- grain is too fine
      to survive as a foreground over noise, and the vignette is not a texture at
