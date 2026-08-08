@@ -331,7 +331,9 @@ const SCRIPT = [
 
   // Wordplay: the block literally is the nothing. In a capture the line reads
   // "Your camera reads: ___", which is both the claim and its evidence.
-  { pattern: 'hatch', mix: [{ t: 'Your camera reads:' }, { n: 'nothing' }],
+  // Drifts, like every striped beat with something to protect: the stripes are
+  // what make the motion legible, a block sliding under wallpaper that stays.
+  { pattern: 'hatch', drift: true, mix: [{ t: 'Your camera reads:' }, { n: 'nothing' }],
     text: 'Your camera reads: nothing', size: 64, hold: 2200, hue: 190, chroma: 0.4, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
     note: 'go on. <b>Print Screen</b>, or point your phone at it' },
@@ -370,6 +372,10 @@ const SCRIPT = [
 
   // The proof, taken on the viewer's own machine. The line is written so the
   // capture completes it: what comes back reads "This half survives. ___".
+  // NO drift here, though it is striped. shotOf() photographs this beat for
+  // the closing gallery, and a subject caught mid-drift sits up to 12px off its
+  // label in the composed evidence, which reads as a bug rather than motion.
+  // The thing being photographed holds still.
   { pattern: 'hatch', mix: [{ t: 'This half survives.' }, { n: 'This half does not.' }],
     text: 'This half survives. This half does not.', size: 54, hold: 2800, hue: 200, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true,
@@ -389,7 +395,7 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
     note: 'it even drifts, to smear a lazy frame-average. <b>stabilised video reads it anyway.</b> inherent, and we do not hide it' },
 
-  { pattern: 'hatch', text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
+  { pattern: 'hatch', drift: true, text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
   // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
   // by 0.30 the pair is down to 0.46 masking and a bright phosphor green does
@@ -836,14 +842,12 @@ function startDrift(b) {
   };
   driftRaf = requestAnimationFrame(step);
 }
-function stopDrift(b) {
+function stopDrift() {
+  // Cancel only. Resetting translate here snapped a drifted element 12px
+  // sideways at the very start of its fade, while it was still fully visible;
+  // the reset belongs with the other post-fade restorations in exitBeat.
   cancelAnimationFrame(driftRaf);
   driftRaf = 0;
-  if (!b) return;
-  for (const el of b.wrap.children) {
-    if (el.tagName !== 'NOCAP-SECRET') continue;
-    el.style.translate = '';
-  }
 }
 
 function play(i) {
@@ -924,7 +928,7 @@ function play(i) {
  * teardown.
  */
 function exitBeat(b) {
-    if (b.drift) stopDrift(b);
+    if (b.drift) stopDrift();
     b.wrap.classList.remove('on');
     // Put the start offsets back once it has faded, so the next loop enters the
     // same way rather than appearing from wherever it stopped.
@@ -932,7 +936,10 @@ function exitBeat(b) {
       // Faded out now, so it can stop animating. Doing this in play() paused it
       // while it was still visible, and a frozen plane is raw noise -- the
       // coloured block that was left behind on every exit.
-      for (const el of b.wrap.children) el.setAttribute('paused', '');
+      for (const el of b.wrap.children) {
+        el.setAttribute('paused', '');
+        el.style.translate = '';
+      }
       if (b.plain) {
         const el = b.wrap.firstChild;
         el.style.transition = 'none';
@@ -958,7 +965,10 @@ function start() {
   shots.length = 0;
   clearTimeout(timer);
   replay.classList.remove('on');
-  for (const b of beats) b.wrap.classList.remove('on');
+  for (const b of beats) {
+    b.wrap.classList.remove('on');
+    for (const el of b.wrap.children) el.style.translate = '';
+  }
   setTimeout(() => play(0), 320);
 }
 
