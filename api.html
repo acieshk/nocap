@@ -22,6 +22,11 @@
   .toc a { font-size:12.5px; padding:5px 11px; border:1px solid var(--line);
            border-radius:20px; text-decoration:none; color:var(--muted) }
   .toc a:hover { border-color:var(--accent); color:var(--fg) }
+  /* The name columns are nowrap for scanability, but a 33ch monospace name is
+     wider than a phone. Wrapping beats a page that scrolls sideways. */
+  @media (max-width:620px) {
+    .api td:first-child, .api td:nth-child(2) { white-space:normal; word-break:break-word }
+  }
 </style>
 </head>
 <body>
@@ -38,7 +43,7 @@
 <div class="toc">
   <a href="#value">The value</a><a href="#strength">Strength</a><a href="#split">The split</a>
   <a href="#colour">Colour</a><a href="#type">Type</a><a href="#modes">Modes</a>
-  <a href="#scratch">Scratch</a><a href="#exports">Exports</a><a href="#how">How it works</a>
+  <a href="#scratch">Scratch</a><a href="#texture">Texture</a><a href="#playback">Playback</a><a href="#exports">Exports</a><a href="#how">How it works</a>
 </div>
 
 <h2 id="value">The value</h2>
@@ -129,6 +134,12 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr class="exp"><td>fake</td><td>ignored</td><td>Accepted, warned about, <b>not applied</b>. The decoy measured fainter in a capture (0.175) than the value it covers (0.217), so it convinces nobody. <code>fakeLike()</code> still exported.</td></tr>
   <tr><td>scramble</td><td>—</td><td>Stores glyphs shuffled, so a heap search never finds the value in order. Obfuscation, not encryption.</td></tr>
   <tr class="exp"><td>chroma-decoy</td><td>—</td><td>A decoy in chrominance at zero luminance contrast. <b>Spatial, so it survives frame averaging</b> — the only thing here that does. Block 2–4px: 1px is annihilated by 4:2:0.</td></tr>
+  <tr class="exp"><td>watermark</td><td>—</td><td>An identifier baked into chrominance at zero luminance contrast, so it survives the averaging that recovers the value and names the capture that leaked. <b>Attribution, not protection:</b> one greyscale conversion removes it — 0.996 correlation in colour, 0.020 after <code>-vf format=gray</code>. Casual leaks, not determined ones.</td></tr>
+  <tr class="exp"><td>watermark-swing</td><td>60</td><td>Chroma excursion for the watermark. The direction is picked toward the side with headroom, so a blue-heavy ground moves toward yellow rather than quietly getting less swing than asked.</td></tr>
+  <tr class="exp"><td>watermark-repeat</td><td>3</td><td>How many times the mark tiles, 1–8. More survives cropping; more is also easier to spot.</td></tr>
+  <tr class="exp"><td>chroma-block</td><td>2</td><td>Block size in px for the chroma decoy and watermark. <b>Keep it ≥ 2:</b> 1px chroma is annihilated by the 4:2:0 subsampling every screenshot pipeline applies.</td></tr>
+  <tr class="exp"><td>fake-share</td><td>0.35</td><td>Share of the noise budget the decoy rides, 0–0.9. Blending and legibility are one budget: past ~0.5 the decoy ghosts into what <i>you</i> see.</td></tr>
+  <tr class="exp"><td>fake-size</td><td>0.55</td><td>Decoy glyph size as a ratio of the real type. Observed nowhere at one point, hence its row here — every attribute in this table is exercised on some page.</td></tr>
 </table>
 
 <h2 id="scratch">Scratch</h2>
@@ -139,6 +150,28 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><td>scratch-radius</td><td>34, or 52 coarse</td><td>Brush radius in CSS px. Wider on touch, because a fingertip covers what it reveals.</td></tr>
   <tr><td>scratch-hint</td><td>Scratch to reveal</td><td>The affordance. Without it the element is a blank rectangle. It is real DOM text, so it is the one string the element contributes to <code>innerText</code>.</td></tr>
   <tr><td>scratch-exclusive</td><td>on</td><td>Revealing one clears the others. <b>Does not slow extraction</b> — capture is 0.3s. It stops one frame containing two revealed values.</td></tr>
+</table>
+
+<h2 id="texture">Texture</h2>
+<p>
+  Draws the page's own pattern through the element, so the block reads as part
+  of the surface instead of a patch on it. The <a href="pairing.html">pairing
+  page</a> is the live version of this table.
+</p>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>pattern</td><td>none</td><td><code>dots</code>, <code>hatch</code> or <code>grid</code> — the three the page CSS can mirror exactly (16px dot lattice, 3px/13px 45° hatch, 46px grid). Grain does not survive over noise and is deliberately absent.</td></tr>
+  <tr><td>pattern-strength</td><td>16</td><td>Levels the texture moves its ground, same meaning as the page's CSS alpha solved per ground. <b>A level count is not a visibility:</b> over noise spanning 0–255 the eye normalises it away, so matching the page's look takes roughly 2.5× the page's number — the promo runs 50 against the page's 20, and the mismatch in numbers is what makes them look equal.</td></tr>
+  <tr><td>pattern-layer</td><td>back</td><td><code>back</code> draws it into the canvas: the split carries it, so it is capped by the ground's headroom and vanishes in a still capture. <code>front</code> composites it over the canvas: free (added identically to every frame, the planes still average to target plus a constant), full-strength on any ground, and it survives a screenshot — at the cost of competing with the glyphs. It adds no protection either way; an attacker who knows the pattern subtracts it.</td></tr>
+  <tr><td>pattern-offset-x / pattern-offset-y</td><td>0</td><td>Phase, in CSS px: where the element sits relative to the pattern's origin, so the lattice continues through the block instead of restarting at its edge. The front layer also reads the live custom properties <code>--nocap-pattern-ox/oy</code>, which land without a repaint.</td></tr>
+  <tr><td>pattern-enter</td><td>—</td><td><code>left</code> / <code>right</code> / <code>up</code> / <code>down</code> / <code>center</code>: the direction the front texture wipes in from, via clip-path keyframes. Without it the texture is simply shown — the failure mode is no animation, never no texture.</td></tr>
+  <tr><td>pattern-playing</td><td>—</td><td>Presence runs the wipe; remove and re-add to replay it. Honoured only alongside <code>pattern-enter</code>.</td></tr>
+</table>
+
+<h2 id="playback">Playback</h2>
+<table class="api">
+  <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
+  <tr><td>paused</td><td>—</td><td>Stops the frame cycle. <b>A paused element freezes on ONE plane</b>, which is a full-amplitude noise frame — exactly what a capture contains, which makes it the honest "what a screenshot gets" demo. Pause anything off screen: thirty-nine running canvases pulled a page to ~41Hz, putting the cycle at 21Hz, squarely in the discomfort band. Pause only <i>after</i> a fade-out, or the frozen plane is visible mid-fade.</td></tr>
 </table>
 
 <h2 id="exports">Exports</h2>
@@ -157,6 +190,10 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><td>auditPage</td><td>check</td><td>Search every readable surface for a value. Takes plaintext, so development and tests only.</td></tr>
   <tr><td>fakeLike / detectFormat / passesLuhn</td><td>generate</td><td>Plausible values of a matching shape. Luhn-valid cards, real dates.</td></tr>
   <tr><td>resolveOptions / resolveText</td><td>pure</td><td>Attribute resolution, exported so it can be tested without a DOM.</td></tr>
+  <tr><td>luma / toRgb / toHex</td><td>palette</td><td>Perceptual luma of a colour; hex↔[r,g,b]. <b>Arrays, not objects</b> — a harness passing <code>{r,g,b}</code> once measured NaN for a session and shipped a wrong constant on it.</td></tr>
+  <tr><td>toLight / toCode</td><td>palette</td><td>sRGB code value ↔ linear light. Averaging happens in light — a display emits (v/255)<sup>γ</sup> — which is why <code>perceivedMean</code> and <code>averageFrames</code> differ by ~19 levels.</td></tr>
+  <tr><td>planeRange / expandRange / maxAmplitudeFor</td><td>palette</td><td>Range arithmetic: what a plane can span, and the largest amplitude a pair carries without clipping — clipping silently breaks the zero-sum property.</td></tr>
+  <tr><td>suggestConfig / placeInBand / isoluminantPartner</td><td>palette</td><td>Pick settings for a palette; move a colour into the maskable band; the equal-luminance partner a chroma effect needs.</td></tr>
   <tr><td>Flicker</td><td>runtime</td><td>The presenter, if you want the split without the element.</td></tr>
 </table>
 

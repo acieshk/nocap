@@ -18,7 +18,10 @@ body { margin:0; padding:0; background:var(--bg); color:var(--fg);
          color:var(--fg); text-decoration:none }
 .brand small { display:block; font:400 11.5px/1.4 ui-sans-serif; letter-spacing:0;
                color:var(--faint); margin-top:7px }
-.side nav { display:flex; flex-direction:column; gap:1px; margin-top:16px }
+.side nav { display:flex; flex-direction:column; gap:1px; margin-top:14px }
+.side nav .grp { font:600 10px/1 ui-sans-serif; letter-spacing:.09em; text-transform:uppercase;
+                 color:var(--faint); padding:14px 10px 5px }
+.side nav .grp:first-child { padding-top:0 }
 .side nav a { color:var(--muted); text-decoration:none; font-size:13.5px; padding:6px 10px;
               border-radius:6px; border-left:2px solid transparent }
 .side nav a:hover { background:var(--panel); color:var(--fg) }
@@ -29,12 +32,22 @@ body { margin:0; padding:0; background:var(--bg); color:var(--fg);
 main { padding:30px 0 0; min-width:0 }
 
 @media (max-width:860px) {
-  .shell { grid-template-columns:1fr; gap:0 }
-  .side { position:static; height:auto; padding:22px 0 0 }
-  .side nav { flex-direction:row; overflow-x:auto; gap:4px; margin:12px -22px 0; padding:0 22px 4px }
+  /* minmax(0,1fr), not 1fr. Bare 1fr is minmax(auto,1fr), and the auto minimum
+     lets the nav row's intrinsic width set the track, so every page was ~1200px
+     wide on a phone and the nav's own overflow-x:auto never engaged -- the row
+     was never narrower than its content, so there was nothing to scroll. The
+     desktop rule already knew this and wrote minmax(0,1fr); this one forgot. */
+  .shell { grid-template-columns:minmax(0,1fr); gap:0 }
+  .side { position:static; height:auto; padding:18px 0 0; min-width:0 }
+  .side nav { flex-direction:row; overflow-x:auto; gap:4px; margin:10px -22px 0;
+              padding:0 22px 6px; -webkit-overflow-scrolling:touch }
   .side nav a { white-space:nowrap; border-left:0; border-bottom:2px solid transparent }
   .side nav a[aria-current=page] { border-left:0; border-bottom-color:var(--accent) }
+  /* Group labels are structure the desktop rail can afford. In a scrolling chip
+     row they read as chips that do nothing, so the chips carry it alone. */
+  .side nav .grp { display:none }
   .side .foot { display:none }
+  .brand small { display:none }
 }
 
 /* ------------------------------------------------------------------- type */
