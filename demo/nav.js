@@ -30,6 +30,7 @@ const GROUPS = [
     ['challenge.html', 'Scraping challenge'],
   ]],
   ['Experimental', [
+    ['motion.html', 'Motion vs averaging'],
     ['scratch.html', 'Scratch to reveal'],
     ['fake.html', 'Fake value'],
   ]],

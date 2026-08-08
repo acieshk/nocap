@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap: motion vs averaging</title>
+<meta name="description" content="Move the value while it is shown, then run the averaging attack a recording uses. See what drift smears, and what stabilising the motion recovers.">
+<link rel="stylesheet" href="demo/shell.css">
+<style>
+  /* A reference grid behind the live element, so the block is visibly sliding
+     against something fixed rather than floating on a flat field. */
+  #stage { background-image:
+      repeating-linear-gradient(rgba(255,255,255,.05) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 24px);
+    background-size:24px 24px; overflow:hidden }
+  .out { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0 0 }
+  .out figure { margin:0; min-width:0 }
+  .out canvas { width:100%; image-rendering:pixelated; border:1px solid var(--line); border-radius:6px }
+  .out figcaption { font:600 10.5px/1.3 ui-sans-serif; letter-spacing:.05em; text-transform:uppercase;
+                    color:var(--faint); margin-top:6px }
+  .rbadge { font-family:ui-monospace,monospace; font-size:12px; font-weight:600; margin-left:6px }
+  .verdict { font-size:14px; margin:16px 0 0; padding:12px 15px; border-radius:8px;
+             border:1px solid var(--line); background:var(--panel) }
+  @media (max-width:620px){ .out{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side"></aside>
+  <main>
+
+<h1>Motion vs averaging</h1>
+<p class="lede">
+  A screen recording defeats nocap by averaging frames: the noise cancels and
+  the value remains. Moving the value while it shows is meant to spoil that
+  average. This page runs the attack so you can see exactly what it costs the
+  attacker, and what a competent one gets back.
+</p>
+
+<div class="rig">
+  <div class="bar">
+    <label class="f" title="static: no motion, the baseline. sine: smooth predictable drift, a 2-parameter model. random: an independent jump every frame, nothing to model." style="min-width:190px"><span>Motion</span>
+      <select id="motion">
+        <option value="static">static (baseline)</option>
+        <option value="sine" selected>sine — smooth, predictable</option>
+        <option value="random">random — jump every frame</option>
+      </select></label>
+    <label class="f" title="How far the value moves, in CSS pixels. Integer pixels only: a sub-pixel shift resamples the canvas toward its mean, which is the very attack this defends against."><span>Amplitude <em id="ampV">12</em>px</span>
+      <input type="range" id="amp" min="0" max="40" value="12"></label>
+    <label class="f" title="1 moves the whole block together. Higher splits it into independent regions that each move on their own, so there is no single shift to undo — closer to per-word motion."><span>Independent regions <em id="bandV">1</em></span>
+      <input type="range" id="bands" min="1" max="6" value="1"></label>
+    <label class="f" title="How many frames the attacker averages. A real recording is 60 per second, so a few seconds is hundreds."><span>Frames captured <em id="frV">64</em></span>
+      <input type="range" id="frames" min="8" max="160" step="8" value="64"></label>
+  </div>
+
+  <div class="body" id="stage" style="min-height:120px">
+    <nocap-secret id="chip" width="300" height="72" color="#6d6d6d" background="#3e4448"
+                  noise-scale="8" max-dpr="1"></nocap-secret>
+    <small>What you see. The block is moving; the grid behind it is not.</small>
+  </div>
+
+  <div class="knobs" style="grid-template-columns:1fr">
+    <button id="run" style="justify-self:start">Average the recording &rarr;</button>
+    <div class="out">
+      <figure><canvas id="one"></canvas><figcaption>One screenshot<span class="rbadge" id="rOne"></span></figcaption></figure>
+      <figure><canvas id="lazy"></canvas><figcaption>Naive average<span class="rbadge" id="rLazy"></span></figcaption></figure>
+      <figure><canvas id="smart"></canvas><figcaption>Motion recovered<span class="rbadge" id="rSmart"></span></figcaption></figure>
+    </div>
+    <div class="verdict" id="verdict">Pick a motion and press the button.</div>
+  </div>
+  <div class="readout">
+    <span>readability is <b>Pearson r</b> against the true value</span>
+    <span>1.0 = fully readable</span>
+    <span>~0.1 = noise</span>
+  </div>
+</div>
+
+<h2>What the three panels are</h2>
+<ul>
+  <li><b>One screenshot</b> is a single captured frame — what a still capture or
+      a phone photo gets. It should always be noise; that is the base defence and
+      motion has nothing to do with it.</li>
+  <li><b>Naive average</b> is the lazy recording attack: average every frame as
+      recorded. With no motion it reads the value straight back. With motion it
+      smears, because the value is no longer on the same pixels.</li>
+  <li><b>Motion recovered</b> is the honest attacker: this page knows the exact
+      motion it applied, so it shifts every frame back before averaging — which
+      is what a competent attacker's motion estimation aims to do. This is the
+      <i>ceiling</i> of what motion can be made to give up.</li>
+</ul>
+
+<h2>What to try</h2>
+<ul>
+  <li><b>static</b> — all three around the same. Averaging wins; this is the
+      known defeat, no motion involved.</li>
+  <li><b>sine, amplitude 12</b> — naive smears a little, motion-recovered snaps
+      back to fully readable. A smooth drift is two numbers to guess.</li>
+  <li><b>random, amplitude 12+</b> — naive smears hard. Motion-recovered still
+      wins, because the value is fully present once each frame is placed. Random
+      only removes the <i>shortcut</i> of a formula.</li>
+  <li><b>regions 6, random</b> — the block breaks into independently moving
+      pieces, closest to per-word motion. Hardest naive result, same recovered
+      result.</li>
+</ul>
+
+<div class="note">
+  <b>The recovered panel is the point.</b> However hard the naive average smears,
+  the value is still fully there — motion hides <i>where</i> it is, not
+  <i>whether</i> it is, and the value is the high-contrast pattern an attacker
+  locks onto to undo the motion. This is why nocap ships drift as a visual on the
+  promo and makes no protection claim for it. The
+  <a href="algorithms.html">algorithms page</a> has the measured attack table.
+</div>
+
+<div class="note" style="border-left-color:#7a6134;background:#332b1a;color:#d9bd80">
+  <b>The honest gap.</b> The middle panel is a <i>naive</i> attacker and the
+  right is one who recovers the motion perfectly. A real attacker lands between
+  them, depending on how good their motion estimation is — this page does not
+  ship that estimator, so it shows the two bounds rather than pretending to know
+  where a given attacker falls. And the motion smooth enough to read comfortably
+  is the motion easiest to recover: the same single budget as everything else.
+</div>
+
+  </main>
+</div>
+
+<script src="demo/nav.js"></script>
+<script type="module">
+import './src/secret.js';
+import { perceivedMean } from './src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const chip = $('chip');
+const BACK = [62, 68, 72];                     // #3e4448, the element's ground
+
+let planes = null, truth = null, dw = 0, dh = 0;
+chip.addEventListener('render', () => {
+  planes = chip.planes;
+  if (!planes?.length) return;
+  dw = planes[0].width; dh = planes[0].height;
+  const m = perceivedMean(planes);
+  truth = { data: m.data, width: dw, height: dh };
+});
+chip.secret = 'RECORDING';
+
+// ---- live preview: slide the block with the chosen motion --------------------
+let raf = 0, t0 = 0, seed = 1;
+const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+function offsetAt(f) {
+  const A = +$('amp').value;
+  const kind = $('motion').value;
+  if (A === 0 || kind === 'static') return [0, 0];
+  if (kind === 'sine') return [Math.round(A * Math.sin(f * (1000 / 60) / 800)), 0];
+  return [Math.round((rand() * 2 - 1) * A), Math.round((rand() * 2 - 1) * A)];
+}
+
+function loop(now) {
+  raf = requestAnimationFrame(loop);
+  if (!t0) t0 = now;
+  const f = Math.round((now - t0) / (1000 / 60));
+  const [ox, oy] = offsetAt(f);
+  // Integer px, translate not transform (transform is free here — no entrance
+  // rule — but translate keeps the preview honest to what the promo does).
+  chip.style.translate = `${ox}px ${oy}px`;
+}
+function restart() { cancelAnimationFrame(raf); t0 = 0; seed = 1; raf = requestAnimationFrame(loop); }
+
+// ---- the attack: composite planes at the motion, then average ----------------
+function bandOffsets(f, bands) {
+  // One offset vector per band. Global motion (sine) ignores bands.
+  const kind = $('motion').value, A = +$('amp').value;
+  if (A === 0 || kind === 'static') return Array.from({ length: bands }, () => [0, 0]);
+  if (kind === 'sine') {
+    const o = [Math.round(A * Math.sin(f * (1000 / 60) / 800)), 0];
+    return Array.from({ length: bands }, () => o);
+  }
+  return Array.from({ length: bands }, () => [Math.round((rand() * 2 - 1) * A),
+                                              Math.round((rand() * 2 - 1) * A)]);
+}
+
+// displayed[x] = source[x - ox]; recover with source[x] = displayed[x + ox].
+function composite(f, offs) {
+  const p = planes[f % planes.length], out = new Float64Array(dw * dh * 4);
+  const bw = dw / offs.length;
+  for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
+    const b = Math.min(offs.length - 1, Math.floor(x / bw));
+    const [ox, oy] = offs[b], sx = x - ox, sy = y - oy, di = (y * dw + x) * 4;
+    if (sx < 0 || sx >= dw || sy < 0 || sy >= dh) {
+      out[di] = BACK[0]; out[di + 1] = BACK[1]; out[di + 2] = BACK[2]; out[di + 3] = 255; continue;
+    }
+    const si = (sy * dw + sx) * 4;
+    out[di] = p.data[si]; out[di + 1] = p.data[si + 1]; out[di + 2] = p.data[si + 2]; out[di + 3] = 255;
+  }
+  return out;
+}
+
+function average(recs, aligns) {
+  const bands = aligns[0].length, bw = dw / bands, acc = new Float64Array(dw * dh * 4);
+  recs.forEach((buf, f) => {
+    for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
+      const b = Math.min(bands - 1, Math.floor(x / bw));
+      const [ox, oy] = aligns[f][b], sx = x + ox, sy = y + oy;
+      if (sx < 0 || sx >= dw || sy < 0 || sy >= dh) continue;
+      const di = (y * dw + x) * 4, si = (sy * dw + sx) * 4;
+      acc[di] += buf[si]; acc[di + 1] += buf[si + 1]; acc[di + 2] += buf[si + 2];
+    }
+  });
+  const im = new ImageData(dw, dh);
+  for (let i = 0; i < im.data.length; i += 4) {
+    im.data[i] = acc[i] / recs.length; im.data[i + 1] = acc[i + 1] / recs.length;
+    im.data[i + 2] = acc[i + 2] / recs.length; im.data[i + 3] = 255;
+  }
+  return im;
+}
+
+const lum = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+function pearson(a, b) {
+  const va = [], vb = [], x0 = 40, x1 = dw - 40;
+  for (let y = 0; y < dh; y++) for (let x = x0; x < x1; x++) {
+    const i = (y * dw + x) * 4; va.push(lum(a.data, i)); vb.push(lum(b.data, i));
+  }
+  const ma = va.reduce((s, v) => s + v, 0) / va.length, mb = vb.reduce((s, v) => s + v, 0) / vb.length;
+  let n = 0, da = 0, db = 0;
+  for (let k = 0; k < va.length; k++) { const p = va[k] - ma, q = vb[k] - mb; n += p * q; da += p * p; db += q * q; }
+  return Math.abs(n / Math.sqrt(da * db + 1e-9));
+}
+
+function draw(id, im) {
+  const c = $(id); c.width = dw; c.height = dh;
+  c.getContext('2d').putImageData(im, 0, 0);
+}
+function badge(id, r) {
+  const el = $(id);
+  el.textContent = 'r ' + r.toFixed(2);
+  el.style.color = r < 0.35 ? '#6fa76f' : r < 0.6 ? '#c2a15c' : '#d9885f';
+}
+
+function runAttack() {
+  if (!planes || !truth) return;
+  const N = +$('frames').value, bands = +$('bands').value;
+  seed = 1;                                   // reproducible recording
+  const offsList = Array.from({ length: N }, (_, f) => bandOffsets(f, bands));
+  const recs = offsList.map((offs, f) => composite(f, offs));
+
+  const flat = Array.from({ length: N }, () => Array.from({ length: bands }, () => [0, 0]));
+  // One mid-run frame is the single-screenshot case. recs entries are
+  // Float64Array, so copy into an ImageData explicitly.
+  const single = new ImageData(dw, dh);
+  for (let i = 0; i < single.data.length; i++) single.data[i] = recs[N >> 1][i];
+
+  const lazy = average(recs, flat);
+  const smart = average(recs, offsList);       // attacker knows the exact motion
+
+  draw('one', single); draw('lazy', lazy); draw('smart', smart);
+  const rOne = pearson(single, truth), rLazy = pearson(lazy, truth), rSmart = pearson(smart, truth);
+  badge('rOne', rOne); badge('rLazy', rLazy); badge('rSmart', rSmart);
+
+  const kind = $('motion').value, A = +$('amp').value;
+  let v;
+  if (kind === 'static' || A === 0) {
+    v = '<b>Static.</b> The naive average already reads the value back — this is the '
+      + 'plain recording defeat, with no motion in play.';
+  } else if (rLazy < 0.4 && rSmart > 0.7) {
+    v = `<b>Motion smears the lazy attack (r ${rLazy.toFixed(2)}), and a motion-aware `
+      + `attacker recovers it (r ${rSmart.toFixed(2)}).</b> The value is fully present; `
+      + 'the drift only hides where it is. Honest as a visual, not as protection.';
+  } else if (rSmart > 0.7) {
+    v = `<b>Recovered at r ${rSmart.toFixed(2)}.</b> Even where the naive average `
+      + `holds up (r ${rLazy.toFixed(2)}), placing each frame back exposes the value.`;
+  } else {
+    v = `naive r ${rLazy.toFixed(2)}, recovered r ${rSmart.toFixed(2)}. Try more frames — `
+      + 'the recovered panel climbs as the attacker gets more to average.';
+  }
+  $('verdict').innerHTML = v;
+}
+
+// ---- wiring ------------------------------------------------------------------
+for (const id of ['motion', 'amp', 'bands', 'frames']) {
+  $(id).addEventListener('input', () => {
+    $('ampV').textContent = $('amp').value;
+    $('bandV').textContent = $('bands').value;
+    $('frV').textContent = $('frames').value;
+    // Regions are meaningless for a single global sine; say so by disabling.
+    $('bands').disabled = $('motion').value === 'sine';
+    restart();
+  });
+}
+$('run').addEventListener('click', runAttack);
+$('bands').disabled = true;                    // sine is the default
+restart();
+</script>
+</body>
+</html>
