@@ -375,10 +375,19 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 7, shot: true,
     note: 'and a capture of this line is waiting at the end' },
 
-  { pattern: 'dots', mix: [{ t: 'One catch:' }, { n: 'a recording still wins.' }],
-    text: 'One catch: a recording still wins.', size: 60, hold: 2400, hue: 345, enter: 'left',
+  // The value drifts on this beat, and the stripes make the motion readable:
+  // the block slides while the hatch inside it stays phase-locked to the page,
+  // so it reads as a window moving under fixed wallpaper.
+  //
+  // Measured before it was choreography: drifting the value smears a naive
+  // 32-frame average from r 0.78 to 0.39 -- and an attacker who sweeps nine
+  // candidate velocities and keeps the sharpest result gets 0.78 back. So the
+  // drift defeats the lazy average only, the caption says video still wins,
+  // and the motion is honest theatre on a beat whose copy is the admission.
+  { pattern: 'hatch', drift: true, mix: [{ t: 'One catch:' }, { n: 'a recording still wins.' }],
+    text: 'One catch: a recording still wins.', size: 60, hold: 3000, hue: 345, enter: 'left',
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
-    note: 'stills and scrapers lose. <b>video does not.</b> inherent, and we do not hide it' },
+    note: 'it even drifts, to smear a lazy frame-average. <b>stabilised video reads it anyway.</b> inherent, and we do not hide it' },
 
   { pattern: 'hatch', text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
@@ -796,6 +805,47 @@ function shotOf(b) {
 /** Captures taken during the reel, shown together on the install screen. */
 const shots = [];
 
+/**
+ * Slide a beat's protected elements while their internal stripes hold still.
+ *
+ * Integer CSS px only: a sub-pixel translate resamples the canvas, and
+ * resampling noise toward its mean is the exact attack this page refuses to
+ * perform on itself. The `translate` property is used rather than `transform`
+ * because the entrance rule pins transform with !important, and the two
+ * compose without touching layout.
+ *
+ * Each step re-points --nocap-pattern-ox at the element's DISPLAYED position,
+ * so the hatch inside stays phase-locked to the page while the block moves
+ * under it. That is the visible point of the beat: the window slides, the
+ * wallpaper does not.
+ */
+let driftRaf = 0;
+function startDrift(b) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const els = [...b.wrap.children].filter((el) => el.tagName === 'NOCAP-SECRET');
+  if (!els.length) return;
+  const base = els.map((el) => restOffset(el));
+  const t0 = performance.now();
+  const step = (now) => {
+    const dx = Math.round(12 * Math.sin((now - t0) / 800));
+    els.forEach((el, k) => {
+      el.style.translate = dx + 'px 0';
+      el.style.setProperty('--nocap-pattern-ox', (base[k][0] + dx) + 'px');
+    });
+    driftRaf = requestAnimationFrame(step);
+  };
+  driftRaf = requestAnimationFrame(step);
+}
+function stopDrift(b) {
+  cancelAnimationFrame(driftRaf);
+  driftRaf = 0;
+  if (!b) return;
+  for (const el of b.wrap.children) {
+    if (el.tagName !== 'NOCAP-SECRET') continue;
+    el.style.translate = '';
+  }
+}
+
 function play(i) {
   if (stopped) return;
   // The install line is the last thing on screen and it stays there. A separate
@@ -842,6 +892,8 @@ function play(i) {
   note.innerHTML = b.note ?? '';
   note.classList.toggle('on', Boolean(b.note));
 
+  if (b.drift) startDrift(b);
+
   if (b.shot) {
     // Taken once the words have arrived and stopped, so the geometry measured
     // here is the geometry a viewer would have captured. Collected rather than
@@ -872,6 +924,7 @@ function play(i) {
  * teardown.
  */
 function exitBeat(b) {
+    if (b.drift) stopDrift(b);
     b.wrap.classList.remove('on');
     // Put the start offsets back once it has faded, so the next loop enters the
     // same way rather than appearing from wherever it stopped.
@@ -899,6 +952,7 @@ function exitBeat(b) {
 
 function start() {
   stopped = false;
+  stopDrift();
   document.body.classList.remove('ending');
   document.getElementById('shots').replaceChildren();
   shots.length = 0;
