@@ -14,13 +14,20 @@
     "./palette": "./src/palette.js",
     "./fake": "./src/fake.js"
   },
+  "sideEffects": [
+    "./src/secret.js"
+  ],
   "files": [
     "src",
     "README.md",
     "LICENSE"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/",
+    "prepublishOnly": "node --test test/",
     "demo": "npx --yes serve . --listen tcp://127.0.0.1:8787"
   },
   "keywords": [

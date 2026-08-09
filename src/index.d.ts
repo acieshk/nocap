@@ -262,6 +262,12 @@ export class NocapSecret extends HTMLElement {
   readonly planes: Pixels[];
   readonly decoys: string[];
   readonly lastDecoy: string | null;
+  /** What fitToBand moved the palette to, or null if it was already maskable. */
+  readonly fitted: {
+    color: string; background: string; ratio: number; moved: boolean; contrast: number;
+  } | null;
+  /** Achieved chroma swing of the watermark, 0 if none is set. */
+  readonly watermarkSwing: number;
   render(): Promise<void>;
   stop(): void;
   /** Worst plane against the mean. null before anything is rendered. */
