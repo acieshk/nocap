@@ -1746,6 +1746,11 @@ export class NocapSecret extends ElementBase {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(plain, w / 2, h / 2);
+      // Same parity rule as the pattern above: a chroma-decoy set alongside
+      // fake must not silently vanish. The two decoys are complementary, not
+      // redundant -- the temporal one owns the single frame and cancels out
+      // of an average, the chroma one lives in the mean and survives it.
+      this.#paintChromaDecoy(ctx, font, background, w, h);
     }), { ...this.#options(), decoy: null });
 
     const decoys = [];
