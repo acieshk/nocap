@@ -16,12 +16,13 @@
 <p class="lede">
   Content is split into frames that alternate at your display's refresh rate.
   Each frame is noise, their mean is the content, and your visual system does the
-  averaging. So you read it and <b>a single capture does not</b>. The text also
-  never enters the DOM, so scrapers and page-reading agents get nothing at all.
+  averaging. So you read it and <b>a single capture does not</b>. The text never
+  enters the DOM, so scrapers and page-reading agents get nothing at all. It can
+  even hand a capture a <a href="fake.html">plausible wrong value</a> instead of
+  noise.
   <br><br>
   <b>A screen recording defeats it.</b> Sixty frames averaged reads back at 100%.
-  That is inherent to the method rather than a gap in it, and the panel on the
-  right is the cheap attack failing, not the expensive one.
+  That is inherent to the method rather than a gap in it.
 </p>
 
 <section class="compare">
@@ -35,50 +36,6 @@
   this. <span id="hz"></span>
 </p>
 
-<h2>Everything here, by what you are trying to do</h2>
-<div class="cards">
-  <a class="card" href="sandbox.html"><b>Sandbox</b><span>Every setting on a real
-    element, with masking and leak measured as you change them.</span></a>
-  <a class="card" href="scenarios.html"><b>Examples</b><span>Walls of text, single
-    values, the same secret across five palettes, and why the default is the default.</span></a>
-  <a class="card" href="promo.html"><b>Promo reel</b><span>The thirty-second
-    version, mixing plain text with protected values.</span></a>
-</div>
-
-<h3>Reference</h3>
-<div class="cards">
-  <a class="card" href="api.html"><b>API</b><span>Every attribute and export, with
-    what each one trades — almost nothing here is free.</span></a>
-  <a class="card" href="styling.html"><b>Styling</b><span>Fonts, sizing, radius,
-    and the one rule: never scale the canvas with CSS.</span></a>
-  <a class="card" href="algorithms.html"><b>Algorithms &amp; comfort</b><span>Every
-    splitting mode measured, including the ones that failed and why.</span></a>
-</div>
-
-<h3>Design</h3>
-<div class="cards">
-  <a class="card" href="pairing.html"><b>Background pairing</b><span>Grounds and
-    textures that make the block read as part of the page, with a strength slider.</span></a>
-  <a class="card" href="contrast.html"><b>Contrast</b><span>Palettes above 4:1
-    that still mask, and the hue slider to find your own.</span></a>
-</div>
-
-<h3>Attack it</h3>
-<div class="cards">
-  <a class="card" href="security.html"><b>Security check</b><span>A fresh secret
-    each load, no text box anywhere, searched for across every readable surface.</span></a>
-  <a class="card" href="challenge.html"><b>Scraping challenge</b><span>Seeded values
-    behind the element. Extract them any way you can, then check your answers.</span></a>
-</div>
-
-<h3>Experimental</h3>
-<div class="cards">
-  <a class="card" href="scratch.html"><b>Scratch to reveal</b><span>Unmask only a
-    trail under the pointer, and time how long it lasts.</span></a>
-  <a class="card" href="fake.html"><b>Fake value</b><span>Give a capture a
-    plausible wrong answer instead of obvious noise.</span></a>
-</div>
-
 <h2>Install</h2>
 <pre>npm install nocap</pre>
 <pre>import 'nocap';                      // registers &lt;nocap-secret&gt;
@@ -86,20 +43,19 @@
 const el = document.querySelector('nocap-secret');
 el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</pre>
 <p>
-  Full attribute reference and integration notes are in the
+  Every attribute and export is documented in the
+  <a href="https://github.com/acieshk/nocap/blob/main/docs/API.md">API reference</a>,
+  with integration notes in the
   <a href="https://github.com/acieshk/nocap#readme">README</a>.
 </p>
 
 <h2>What this defeats, and what defeats it</h2>
 <table>
   <tr><th>Threat</th><th>Result</th></tr>
-  <tr><td>Reflexive Print Screen, Win+Shift+S, Cmd+Shift+4</td><td class="ok">Blocked</td></tr>
-  <tr><td>DOM-reading AI agents, LLM scrapers, accessibility-tree readers</td><td class="ok">Blocked absolutely</td></tr>
-  <tr><td>Single-frame OCR and vision-model ingestion</td><td class="ok">Blocked</td></tr>
-  <tr><td>View Source, Save Page As, Reader mode, Select All and Copy</td><td class="ok">Blocked absolutely</td></tr>
+  <tr><td>Print Screen, Win+Shift+S, Cmd+Shift+4, single-frame OCR</td><td class="ok">Blocked</td></tr>
+  <tr><td>DOM-reading AI agents, LLM scrapers, View Source, Select All</td><td class="ok">Blocked absolutely</td></tr>
   <tr><td>A blur or denoise pass over one captured frame</td><td class="ok">Blocked at block ≥ stroke width</td></tr>
-  <tr><td>Screen recording, or any burst of frames</td><td class="bad">Defeated</td></tr>
-  <tr><td>A phone camera pointed at the screen</td><td class="bad">Defeated</td></tr>
+  <tr><td>Screen recording, a phone camera, any burst of frames</td><td class="bad">Defeated</td></tr>
   <tr><td>DevTools: a breakpoint, a heap snapshot, a canvas dump</td><td class="bad">Defeated</td></tr>
 </table>
 <div class="note">
@@ -107,19 +63,11 @@ el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</p
   the cost of a casual look and removes the value from every surface a machine
   reads without being told to. It does not defeat someone who has decided to come
   after the value, because the client belongs to them. The
-  <a href="security.html">security check</a> runs both defeats for real rather
-  than asking you to take the row above on trust.
+  <a href="security.html">security check</a> and the
+  <a href="challenge.html">scraping challenge</a> run both defeats for real
+  rather than asking you to take the table on trust; everything else in the
+  sidebar measures a claim on a live element.
 </div>
-
-<h2>Why the page is this grey</h2>
-<p>
-  <code>#404040</code> is close to the darkest colour that still has room to carry
-  noise, so the panels blend into the page and the split still works. A near-black
-  page cannot do both: at <code>#0d0d0e</code> the best text colour that still
-  hides the value is <code>#1a1a1a</code>, which nobody can read, and every
-  readable choice leaks 0.53 or worse. If your design is darker than this, put the
-  secret on a panel at this level rather than on the page itself.
-</p>
 
   </main>
 </div>
