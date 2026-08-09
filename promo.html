@@ -660,16 +660,29 @@ const beats = SCRIPT.map((b) => {
     // dominating. 0.4 is a fifth more leak for a visible tint, on beats that are
     // not the ones inviting a screenshot.
     if (b.chroma) el.setAttribute('chroma', String(b.chroma));
-    // The photographed beats also carry a decoy in CHROMINANCE: a plausible
-    // wrong value at the background's own luminance, in fine blocks the eye
-    // greys out and a sensor keeps. Unlike the noise, this survives frame
-    // averaging -- it is in the mean -- so a capture of any length comes away
-    // holding a value-shaped lie. The closing caption says so out loud, and
-    // the honest limit is the library's: one greyscale conversion strips it,
-    // so this misleads pipelines and pasted screenshots, not someone who
-    // thinks to drop colour. A fresh shape-matched fake per load, same
-    // generator as the value itself.
-    if (b.shot) el.setAttribute('chroma-decoy', fakeLike(word));
+    // The photographed beats carry two decoys, split by what defeats them.
+    //
+    // FAKE mode is the one OCR falls for: each cycle plants a different
+    // plausible wrong value, added on one plane and subtracted on the other,
+    // so the viewer's mean holds none of it while a single captured frame
+    // shows one at the strongest contrast the palette physics allow. Share
+    // 0.9, deliberately at the top of the range: where the decoy's ink falls
+    // the noise is nearly gone, because a decoy buried under the mask it is
+    // planted in convinces nobody -- the decoy must be the cleanest, most
+    // readable thing in the frame while the real value stays noise. Averaging
+    // a recording cancels these out.
+    //
+    // The CHROMA decoy is the one that survives that averaging: a wrong value
+    // at the background's own luminance, in fine blocks the eye greys out and
+    // a sensor keeps, riding in the mean itself. Its limit is one greyscale
+    // conversion.
+    //
+    // Fresh shape-matched fakes per load, same generator as the value itself.
+    if (b.shot) {
+      el.setAttribute('fake', 'auto');
+      el.setAttribute('fake-share', '0.9');
+      el.setAttribute('chroma-decoy', fakeLike(word));
+    }
     // NO edge-fade here, and the reason is worth keeping. It tapers the noise at
     // each element's own boundary, which is right for a lone element sitting on
     // a page. In a row of words every seam gets TWO taperings meeting, and the
@@ -899,12 +912,11 @@ function play(i) {
       cap.id = 'shotcap';
       // One line. The stack of captures is the argument; a paragraph under it
       // just competes with the command for the last thing read. The second
-      // clause is the chroma decoy, stated rather than sprung: each captured
-      // value block also carries a plausible WRONG value in colour at the
-      // background's luminance, which a viewer cannot resolve and a pixel
-      // reader can.
+      // clause is the decoys, stated rather than sprung: the readable value
+      // in each card is fake mode's planted lie, and a second one rides in
+      // the colour for captures long enough to average the first away.
       cap.innerHTML = '<b>the label survives, the value never does</b> &mdash; '
-        + 'and the colour channels hold a decoy value that was never the real one';
+        + 'the value you <i>can</i> read in a capture is a planted decoy, never the real one';
       box.replaceChildren(head, ...shots, cap);
       document.body.classList.add('ending');
 
