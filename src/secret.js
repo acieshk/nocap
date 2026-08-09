@@ -1787,11 +1787,30 @@ export class NocapSecret extends ElementBase {
     // property of the decoy rather than of the appearance, so the added and
     // subtracted copies still land on exactly the same pixels and cancel. It
     // just scatters them across the field instead of stacking two rows.
-    // Ranges keep the text inside the canvas at the smallest size.
-    const inks = decoys.map((d) =>
-      inkFor(d, (Math.random() - 0.5) * w * 0.26,
-                (Math.random() - 0.5) * h * 0.62,
-                0.8 + Math.random() * 0.45));
+    //
+    // Fit-clamped, because the fixed fractions were not. An element sizes its
+    // canvas snugly around the real value, and a decoy jittered past the edge
+    // is silently cropped by fillText: a capture then holds half a value,
+    // which reads as a rendering fault rather than a secret and gives the
+    // mechanism away. Each decoy is measured at its jittered size, shrunk
+    // until it fits, and offset only as far as keeps the whole string inside.
+    const basePx = +(small.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? 16);
+    const probe = makeCanvas(1, 1).getContext('2d');
+    const fontAt = (s) =>
+      small.replace(/(\d+(?:\.\d+)?)px/, () => `${Math.round(basePx * s)}px`);
+    const inks = decoys.map((d) => {
+      let s = 0.9 + Math.random() * 0.25;
+      probe.font = fontAt(s);
+      const wide = probe.measureText(d).width;
+      if (wide > w - 8) s = Math.max(0.3, s * ((w - 8) / wide));
+      probe.font = fontAt(s);
+      const fw = probe.measureText(d).width;
+      const fh = Math.round(basePx * s) * 1.2;
+      const dxMax = Math.max(0, (w - fw) / 2 - 3);
+      const dyMax = Math.max(0, (h - fh) / 2 - 2);
+      return inkFor(d, (Math.random() - 0.5) * 2 * dxMax * 0.9,
+                       (Math.random() - 0.5) * 2 * dyMax * 0.9, s);
+    });
 
     for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
