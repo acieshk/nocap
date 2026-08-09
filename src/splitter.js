@@ -491,12 +491,18 @@ function randomDraws(w, h, cfg) {
   }
 
   const chroma = cfg.chroma;
+  // One reused result object. The callers destructure immediately and never
+  // hold the reference, and this runs w*h*3 times per plane set, so the
+  // per-call literal was millions of short-lived allocations per rebuild.
+  const draw = { phase: 0, mag: 0 };
   return (x, y, c) => {
     const cy = ((y + oy) / scale) | 0;
     const cx = ((x + rowShift[cy]) / scale) | 0;
     const base = (cy * nw + cx) * 9;
     const sc = lat[base + c * 3 + 2] < chroma ? c : 0;
-    return { phase: lat[base + sc * 3], mag: lat[base + sc * 3 + 1] };
+    draw.phase = lat[base + sc * 3];
+    draw.mag = lat[base + sc * 3 + 1];
+    return draw;
   };
 }
 
@@ -508,11 +514,14 @@ function randomDraws(w, h, cfg) {
 function decoyDraws(decoy, w, h) {
   if (!decoy) throw new Error("splitFrames: mode 'decoy' requires opts.decoy");
   const { width: dw, height: dh, data: d } = decoy;
+  const draw = { phase: 0, mag: 0 };  // reused; see randomDraws
   return (x, y, c) => {
     const sx = Math.min(dw - 1, ((x * dw) / w) | 0);
     const sy = Math.min(dh - 1, ((y * dh) / h) | 0);
     const v = d[(sy * dw + sx) * 4 + c] / 255;
-    return { phase: v, mag: Math.abs(v - 0.5) * 2 };
+    draw.phase = v;
+    draw.mag = Math.abs(v - 0.5) * 2;
+    return draw;
   };
 }
 
@@ -582,6 +591,10 @@ function toLight(v, gamma) {
 
 /** Contrast pre-emphasis around mid-grey, then compression into [lo, hi]. */
 function remap(src, contrast, lo, hi) {
+  // The default linear-light config asks for the identity here (contrast 1,
+  // full range), and this runs once per bank entry, so skipping the copy
+  // saves a full-image allocation and pass six times per rebuild.
+  if (contrast === 1 && lo === 0 && hi === 255) return src;
   const out = new Float32Array(src.data.length);
   const span = (hi - lo) / 255;
   for (let i = 0; i < out.length; i += 4) {
