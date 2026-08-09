@@ -52,11 +52,11 @@
 
 <h2>Why it is marked experimental</h2>
 <p>
-  <b>Blending and legibility are the same budget, and it is already spent.</b> The
-  decoy has to ride on the excursion the noise is not using. Push it harder and it
-  clips, stops cancelling, and ghosts into the mean where <i>you</i> would see it.
-  Keep it subtle enough to stay invisible to you and it is also faint in a
-  capture. Measured on the default palette:
+  <b>Blending and legibility are the same budget.</b> The decoy takes its share
+  of each ink pixel's excursion out of the noise, and the centre of the pair is
+  re-solved so the perceived value stays exact at every setting — the viewer
+  never sees the decoys arrive. The cost of a bigger share is quieter noise
+  where the decoy's ink falls, not ghosting. Measured on the default palette:
 </p>
 <table>
   <tr><th>Share of the budget</th><th>Decoy in a captured frame</th><th>Noise swing left</th></tr>
@@ -65,10 +65,15 @@
   <tr><td>35%</td><td>0.318</td><td class="warn">51.0</td></tr>
   <tr><td>50%</td><td>0.407</td><td class="warn">39.2</td></tr>
   <tr><td>70%</td><td class="ok">0.489</td><td class="bad">23.5</td></tr>
+  <tr><td><b>80% (default)</b></td><td class="ok">0.53</td><td class="bad">15.7</td></tr>
 </table>
 <p>
-  There is no setting that gives both, because it is one budget. Treat this as a
-  demonstration rather than something to ship.
+  The defaults sit at the loud end on purpose: share 0.8 with the decoy at full
+  size, because that is where a capture reads the decoy at roughly twice the
+  correlation of the real value. Below half size or half share the decoy scores
+  <i>under</i> the truth and convinces nobody, which is why the early defaults
+  shipped disabled. Experimental means it has had far less use than the rest of
+  the library, not that the mechanism is in doubt.
 </p>
 
 <h2>It needs a maskable palette</h2>

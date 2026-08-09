@@ -744,9 +744,21 @@ and decide on your own content whether it is tolerable.
 
 ## Fake values. Experimental
 
-> **Experimental.** It works, and the trade that used to make it marginal is
-> gone (see below), but it has had far less use than the rest of the library.
-> Verify it on your own content.
+> **Experimental.** It works at its defaults — measured, a captured frame reads
+> the decoy at roughly twice the correlation of the real value, raw and through
+> a blur, while the viewer-visible image moves by at most one code level — but
+> it has had far less use than the rest of the library. It needs a maskable
+> palette (`checkPalette` ratio 1.0+), and it draws the value centred, so the
+> alignment and spacing attributes do not apply while it is on. Verify it on
+> your own content.
+
+The defaults are `fake-share="0.8"` and `fake-size="1"`, and they are the
+result of a measurement rather than a compromise: the decoy only reads over
+the truth at full size with most of the budget. 0.1 shipped with the lower
+0.35/0.55 defaults, at which the decoy came out *fainter* in a capture than
+the value it covers (0.175 against 0.217), so 0.1 accepted the attribute,
+warned, and ignored it. The working point is now the default and the mode is
+live.
 
 
 Noise tells an attacker the capture failed, so they take another. A value in the
@@ -817,10 +829,14 @@ copies still land on exactly the same pixels and cancel.
 
 ## `<nocap-secret>`
 
+The full reference — every attribute with its range and what it trades, the
+`Flicker` runtime, and every export — is in [docs/API.md](docs/API.md). The
+table below is the short version.
+
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `scramble` | off | Store glyphs shuffled. See the DevTools table |
-| `fake` | **ignored in 0.1** | Accepted and warned about. The decoy reads fainter in a capture than the value it covers, so it convinces nobody. `fakeLike()` is still exported |
+| `fake` | off | `auto` / `number` / `text` / `random`. Each cycle carries a different plausible wrong value that a capture freezes and the viewer never sees. Experimental; needs a maskable palette. Draws the value centred (alignment and spacing attributes do not apply) |
 | `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
 | `amplitude` | `110` | Fraction of the headroom the colours allow |
 | `noise-scale` | `2 × stroke` | Noise block in device px, derived from the stroke rather than fixed. 6 at the default size and dpr 1, 12 at dpr 2. Setting it under twice the stroke warns |

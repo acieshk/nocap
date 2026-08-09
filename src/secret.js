@@ -379,9 +379,19 @@ export function resolveFake(attrs = {}) {
   return {
     // How much of a pixel's excursion budget the decoy may take. 0.9 rather
     // than 1 because at 1 the noise where the decoy falls is gone entirely.
-    share: Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.35))),
+    //
+    // 0.8, and the size below is 1.0, because those are the settings at which
+    // the mode does its job. The old 0.35/0.55 pair was measured and the decoy
+    // came out QUIETER in a captured frame than the secret it covers (0.068
+    // against 0.101 on synthetic glyphs, 0.175 against 0.217 in the browser),
+    // which is why 0.1 shipped with the mode disabled. At 0.8/1.0 the decoy
+    // reads at 0.212 against the real value's 0.121 raw, 0.174 against 0.102
+    // through a blur, with the viewer-visible ghost still at most one code
+    // level. The decoy only wins at full size with most of the budget, so
+    // that is the default rather than the compromise nobody measured.
+    share: Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.8))),
     // The decoy's font size relative to the real text.
-    sizeRatio: Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 0.55))),
+    sizeRatio: Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 1))),
   };
 }
 
@@ -711,8 +721,11 @@ export class NocapSecret extends ElementBase {
       else this.#flicker.start();
       return;
     }
-    if (name === 'max-dpr') {
-      // The cap changes the device size of the canvas, which resize owns.
+    if (name === 'max-dpr' || name === 'width' || name === 'height') {
+      // All three change the device size of the canvas, which resize owns.
+      // width and height were observed but used to fall through to a bare
+      // reconfigure, so the split rebuilt at the old size and the element
+      // never actually changed dimensions.
       this.#flicker.resize(
         +(this.getAttribute('width') ?? 260),
         +(this.getAttribute('height') ?? 56),
@@ -788,28 +801,27 @@ export class NocapSecret extends ElementBase {
     // `fake` drop the decoys and `watermark` with `scramble` drop the mark, both
     // silently. Same shape as the fake/scramble clash fixed earlier: modes that
     // add to each other cannot be selected between.
-    // Inert in 0.1, and this is the honest call rather than a cautious one.
     //
-    // Fake mode does not do its job. Measured on the shipped palette at the
-    // defaults, the decoy comes out QUIETER in a captured frame than the secret
-    // it is supposed to be covering, 0.175 against 0.217 with the sizes levelled.
-    // An attacker has no reason to believe it. Blending and legibility are one
-    // budget and it is already spent, so there is no setting that gives both.
+    // Fake mode was inert in 0.1 because at the old defaults (share 0.35, size
+    // 0.55) the decoy read FAINTER in a capture than the secret it covers,
+    // 0.175 against 0.217, so it misled nobody. The defaults moved to the
+    // measured working point instead: at share 0.8 and full size the decoy
+    // reads at roughly twice the real value's correlation in a captured frame,
+    // raw and blurred both, with the viewer-visible ghost at most one code
+    // level. See resolveFake for the numbers.
     //
-    // "Experimental" in a doc does not survive contact with someone who switches
-    // it on and assumes it works, so the attribute is accepted, warned about,
-    // and ignored. The generator behind it is fine and stays exported: fakeLike
-    // and detectFormat are what the security and challenge pages use to make
-    // fresh values, and they do that job well. It is the decoy RENDERING that
-    // does not work.
+    // fake and scramble are genuinely alternative draw paths for the value
+    // (one canvas draw against per-cell blits), so fake wins and says so,
+    // rather than one of them silently dropping.
     if (fakeMode && fakeMode !== 'off') {
-      warnOnce('fake-disabled',
-        `fake="${fakeMode}" is ignored in this release. Measured at the defaults the ` +
-        'decoy reads fainter in a capture than the value it covers (0.175 against ' +
-        '0.217), so it misleads nobody. fakeLike() is still exported if you want ' +
-        'to generate a plausible value yourself.');
-    }
-    if (this.#chars) {
+      if (this.#chars) {
+        warnOnce('fake-scramble',
+          'fake and scramble are both set. Fake mode draws the value in a ' +
+          'single fillText, so scramble\'s per-cell draw (and its protection ' +
+          'against fillText hooks) does not apply while fake is on.');
+      }
+      await this.#drawFake(font, color, background, fakeMode, plain);
+    } else if (this.#chars) {
       await this.#drawScrambled(font, color, background);
     } else {
       await this.#drawPlain(font, color, background, plain);
@@ -1614,24 +1626,26 @@ export class NocapSecret extends ElementBase {
   }
 
   /**
-   * UNREACHABLE IN 0.1. The render dispatch no longer calls this, because the
-   * decoy reads fainter in a capture than the value it covers and so convinces
-   * nobody. Kept rather than deleted because the mechanism is sound and the
-   * measurements around it are the record of why it does not pay off: the
-   * budget is shared with the noise and it is already spent.
+   * Decoy planes: each cycle's pair carries a plausible wrong value, added on
+   * one frame and subtracted on the other, so a capture freezes a decoy at
+   * full contrast and the viewer never resolves any of them.
    *
-   * Two things follow from it being dead. The additive-modes test still asserts
-   * this method paints the watermark, which is now a check on code nobody runs.
-   * And anyone reviving it should re-measure first rather than trust the shape.
+   * Reinstated in 0.2 with the defaults moved to the measured working point
+   * (share 0.8, full size; see resolveFake). At the 0.1 defaults the decoy
+   * read fainter in a capture than the value it covered, which is why the 0.1
+   * dispatch ignored the attribute.
    */
   async #drawFake(font, color, background, mode, plain) {
     if (!this.#fakeWarned) {
       this.#fakeWarned = true;
       console.warn(
-        '[nocap-secret] fake mode is EXPERIMENTAL. It works. A capture reads a ' +
-          'plausible wrong value and the viewer sees none of them. But it has ' +
-          'had far less use than the rest of the library. Verify it on your own ' +
-          'content before relying on it.'
+        '[nocap-secret] fake mode is EXPERIMENTAL. At the defaults a captured ' +
+          'frame reads the decoy at roughly twice the correlation of the real ' +
+          'value, and the viewer sees none of it. But it has had far less use ' +
+          'than the rest of the library, and it needs a maskable palette ' +
+          '(checkPalette ratio 1.0+). Verify it on your own content before ' +
+          'relying on it. Note the value is drawn centred: text-align, ' +
+          'letter-spacing and padding do not apply while fake is on.'
       );
     }
     const { width: w, height: h } = this.#flicker.canvas;
@@ -1676,19 +1690,35 @@ export class NocapSecret extends ElementBase {
      * The same solve linearMeanTable() performs for the base split, applied
      * again after the decoy widens the pair. Light-mean is monotonic in the
      * centre, so a binary search converges.
+     *
+     * toLight through a 257-entry table with linear interpolation, not the
+     * piecewise curve directly: the search runs 22 iterations for every ink
+     * pixel of every channel of every cycle, and the pow() calls made that
+     * 530ms of main thread for a typical element. The lerp error is under
+     * 1e-5 in light, far below the one-code-level quantisation of the write.
+     * Built at the element's gamma; the old direct calls silently used 2.4
+     * whatever the gamma attribute said.
      */
+    const gamma = this.#options().gamma;
+    const L = new Float64Array(257);
+    for (let v = 0; v <= 256; v++) L[v] = toLight(Math.min(255, v), gamma);
+    const lightAt = (x) => {
+      const cl = x < 0 ? 0 : x > 255 ? 255 : x;
+      const f = cl | 0;
+      return L[f] + (L[f + 1] - L[f]) * (cl - f);
+    };
     const centreFor = (want, half) => {
       let lo = half;
       let hi = 255 - half;
       for (let i = 0; i < 22; i++) {
         const mid = (lo + hi) / 2;
-        if ((toLight(mid + half) + toLight(mid - half)) / 2 < want) lo = mid;
+        if ((lightAt(mid + half) + lightAt(mid - half)) / 2 < want) lo = mid;
         else hi = mid;
       }
       return (lo + hi) / 2;
     };
 
-    const feasibleHalf = feasibleHalfTable(this.#options().gamma);
+    const feasibleHalf = feasibleHalfTable(gamma);
     // Full headroom. At half, the decoy competed with the noise and read as a
     // ghost behind the real text. A capture is supposed to come away with the
     // decoy as the most legible thing in the frame.
@@ -1705,8 +1735,11 @@ export class NocapSecret extends ElementBase {
 
     // The real value, split normally: its mean is what the eye resolves. The
     // mark goes in here rather than into the decoy planes, so it lands in the
-    // mean and survives averaging, which is the point of it.
+    // mean and survives averaging, which is the point of it. The pattern too,
+    // for parity with #drawPlain: enabling fake must not silently strip a
+    // texture the element was showing.
     const base = splitFrames(paint((ctx) => {
+      this.#paintPattern(ctx, background, w, h);
       this.#paintWatermark(ctx, font, background, w, h);
       ctx.font = font;
       ctx.fillStyle = color;
@@ -1807,8 +1840,9 @@ export class NocapSecret extends ElementBase {
           // same way everywhere the ink falls, which is what makes a glyph.
           // Measured on the same simulation: 0.54. The re-solved centre keeps
           // the perceived value exact either way, 0.00 error in both.
-          const want = (toLight(b0) + toLight(b1)) / 2;
-          const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want))))];
+          // b0 and b1 are integer code values, so the table hits exactly.
+          const want = (L[b0] + L[b1]) / 2;
+          const cap = feasibleHalf[Math.round(Math.max(0, Math.min(255, toCode(want, gamma))))];
           // Split the pixel's whole budget between masking it and marking it.
           const { half, signed } = decoySplit(cap, share, amount, b0, b1);
           const centre = centreFor(want, half);

@@ -913,7 +913,10 @@ test('a size attribute has to be positive, not merely finite', async () => {
 test('resolveFake clamps at both ends and falls back on a malformed value', async () => {
   const { resolveFake } = await import('../src/secret.js');
 
-  assert.deepEqual(resolveFake(), { share: 0.35, sizeRatio: 0.55 });
+  // The measured working point: full size, most of the budget. At the old
+  // 0.35/0.55 pair the decoy read fainter in a capture than the value it
+  // covers, which is why 0.1 shipped with the mode disabled.
+  assert.deepEqual(resolveFake(), { share: 0.8, sizeRatio: 1 });
 
   // 1.0 would leave no noise at all where the decoy falls.
   assert.equal(resolveFake({ 'fake-share': '5' }).share, 0.9);
@@ -922,8 +925,8 @@ test('resolveFake clamps at both ends and falls back on a malformed value', asyn
   assert.equal(resolveFake({ 'fake-size': '0' }).sizeRatio, 0.1);
 
   // Same treatment the other attributes got: a non-number is not a zero.
-  assert.equal(resolveFake({ 'fake-share': 'abc' }).share, 0.35);
-  assert.equal(resolveFake({ 'fake-size': 'abc' }).sizeRatio, 0.55);
+  assert.equal(resolveFake({ 'fake-share': 'abc' }).share, 0.8);
+  assert.equal(resolveFake({ 'fake-size': 'abc' }).sizeRatio, 1);
 
   assert.equal(resolveFake({ 'fake-share': '0.5' }).share, 0.5);
 });
@@ -1087,4 +1090,108 @@ test('a texture in the image survives the split intact under linearLight', () =>
     assert.ok(Math.abs(after / before - 1) < 0.02,
       `texture should arrive intact at amplitude ${amplitude}, got ${(after / before).toFixed(3)}`);
   }
+});
+
+test('at the fake defaults, a captured plane reads the decoy over the truth', async () => {
+  // The property the 0.2 re-enable rests on, asserted end to end through the
+  // exported pieces #drawFake is built from. At the 0.1 defaults (share 0.35,
+  // size 0.55) this test FAILS: the decoy scores below the real value, which
+  // is why 0.1 shipped with the attribute accepted and ignored.
+  const { feasibleHalfTable, decoySplit, resolveFake } = await import('../src/secret.js');
+  const { toLight, toCode } = await import('../src/palette.js');
+
+  const { share, sizeRatio } = resolveFake();
+  assert.equal(sizeRatio, 1, 'the decoy must default to full size or it is quieter than the truth');
+
+  const W = 320, H = 96;
+  // Two disjoint stroke alphabets on the shipped palette's luma, so "reads the
+  // decoy" and "reads the truth" are different correlations, not one.
+  const glyphs = (w, h, stroke, phase, fg, bg) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = data[i + 1] = data[i + 2] = bg;
+      data[i + 3] = 255;
+    }
+    const cell = Math.floor(w / 8);
+    for (let c = 0; c < 8; c++) {
+      for (let s = 0; s < 5; s++) {
+        if ((c + s + phase) % 3 === 0) continue;
+        const vertical = (s + phase) % 2 === 0;
+        const x0 = c * cell + 3 + (vertical ? s * 5 : 0);
+        const y0 = Math.floor(h * 0.25) + (vertical ? 0 : s * 8);
+        for (let t = 0; t < (vertical ? Math.floor(h * 0.5) : cell - 8); t++) {
+          for (let k = 0; k < stroke; k++) {
+            const x = vertical ? x0 + k : x0 + t;
+            const y = vertical ? y0 + t : y0 + k;
+            if (x < 0 || x >= w || y < 0 || y >= h) continue;
+            const p = (y * w + x) * 4;
+            data[p] = data[p + 1] = data[p + 2] = fg;
+          }
+        }
+      }
+    }
+    return { width: w, height: h, data };
+  };
+
+  const realImg = glyphs(W, H, 4, 0, 166, 114);   // luma of #9ea6b4 on #6b7280
+  const decoyRef = glyphs(W, H, 4, 1, 166, 114);  // same alphabet, different arrangement
+  const ink = glyphs(W, H, 4, 1, 255, 0);         // coverage mask of the decoy
+
+  const cfg = { mode: 'amplitude', frames: 2, amplitude: 110, linearLight: true,
+    gamma: 2.4, contrast: 1, hardness: 1, chroma: 0, noiseScale: 8 };
+  const table = feasibleHalfTable(2.4);
+  const centreFor = (want, half) => {
+    let lo = half, hi = 255 - half;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      if ((toLight(mid + half) + toLight(mid - half)) / 2 < want) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+
+  let decoyLeak = 0, realLeak = 0, ghost = 0;
+  const SEEDS = 3;
+  for (let s = 0; s < SEEDS; s++) {
+    const base = splitFrames(realImg, cfg);
+    const set = base.map((pl) => ({ width: W, height: H,
+      data: new Uint8ClampedArray(pl.data) }));
+    for (let i = 0; i < ink.data.length; i += 4) {
+      const amount = ink.data[i] / 255;
+      if (amount <= 0.02) continue;
+      for (let c = 0; c < 3; c++) {
+        const b0 = base[0].data[i + c];
+        const b1 = base[1].data[i + c];
+        const want = (toLight(b0) + toLight(b1)) / 2;
+        const cap = table[Math.round(Math.max(0, Math.min(255, toCode(want))))];
+        const { half, signed } = decoySplit(cap, share, amount, b0, b1);
+        const centre = centreFor(want, half);
+        set[0].data[i + c] = centre + signed;
+        set[1].data[i + c] = centre - signed;
+      }
+    }
+    decoyLeak += leakScore(set[0], decoyRef) / SEEDS;
+    realLeak += leakScore(set[0], realImg) / SEEDS;
+    const mBase = perceivedMean(base, 2.4);
+    const mSet = perceivedMean(set, 2.4);
+    for (let i = 0; i < mBase.data.length; i += 4) {
+      ghost = Math.max(ghost, Math.abs(mBase.data[i] - mSet.data[i]));
+    }
+  }
+
+  assert.ok(decoyLeak > realLeak * 1.3,
+    `the decoy must read clearly over the truth, got decoy ${decoyLeak.toFixed(3)} ` +
+    `against real ${realLeak.toFixed(3)}`);
+  assert.ok(ghost <= 2,
+    `the viewer must not see the decoys arrive: perceived mean moved ${ghost} levels`);
+});
+
+test('the render dispatch reaches #drawFake, not a warn-and-ignore', async () => {
+  // 0.1's regression shape: the attribute accepted, warned about, and ignored,
+  // with nothing failing. Assert the dispatch actually routes to the method.
+  const src = await (await import('node:fs/promises')).readFile(
+    new URL('../src/secret.js', import.meta.url), 'utf8');
+  const render = src.slice(src.indexOf('  render = async'), src.indexOf('  /** Stop the alternation'));
+  assert.ok(/#drawFake\(/.test(render), 'render() must dispatch to #drawFake');
+  assert.ok(!/fake-disabled/.test(render), 'the ignore-path warning must be gone');
 });

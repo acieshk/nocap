@@ -131,15 +131,15 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><td>amplitude</td><td>~0.25</td><td>Every pixel present, every value displaced. Needs colour headroom. The default.</td></tr>
   <tr><td>aperture</td><td>~0.15</td><td>A band sweeps down; each frame carries one slice and genuinely lacks the rest. <b>Needs no colour headroom</b>, so it works at pure white. Costs a 6-frame cycle, which is 10Hz on a 60Hz panel — near the peak of temporal sensitivity.</td></tr>
   <tr class="exp"><td>interleave</td><td>~1.0</td><td>Kept as a counterexample. Splits <i>where</i> pixels are, and subsampled text reads fine.</td></tr>
-  <tr class="exp"><td>fake</td><td>ignored</td><td>Accepted, warned about, <b>not applied</b>. The decoy measured fainter in a capture (0.175) than the value it covers (0.217), so it convinces nobody. <code>fakeLike()</code> still exported.</td></tr>
+  <tr class="exp"><td>fake</td><td>off</td><td><code>auto</code> / <code>number</code> / <code>text</code> / <code>random</code>. Each cycle carries a different plausible wrong value: a capture freezes one at full contrast, the viewer resolves none. Needs a maskable palette (ratio 1.0+). Draws the value centred — alignment and spacing attributes are inert while on.</td></tr>
   <tr><td>scramble</td><td>—</td><td>Stores glyphs shuffled, so a heap search never finds the value in order. Obfuscation, not encryption.</td></tr>
   <tr class="exp"><td>chroma-decoy</td><td>—</td><td>A decoy in chrominance at zero luminance contrast. <b>Spatial, so it survives frame averaging</b> — the only thing here that does. Block 2–4px: 1px is annihilated by 4:2:0.</td></tr>
   <tr class="exp"><td>watermark</td><td>—</td><td>An identifier baked into chrominance at zero luminance contrast, so it survives the averaging that recovers the value and names the capture that leaked. <b>Attribution, not protection:</b> one greyscale conversion removes it — 0.996 correlation in colour, 0.020 after <code>-vf format=gray</code>. Casual leaks, not determined ones.</td></tr>
   <tr class="exp"><td>watermark-swing</td><td>60</td><td>Chroma excursion for the watermark. The direction is picked toward the side with headroom, so a blue-heavy ground moves toward yellow rather than quietly getting less swing than asked.</td></tr>
   <tr class="exp"><td>watermark-repeat</td><td>3</td><td>How many times the mark tiles, 1–8. More survives cropping; more is also easier to spot.</td></tr>
   <tr class="exp"><td>chroma-block</td><td>2</td><td>Block size in px for the chroma decoy and watermark. <b>Keep it ≥ 2:</b> 1px chroma is annihilated by the 4:2:0 subsampling every screenshot pipeline applies.</td></tr>
-  <tr class="exp"><td>fake-share</td><td>0.35</td><td>Share of the noise budget the decoy rides, 0–0.9. Blending and legibility are one budget: past ~0.5 the decoy ghosts into what <i>you</i> see.</td></tr>
-  <tr class="exp"><td>fake-size</td><td>0.55</td><td>Decoy glyph size as a ratio of the real type. Observed nowhere at one point, hence its row here — every attribute in this table is exercised on some page.</td></tr>
+  <tr class="exp"><td>fake-share</td><td>0.8</td><td>Share of each ink pixel's excursion budget the decoy takes, 0–0.9. The re-solved centre keeps the perceived value exact at every setting, so the cost of raising it is noise where the decoy's ink falls, not ghosting. Below ~0.5 the decoy reads under the truth and convinces nobody.</td></tr>
+  <tr class="exp"><td>fake-size</td><td>1</td><td>Decoy glyph size as a ratio of the real type. Full size is the default because it is the measured requirement: at 0.55 the decoy scored below the real value in a captured frame at every share.</td></tr>
 </table>
 
 <h2 id="scratch">Scratch</h2>
