@@ -975,7 +975,10 @@ function play(i, run) {
 
   if (b.drift) startDrift(b);
 
-  if (b.shot) {
+  // Under reduced motion the elements hold their readable mean, so a real
+  // screenshot READS the value and a card built from one plane would claim
+  // otherwise. The gallery only exists where it is true.
+  if (b.shot && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     // Taken once the words have arrived and stopped, so the geometry measured
     // here is the geometry a viewer would have captured. Collected rather than
     // shown now: they land together at the end, where two of them side by side
