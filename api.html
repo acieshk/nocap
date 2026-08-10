@@ -60,15 +60,18 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 
 <h2 id="strength">Strength</h2>
 <table class="api">
-  <tr><th>value</th><th>at the default size</th><th>what it trades</th></tr>
-  <tr><td>weak</td><td>amp 80, block 4</td><td>Block ratio 1.33, deliberately <b>under</b> the saturation point, so a blur has a radius worth trying. Calmest to look at.</td></tr>
-  <tr><td>medium</td><td>amp 110, block 6</td><td>Ratio 2.0, exactly saturated. The default.</td></tr>
-  <tr><td>strong</td><td>amp 127, block 8</td><td>Ratio 2.67, headroom. The most visually active.</td></tr>
+  <tr><th>value</th><th>what it trades</th></tr>
+  <tr><td>weak</td><td>The block sits deliberately <b>under</b> the saturation point, so a blur has a radius worth trying. Calmest to look at.</td></tr>
+  <tr><td>medium</td><td>Exactly saturated. The default, and the balanced point.</td></tr>
+  <tr><td>strong</td><td>Headroom. The most visually active.</td></tr>
 </table>
 <div class="note">
   These are tested points on the <b>masking</b> curve, not the comfort curve.
   All three read comfortably at the default size on a 60Hz panel, judged by one
-  person on one display. Large text is unmeasured.
+  person on one display. Large text is unmeasured. Use a preset rather than
+  tuning numbers; custom palettes and large-type deployments are a craft of
+  their own, and the <a href="promo.html">promo reel</a> shows what a tuned
+  deployment looks like.
 </div>
 
 <h2 id="split">The split</h2>
@@ -76,16 +79,16 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
   <tr><td>amplitude</td><td>110</td><td>How far each pixel is displaced, as a fraction of the headroom its colour allows. The biggest lever on raw leak. Capped by the palette, not by this number.</td></tr>
   <tr><td>noise-scale</td><td>2 × stroke, max 16</td><td>Block size in device px. Its <b>only</b> job is blur resistance: raw leak barely moves with it. Derived rather than set, because the right block follows the stroke, then capped by <code>noise-scale-max</code>. Warns when it lands under twice the stroke.</td></tr>
-  <tr><td>hardness</td><td>1</td><td>1 puts every pixel at full amplitude. Lower spreads the magnitudes and measures ~20% worse both raw and blurred, so 1 is right.</td></tr>
-  <tr><td>chroma</td><td>0</td><td>0 shares one draw across R/G/B, putting the whole budget into luminance, which is what the eye and OCR key on. 1 is per channel: rainbow static, and weaker. Measured 0.227 → 0.279 at block 12.</td></tr>
-  <tr><td>noise-profile</td><td>white</td><td><code>blue</code> high-passes the lattice, removing about a third of the low-frequency energy. Security unchanged. <b>Not true blue noise</b>, which needs void-and-cluster.</td></tr>
+  <tr><td>hardness</td><td>1</td><td>1 puts every pixel at full amplitude. Lower spreads the magnitudes and measures worse both raw and blurred, so 1 is right.</td></tr>
+  <tr><td>chroma</td><td>0</td><td>0 shares one draw across R/G/B, putting the whole budget into luminance, which is what the eye and OCR key on. 1 is per channel: rainbow static, and measurably weaker.</td></tr>
+  <tr><td>noise-profile</td><td>white</td><td><code>blue</code> high-passes the lattice, which may read calmer. Security unchanged. <b>Not true blue noise</b>, which needs void-and-cluster.</td></tr>
   <tr><td>frames</td><td>2, or 6 for aperture</td><td>Planes per cycle. Chosen by the mode. More frames means a slower cycle, and cycle rate is refresh ÷ frames.</td></tr>
   <tr><td>gamma</td><td>2.4</td><td>Display EOTF. Decides where plane centres are solved, so a wrong value shifts the perceived colour.</td></tr>
   <tr><td>contrast</td><td>1</td><td>Pre-emphasis. Not needed under linear light, which does not compress.</td></tr>
-  <tr><td>ink-bias</td><td>0</td><td>Leans amplitude toward the content. <b>The trap:</b> where the noise is, is where the text is. Measured 0.263 → 0.304 → 0.441 → 0.732 across its range. Past 0.3, measure on your own content.</td></tr>
+  <tr><td>ink-bias</td><td>0</td><td>Leans amplitude toward the content. <b>The trap:</b> where the noise is, is where the text is, and the measured leak climbs steadily across its range. Past 0.3, measure on your own content.</td></tr>
   <tr><td>pattern</td><td>none</td><td><code>dots</code>, <code>hatch</code>, <code>grid</code> or <code>grain</code> drawn into the element background, so a page texture continues across the boundary. <b>Not free</b>, unlike a page texture: the split carries it as content.</td></tr>
-  <tr><td>pattern-strength</td><td>16</td><td>In code levels. 6 is free and invisible, 16 reads and costs ~15% of the leak margin, 34 costs a third. <b>Judge it live:</b> it survives into the mean at full strength, but one frame spans ~117 levels and buries it, so a screenshot shows nothing at any setting.</td></tr>
-  <tr><td>noise-scale-max</td><td>16</td><td>Ceiling on the derived block. Chosen for looks, not security: at stroke 11 over 30 seeds every block from 11 to 30 sat inside one confidence interval, while blocks past ~16 read as tiles.</td></tr>
+  <tr><td>pattern-strength</td><td>16</td><td>In code levels. The measured leak cost rises with the strength. <b>Judge it live:</b> it survives into the mean at full strength, but a single frame spans far more levels and buries it, so a screenshot shows nothing at any setting.</td></tr>
+  <tr><td>noise-scale-max</td><td>16</td><td>Ceiling on the derived block. Chosen for looks, not security: measured, the leak does not care where the ceiling sits, while large blocks read as tiles rather than noise.</td></tr>
   <tr><td>edge-fade</td><td>0</td><td>Tapers noise to nothing within N px of the element edge, so a lone block dissolves. <b>Free</b>, unlike ink-bias: it follows the canvas rectangle, which an attacker already sees. <b>Not for adjacent elements</b> -- two taperings meet at a seam and read as a border.</td></tr>
 </table>
 
@@ -94,16 +97,16 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
   <tr><td>color</td><td>#9ea6b4</td><td>Text colour.</td></tr>
   <tr><td>background</td><td>#6b7280</td><td>Background. Usually the one to move: <b>the page has to meet the secret</b>, because a near-black ground has no room to carry noise.</td></tr>
-  <tr><td>fit</td><td>on</td><td>Moves an unmaskable palette into one that masks, keeping hue and light-or-dark character. <code>off</code> keeps your exact hex and loses the protection. White on black goes 0.00 → 1.01.</td></tr>
+  <tr><td>fit</td><td>on</td><td>Moves an unmaskable palette into one that masks, keeping hue and light-or-dark character. <code>off</code> keeps your exact hex and loses the protection. White on black goes from masking nothing to masking.</td></tr>
   <tr><td>adaptive</td><td>off</td><td>Exact colours, amplitude capped per pixel to their own headroom.</td></tr>
 </table>
 <div class="note">
   <b>Masking and contrast are the same axis pointing opposite ways.</b> Ratio is
-  <code>min(swing) / |text − background|</code>, so high contrast <i>is</i> a
-  large separation. Masking arrives around 2:1 and below. At 4:1 the best pair
-  reaches 0.59 masking and leaks 0.63 -- readable. <b>Saturation destroys masking,
-  not hue:</b> a saturated colour pins a channel at an extreme, and a pinned
-  channel cannot be displaced.
+  <code>min(swing) / separation</code>, so high contrast <i>is</i> a large
+  separation, and past a point a single frame stays readable however the rest
+  is set. The <a href="contrast.html">contrast page</a> measures the trade live
+  on any pair. <b>Saturation destroys masking, not hue:</b> a saturated colour
+  pins a channel at an extreme, and a pinned channel cannot be displaced.
 </div>
 
 <h2 id="type">Type</h2>
@@ -128,9 +131,9 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 <h2 id="modes">Modes</h2>
 <table class="api">
   <tr><th>mode</th><th>leak</th><th>what it does, and what it costs</th></tr>
-  <tr><td>amplitude</td><td>~0.25</td><td>Every pixel present, every value displaced. Needs colour headroom. The default.</td></tr>
-  <tr><td>aperture</td><td>~0.15</td><td>A band sweeps down; each frame carries one slice and genuinely lacks the rest. <b>Needs no colour headroom</b>, so it works at pure white. Costs a 6-frame cycle, which is 10Hz on a 60Hz panel -- near the peak of temporal sensitivity.</td></tr>
-  <tr class="exp"><td>interleave</td><td>~1.0</td><td>Kept as a counterexample. Splits <i>where</i> pixels are, and subsampled text reads fine.</td></tr>
+  <tr><td>amplitude</td><td>masks</td><td>Every pixel present, every value displaced. Needs colour headroom. The default.</td></tr>
+  <tr><td>aperture</td><td>masks</td><td>A band sweeps down; each frame carries one slice and genuinely lacks the rest. <b>Needs no colour headroom</b>, so it works at pure white. Costs a 6-frame cycle, which is 10Hz on a 60Hz panel -- near the peak of temporal sensitivity.</td></tr>
+  <tr class="exp"><td>interleave</td><td>readable</td><td>Kept as a counterexample. Splits <i>where</i> pixels are, and subsampled text reads fine.</td></tr>
   <tr class="exp"><td>fake</td><td>off</td><td><code>auto</code> / <code>number</code> / <code>text</code> / <code>random</code>. Each cycle carries a different plausible wrong value: a capture freezes one at full contrast, the viewer resolves none. Needs a maskable palette (ratio 1.0+). Draws the value centred -- alignment and spacing attributes are inert while on.</td></tr>
   <tr><td>scramble</td><td> -- </td><td>Stores glyphs shuffled, so a heap search never finds the value in order. Obfuscation, not encryption.</td></tr>
   <tr class="exp"><td>chroma-decoy</td><td> -- </td><td>A decoy in chrominance at zero luminance contrast. <b>Spatial, so it survives frame averaging</b> -- the only thing here that does. Block 2-4px: 1px is annihilated by 4:2:0.</td></tr>
@@ -138,8 +141,8 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr class="exp"><td>watermark-swing</td><td>60</td><td>Chroma excursion for the watermark. The direction is picked toward the side with headroom, so a blue-heavy ground moves toward yellow rather than quietly getting less swing than asked.</td></tr>
   <tr class="exp"><td>watermark-repeat</td><td>3</td><td>How many times the mark tiles, 1-8. More survives cropping; more is also easier to spot.</td></tr>
   <tr class="exp"><td>chroma-block</td><td>2</td><td>Block size in px for the chroma decoy and watermark. <b>Keep it ≥ 2:</b> 1px chroma is annihilated by the 4:2:0 subsampling every screenshot pipeline applies.</td></tr>
-  <tr class="exp"><td>fake-share</td><td>0.8</td><td>Share of each ink pixel's excursion budget the decoy takes, 0-0.9. The re-solved centre keeps the perceived value exact at every setting, so the cost of raising it is noise where the decoy's ink falls, not ghosting. Below ~0.5 the decoy reads under the truth and convinces nobody.</td></tr>
-  <tr class="exp"><td>fake-size</td><td>1</td><td>Decoy glyph size as a ratio of the real type. Full size is the default because it is the measured requirement: at 0.55 the decoy scored below the real value in a captured frame at every share.</td></tr>
+  <tr class="exp"><td>fake-share</td><td>0.8</td><td>Share of each ink pixel's excursion budget the decoy takes, 0-0.9. The re-solved centre keeps the perceived value exact at every setting, so the cost of raising it is noise where the decoy's ink falls, not ghosting. A quiet decoy reads under the truth and convinces nobody.</td></tr>
+  <tr class="exp"><td>fake-size</td><td>1</td><td>Decoy glyph size as a ratio of the real type. Full size is the default because it is the measured requirement: a smaller decoy scored below the real value in a captured frame at every share.</td></tr>
 </table>
 
 <h2 id="scratch">Scratch</h2>
@@ -161,7 +164,7 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 <table class="api">
   <tr><th>attribute</th><th>default</th><th>what it does, and what it costs</th></tr>
   <tr><td>pattern</td><td>none</td><td><code>dots</code>, <code>hatch</code> or <code>grid</code> -- the three the page CSS can mirror exactly (16px dot lattice, 3px/13px 45° hatch, 46px grid). Grain does not survive over noise and is deliberately absent.</td></tr>
-  <tr><td>pattern-strength</td><td>16</td><td>Levels the texture moves its ground, same meaning as the page's CSS alpha solved per ground. <b>A level count is not a visibility:</b> over noise spanning 0-255 the eye normalises it away, so matching the page's look takes roughly 2.5× the page's number -- the promo runs 50 against the page's 20, and the mismatch in numbers is what makes them look equal.</td></tr>
+  <tr><td>pattern-strength</td><td>16</td><td>Levels the texture moves its ground, same meaning as the page's CSS alpha solved per ground. <b>A level count is not a visibility:</b> over noise spanning the full range the eye normalises it away, so matching the page's look takes a good deal more than the page's own number, and the mismatch in numbers is what makes them look equal.</td></tr>
   <tr><td>pattern-layer</td><td>back</td><td><code>back</code> draws it into the canvas: the split carries it, so it is capped by the ground's headroom and vanishes in a still capture. <code>front</code> composites it over the canvas: free (added identically to every frame, the planes still average to target plus a constant), full-strength on any ground, and it survives a screenshot -- at the cost of competing with the glyphs. It adds no protection either way; an attacker who knows the pattern subtracts it.</td></tr>
   <tr><td>pattern-offset-x / pattern-offset-y</td><td>0</td><td>Phase, in CSS px: where the element sits relative to the pattern's origin, so the lattice continues through the block instead of restarting at its edge. The front layer also reads the live custom properties <code>--nocap-pattern-ox/oy</code>, which land without a repaint.</td></tr>
   <tr><td>pattern-enter</td><td> -- </td><td><code>left</code> / <code>right</code> / <code>up</code> / <code>down</code> / <code>center</code>: the direction the front texture wipes in from, via clip-path keyframes. Without it the texture is simply shown -- the failure mode is no animation, never no texture.</td></tr>
