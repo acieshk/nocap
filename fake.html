@@ -54,7 +54,7 @@
 <p>
   <b>Blending and legibility are the same budget.</b> The decoy takes its share
   of each ink pixel's excursion out of the noise, and the centre of the pair is
-  re-solved so the perceived value stays exact at every setting — the viewer
+  re-solved so the perceived value stays exact at every setting -- the viewer
   never sees the decoys arrive. The cost of a bigger share is quieter noise
   where the decoy's ink falls, not ghosting. Measured on the default palette:
 </p>
@@ -136,7 +136,7 @@ function showFrames() {
       new ImageData(planes[i].data, planes[i].width, planes[i].height), 0, 0);
   }
   $('n').textContent = chip.decoys?.length ?? 0;
-  $('last').textContent = chip.lastDecoy ?? '—';
+  $('last').textContent = chip.lastDecoy ?? ' -- ';
 }
 
 function apply() {

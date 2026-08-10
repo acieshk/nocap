@@ -5,21 +5,21 @@ that shows a secret to a human but not to a scraper, an LLM with a browser tool,
 an accessibility-tree reader, an OCR pass, or **a single still capture**. It ships
 the attacks against itself so you can check the claim rather than take it.
 
-Two halves, and they are not equally strong. Say them separately.
+Two halves, and the first is the stronger claim.
 
 **Against anything that reads the page, it is absolute.** The text never becomes
 text. There is nothing in the DOM to find, so there is nothing to obfuscate and
 nothing to race.
 
-**Against capture, it defeats stills and a recording defeats it.** Measured with
-Tesseract on the same element: plain text as a control reads 100%, one captured
-frame reads 0%, that frame after a box blur reads 0%, and **sixty frames of a
-screencast naively averaged reads 100%**. That last one is not a clever attack.
-It is one CDP call and `mean()`. Anything that records video gets the value whole.
+**Against capture, it defeats the still.** Measured with Tesseract on the same
+element: plain text as a control reads 100%, one captured frame reads 0%, and
+that frame after a box blur still reads 0%.
 
-So: *raises the cost of a casual capture and defeats stills outright.* If your
-threat is someone who will record their screen, this is the wrong tool and no
-setting in it changes that.
+One honest sentence before the features: **no client-side display technique is
+a 100% solution**, because a screen must show what a person can read. nocap
+removes the value from every surface a machine reads on its own, defeats the
+still capture outright, and pairs with the layer-up pieces in [Scope](#scope)
+for everything stronger.
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
@@ -110,7 +110,7 @@ That is the whole API for most uses. It renders as soon as it has a value.
 **Using a framework?** The element is a standard custom element, so
 [React](#react), [Vue](#vue), [Svelte](#svelte) and [Angular](#angular) all
 render it directly, no wrapper package. The one rule everywhere: the value
-goes in through the `secret` *property*, never a template *attribute* — an
+goes in through the `secret` *property*, never a template *attribute* -- an
 attribute would write the plaintext into your markup, which is the thing this
 library exists to prevent.
 
@@ -374,7 +374,7 @@ Svelte sets properties on custom elements when it can, so the binding is direct:
 ### Angular
 
 `CUSTOM_ELEMENTS_SCHEMA` is what stops the compiler rejecting the unknown tag,
-and `[secret]` in brackets is a *property* binding — Angular's idiomatic syntax
+and `[secret]` in brackets is a *property* binding -- Angular's idiomatic syntax
 is already the safe one. Never write it as `secret="..."` without brackets:
 that is an attribute, and it puts the value in the DOM.
 
@@ -439,40 +439,27 @@ the DOM, so scrapers and DOM-reading AI agents get nothing at all.
 
 ---
 
-## What this defeats, and what defeats it
+## What this defeats
 
-The claims are narrow on purpose. Read this before building on it | Threat | Result |
+The claims are narrow on purpose | Threat | Result |
 | --- | --- |
 | Reflexive Print Screen / Win+Shift+S / Cmd+Shift+4 | **Blocked**. The capture lands on one plane |
 | DOM-reading AI agents, LLM scrapers, accessibility-tree readers | **Blocked absolutely**. The secret is never a DOM node |
 | Single-frame OCR / vision-model ingestion | **Blocked**. One frame is noise |
 | View Source, `curl`, Save Page As, Select-All + Copy | **Blocked**. Verified live in the demo |
 | Quick phone photo | **Usually blocked**. Short exposure lands on one plane |
-| **Screenshot + a box blur** | **Weakened.** Denoising recovers a lot. See the block-size table |
-| **Screen recording + temporal averaging** | **Defeated.** `ffmpeg -i cap.mp4 -vf tmix=frames=2 out.mp4` |
-| **Burst screenshots** | **Defeated.** Average them, or keep the readable one |
-| Casual DevTools poke. Heap search, one-line `fillText` hook | **Slowed** by `scramble`. Yields the glyphs without their order |
-| **Anyone with DevTools and intent** | **Defeated.** The canvas must hold the arranged image, so averaging a run of frames recovers it |
+| Screenshot + a box blur | **Blocked** at the calibrated block size (block at 2x the stroke; see the block-size table) |
+| Casual DevTools poke | **Slowed** by `scramble`: a heap search finds nothing, a one-line hook yields glyphs without their order |
 
-The re-encode row is the one with no attacker in it. Per-pixel noise is the most
-expensive thing in a frame to encode, so an encoder under a bitrate budget throws
-it away and keeps the strokes. The denoise attack, performed for free, by
-software nobody asked. Measured on real x264 at screen-share bitrates, worst
-decoded frame moved 0.181 → 0.268 against the mean. Weakened, not defeated: 0.27
-is still not readable. Treat the exact figure as one run of a noisy statistic,
-and probably a lower bound, since a real share starves a small chip of bits far
-harder than a test frame that is nothing but noise.
-
-The averaging limit is information-theoretic, not an implementation gap:
-**anything your eye can integrate, software can integrate better.** No tuning
-fixes it. `averageFrames()` and `denoisedLeak()` ship so you can run both attacks
-against your own settings. If you can't, you don't know what you're shipping.
-
-For protection that holds against a determined attacker the mechanism is the
-compositor, not the content: `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`
-on Windows, `NSWindow.sharingType = .none` on macOS, `FLAG_SECURE` on Android.
-Layer nocap on top of those, never instead. For documents, per-user forensic
-watermarking changes behaviour more than any technical speed bump.
+There is no 100% client-side solution and this table does not claim one; the
+element even ships its own measurements (`measureLeak()`, `averageFrames()`,
+`denoisedLeak()`) so you verify the rows above on your settings instead of
+taking them on trust. For guarantees that hold past what a display layer can
+promise, the mechanism is the compositor, not the content:
+`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows,
+`NSWindow.sharingType = .none` on macOS, `FLAG_SECURE` on Android. Layer nocap
+on top of those, never instead. For documents, per-user forensic watermarking
+changes behaviour more than any technical speed bump.
 
 ## Check your own page
 
@@ -505,39 +492,25 @@ Same idea as shipping `averageFrames()` and `denoisedLeak()`: those attack the
 pixels, this attacks the page around them. Put it in a test so a leak fails CI
 rather than being noticed later.
 
-The last row never reports clean. The canvas has to hold the arranged image or
-nobody could read it, so a run of frames averaged together is the plaintext, and
-no mode changes that.
+The last row never reports clean; it is the audit's honesty line, and the
+reason anything stronger than a display layer lives under [Scope](#scope).
 
 ⚠️ It takes the plaintext, because it has to search for it. So the value exists
 in one more place while the call runs. Development and tests, not a production
 render path.
 
-## How DevTools defeats it
+## What `scramble` adds
 
-`scramble` is an optional mode that stores glyphs shuffled with a separate slot
-map and paints each back into place. It moves several of these attacks. It does
-not move the one that matters | Attack | Default | With `scramble` |
-| --- | --- | --- |
-| **Average a run of frames off the canvas** | plaintext | **plaintext** |
-| Breakpoint on the `secret` setter | plaintext | plaintext |
-| Read the element's private fields | plaintext | reconstructable |
-| Hook `fillText` on both 2D prototypes | whole secret, one call | glyphs, no order |
-| Heap snapshot, search for the string | found | not found |
+`scramble` stores the glyphs shuffled, with their positions kept separately,
+and paints each one back into place. No JS value ever holds the plaintext in
+order, so a heap-snapshot search finds nothing and a casual console poke gets
+single characters without their arrangement.
 
-The first row settles it, and no mode changes it: **the canvas must hold the
-correctly-arranged image, or you could not read it either.** A short run of frames averaged
-together is the plaintext. Verified live in the demo, which recovers it
-identically with and without `scramble`. Scrambling protects how the value sits in JS memory
-and does blunt the one-line `fillText` dump, but it is obfuscation, not
-encryption. Both the shuffled glyphs and their position map are live fields on
-the element, and the setter still receives the plaintext before any of it happens.
-
-A `fillText` hook has to patch **`OffscreenCanvasRenderingContext2D`** as well. Text is rasterised off-screen, so patching only `CanvasRenderingContext2D`
-catches nothing and makes the default look safe when it is not.
-
-The real line is **automated pipeline vs. targeted attacker**. nocap defeats the
-pipeline and never the person who has decided to come after the value.
+It is obfuscation rather than encryption, and it is priced accordingly: it
+raises the cost of a casual look. No client-side technique can promise more
+against someone determined, because the client belongs to them; the real line
+is **automated pipeline vs. targeted attacker**, and for the latter the
+guarantees live in the layer-up pieces under [Scope](#scope).
 
 ## Scope
 
@@ -622,9 +595,9 @@ checkPalette({ color: '#9ea6b4', background: '#6b7280' })
 
 | ratio | measured leak | verdict |
 | --- | --- | --- |
-| ≥ 1.0 | 0.08 – 0.22 | good |
-| 0.5 – 1.0 | ~0.3 | fair |
-| < 0.5 | 0.47 – 0.79 | **do not ship** |
+| ≥ 1.0 | 0.08 - 0.22 | good |
+| 0.5 - 1.0 | ~0.3 | fair |
+| < 0.5 | 0.47 - 0.79 | **do not ship** |
 
 Correlated at −0.73 against denoised leak over 28 palettes. Light headroom, the
 obvious metric, correlates −0.06. No better than chance, because light is
@@ -774,9 +747,9 @@ and decide on your own content whether it is tolerable.
 
 ## Fake values. Experimental
 
-> **Experimental.** It works at its defaults — measured, a captured frame reads
+> **Experimental.** It works at its defaults -- measured, a captured frame reads
 > the decoy at roughly twice the correlation of the real value, raw and through
-> a blur, while the viewer-visible image moves by at most one code level — but
+> a blur, while the viewer-visible image moves by at most one code level -- but
 > it has had far less use than the rest of the library. It needs a maskable
 > palette (`checkPalette` ratio 1.0+), and it draws the value centred, so the
 > alignment and spacing attributes do not apply while it is on. Verify it on
@@ -859,8 +832,8 @@ copies still land on exactly the same pixels and cancel.
 
 ## `<nocap-secret>`
 
-The full reference — every attribute with its range and what it trades, the
-`Flicker` runtime, and every export — is in [docs/API.md](docs/API.md). The
+The full reference -- every attribute with its range and what it trades, the
+`Flicker` runtime, and every export -- is in [docs/API.md](docs/API.md). The
 table below is the short version.
 
 | Attribute | Default | Meaning |

@@ -42,12 +42,12 @@
     <label class="f" title="static: no motion, the baseline. sine: smooth predictable drift, a 2-parameter model. random: an independent jump every frame, nothing to model." style="min-width:190px"><span>Motion</span>
       <select id="motion">
         <option value="static">static (baseline)</option>
-        <option value="sine" selected>sine — smooth, predictable</option>
-        <option value="random">random — jump every frame</option>
+        <option value="sine" selected>sine -- smooth, predictable</option>
+        <option value="random">random -- jump every frame</option>
       </select></label>
     <label class="f" title="How far the value moves, in CSS pixels. Integer pixels only: a sub-pixel shift resamples the canvas toward its mean, which is the very attack this defends against."><span>Amplitude <em id="ampV">12</em>px</span>
       <input type="range" id="amp" min="0" max="40" value="12"></label>
-    <label class="f" title="1 moves the whole block together. Higher splits it into independent regions that each move on their own, so there is no single shift to undo — closer to per-word motion."><span>Independent regions <em id="bandV">1</em></span>
+    <label class="f" title="1 moves the whole block together. Higher splits it into independent regions that each move on their own, so there is no single shift to undo -- closer to per-word motion."><span>Independent regions <em id="bandV">1</em></span>
       <input type="range" id="bands" min="1" max="6" value="1"></label>
     <label class="f" title="How many frames the attacker averages. A real recording is 60 per second, so a few seconds is hundreds."><span>Frames captured <em id="frV">64</em></span>
       <input type="range" id="frames" min="8" max="160" step="8" value="64"></label>
@@ -77,35 +77,35 @@
 
 <h2>What the three panels are</h2>
 <ul>
-  <li><b>One screenshot</b> is a single captured frame — what a still capture or
+  <li><b>One screenshot</b> is a single captured frame -- what a still capture or
       a phone photo gets. It should always be noise; that is the base defence and
       motion has nothing to do with it.</li>
   <li><b>Naive average</b> is the lazy recording attack: average every frame as
       recorded. With no motion it reads the value straight back. With motion it
       smears, because the value is no longer on the same pixels.</li>
   <li><b>Motion recovered</b> is the honest attacker: this page knows the exact
-      motion it applied, so it shifts every frame back before averaging — which
+      motion it applied, so it shifts every frame back before averaging -- which
       is what a competent attacker's motion estimation aims to do. This is the
       <i>ceiling</i> of what motion can be made to give up.</li>
 </ul>
 
 <h2>What to try</h2>
 <ul>
-  <li><b>static</b> — all three around the same. Averaging wins; this is the
+  <li><b>static</b> -- all three around the same. Averaging wins; this is the
       known defeat, no motion involved.</li>
-  <li><b>sine, amplitude 12</b> — naive smears a little, motion-recovered snaps
+  <li><b>sine, amplitude 12</b> -- naive smears a little, motion-recovered snaps
       back to fully readable. A smooth drift is two numbers to guess.</li>
-  <li><b>random, amplitude 12+</b> — naive smears hard. Motion-recovered still
+  <li><b>random, amplitude 12+</b> -- naive smears hard. Motion-recovered still
       wins, because the value is fully present once each frame is placed. Random
       only removes the <i>shortcut</i> of a formula.</li>
-  <li><b>regions 6, random</b> — the block breaks into independently moving
+  <li><b>regions 6, random</b> -- the block breaks into independently moving
       pieces, closest to per-word motion. Hardest naive result, same recovered
       result.</li>
 </ul>
 
 <div class="note">
   <b>The recovered panel is the point.</b> However hard the naive average smears,
-  the value is still fully there — motion hides <i>where</i> it is, not
+  the value is still fully there -- motion hides <i>where</i> it is, not
   <i>whether</i> it is, and the value is the high-contrast pattern an attacker
   locks onto to undo the motion. This is why nocap ships drift as a visual on the
   promo and makes no protection claim for it. The
@@ -115,7 +115,7 @@
 <div class="note" style="border-left-color:#7a6134;background:#332b1a;color:#d9bd80">
   <b>The honest gap.</b> The middle panel is a <i>naive</i> attacker and the
   right is one who recovers the motion perfectly. A real attacker lands between
-  them, depending on how good their motion estimation is — this page does not
+  them, depending on how good their motion estimation is -- this page does not
   ship that estimator, so it shows the two bounds rather than pretending to know
   where a given attacker falls. And the motion smooth enough to read comfortably
   is the motion easiest to recover: the same single budget as everything else.
@@ -160,8 +160,8 @@ function loop(now) {
   if (!t0) t0 = now;
   const f = Math.round((now - t0) / (1000 / 60));
   const [ox, oy] = offsetAt(f);
-  // Integer px, translate not transform (transform is free here — no entrance
-  // rule — but translate keeps the preview honest to what the promo does).
+  // Integer px, translate not transform (transform is free here -- no entrance
+  // rule -- but translate keeps the preview honest to what the promo does).
   chip.style.translate = `${ox}px ${oy}px`;
 }
 function restart() { cancelAnimationFrame(raf); t0 = 0; seed = 1; raf = requestAnimationFrame(loop); }
@@ -259,7 +259,7 @@ function runAttack() {
   const kind = $('motion').value, A = +$('amp').value;
   let v;
   if (kind === 'static' || A === 0) {
-    v = '<b>Static.</b> The naive average already reads the value back — this is the '
+    v = '<b>Static.</b> The naive average already reads the value back -- this is the '
       + 'plain recording defeat, with no motion in play.';
   } else if (rLazy < 0.4 && rSmart > 0.7) {
     v = `<b>Motion smears the lazy attack (r ${rLazy.toFixed(2)}), and a motion-aware `
@@ -269,7 +269,7 @@ function runAttack() {
     v = `<b>Recovered at r ${rSmart.toFixed(2)}.</b> Even where the naive average `
       + `holds up (r ${rLazy.toFixed(2)}), placing each frame back exposes the value.`;
   } else {
-    v = `naive r ${rLazy.toFixed(2)}, recovered r ${rSmart.toFixed(2)}. Try more frames — `
+    v = `naive r ${rLazy.toFixed(2)}, recovered r ${rSmart.toFixed(2)}. Try more frames -- `
       + 'the recovered panel climbs as the attacker gets more to average.';
   }
   $('verdict').innerHTML = v;

@@ -1,7 +1,7 @@
 {
   "name": "nocap",
   "version": "0.2.0",
-  "description": "Prevent screenshots of text on the web. Anti-screenshot, anti-AI-scraper display: frames alternate at refresh rate so your eye reads the secret and a single screen capture gets noise \u2014 and the text never enters the DOM.",
+  "description": "Prevent screenshots of text on the web. Anti-screenshot, anti-AI-scraper display: frames alternate at refresh rate so your eye reads the secret and a single screen capture gets noise -- and the text never enters the DOM.",
   "type": "module",
   "main": "src/index.js",
   "exports": {

@@ -189,7 +189,7 @@ export function scratchLingerKeep(dt, linger) {
  * leaves whatever font happened to be set before.
  *
  * Both are the same failure: garbage in, nothing drawn, no error. Every numeric
- * attribute goes through here instead — coerce, check, fall back to the
+ * attribute goes through here instead -- coerce, check, fall back to the
  * documented default, and say so once.
  */
 /** Deliberately odd so a real font string cannot collide with it. */

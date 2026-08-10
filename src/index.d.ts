@@ -23,7 +23,7 @@ export interface SplitOptions {
   mode?: SplitMode;
   /** Planes per cycle. 2 is almost always right. */
   frames?: number;
-  /** 0–127. Fraction of the headroom the colours allow. */
+  /** 0-127. Fraction of the headroom the colours allow. */
   amplitude?: number;
   /** Pre-emphasis. Not needed under `linearLight`, which does not compress. */
   contrast?: number;
