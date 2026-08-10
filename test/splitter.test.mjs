@@ -387,7 +387,7 @@ test('semantic decoys survive a second look', async () => {
 
 test('the package barrel imports outside a browser', async () => {
   // Next, Astro and Remix all evaluate module top-level on the server, so a bare
-  // `import 'nocap'` must not throw there. secret.js defines a web component, so
+  // `import 'nocap-js'` must not throw there. secret.js defines a web component, so
   // this only holds because its base class falls back when HTMLElement is absent.
   const m = await import('../src/index.js');
   for (const name of ['splitFrames', 'checkPalette', 'fakeLike', 'Flicker', 'NocapSecret']) {

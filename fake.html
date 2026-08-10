@@ -98,7 +98,7 @@
   You can call the generator directly, without the element, which is also how the
   <a href="security.html">security check</a> makes a fresh secret on every load:
 </p>
-<pre>import { fakeLike, detectFormat, passesLuhn } from 'nocap';
+<pre>import { fakeLike, detectFormat, passesLuhn } from 'nocap-js';
 
 detectFormat('4111 1111 1111 1111').describe   // "16-digit card number"
 fakeLike('4111 1111 1111 1111')                // "5327 8801 4429 6613"

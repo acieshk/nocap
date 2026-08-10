@@ -22,7 +22,7 @@ still capture outright, and pairs with the layer-up pieces in [Scope](#scope)
 for everything stronger.
 
 [![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
-[![npm](https://img.shields.io/npm/v/nocap)](https://www.npmjs.com/package/nocap)
+[![npm](https://img.shields.io/npm/v/nocap-js)](https://www.npmjs.com/package/nocap-js)
 [![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/acieshk/nocap/blob/main/LICENSE)
 
 | What a screenshot captures | What you see |
@@ -78,7 +78,7 @@ setting in this library changes that.
 Verify it on your own page rather than trusting the table:
 
 ```js
-import { auditPage } from 'nocap';
+import { auditPage } from 'nocap-js';
 const report = await auditPage(secret);
 if (!report.clean) throw new Error(`leaked in ${report.found.join(', ')}`);
 ```
@@ -86,11 +86,11 @@ if (!report.clean) throw new Error(`leaked in ${report.found.join(', ')}`);
 ## Quick start
 
 ```
-npm i nocap
+npm i nocap-js
 ```
 
 ```js
-import 'nocap';   // registers <nocap-secret>
+import 'nocap-js';   // registers <nocap-secret>
 ```
 
 ```html
@@ -170,17 +170,17 @@ tested points on the comfort curve.
 
 ### Registering the element
 
-`import 'nocap'` has the side effect of calling `customElements.define`. Import
+`import 'nocap-js'` has the side effect of calling `customElements.define`. Import
 it once, anywhere that runs in the browser.
 
 ```js
-import 'nocap';
+import 'nocap-js';
 ```
 
 Without a bundler, point a module script at the file directly:
 
 ```html
-<script type="module" src="https://unpkg.com/nocap@0.2/src/index.js"></script>
+<script type="module" src="https://unpkg.com/nocap-js@0.2/src/index.js"></script>
 ```
 
 The module is safe to import on a server. It falls back to a plain base class
@@ -317,7 +317,7 @@ though, so keyboard and screen reader users need that alternative even more.
 
 ```jsx
 import { useEffect, useRef } from 'react';
-import 'nocap';
+import 'nocap-js';
 
 export function Secret({ value, strength = 'medium' }) {
   const ref = useRef(null);
@@ -336,7 +336,7 @@ there.
 
 ```vue
 <script setup>
-import 'nocap';
+import 'nocap-js';
 import { ref, watchEffect } from 'vue';
 const el = ref(null);
 const props = defineProps({ value: String });
@@ -362,7 +362,7 @@ Svelte sets properties on custom elements when it can, so the binding is direct:
 
 ```svelte
 <script>
-  import 'nocap';
+  import 'nocap-js';
   export let value;
 </script>
 
@@ -377,7 +377,7 @@ is already the safe one. Never write it as `secret="..."` without brackets:
 that is an attribute, and it puts the value in the DOM.
 
 ```ts
-import 'nocap';
+import 'nocap-js';
 import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 @Component({
@@ -397,7 +397,7 @@ export class SecretComponent {
 Three measurements, all exported, all runnable in your own tests:
 
 ```js
-import { checkPalette, auditPage } from 'nocap';
+import { checkPalette, auditPage } from 'nocap-js';
 
 // 1. Can these colours carry noise at all?
 const pal = checkPalette({ color: '#6d6d6d', background: '#404040' });
@@ -469,7 +469,7 @@ the scrapers and DOM-reading agents the canvas defeats, and none of them appear
 in View Source, so they are easy to miss.
 
 ```js
-import { auditPage } from 'nocap';
+import { auditPage } from 'nocap-js';
 
 const { clean, found, report } = await auditPage(accountNumber);
 console.log(report);
@@ -563,7 +563,7 @@ light-on-dark, desaturates only when a pinned channel leaves it no choice, and
 warns once saying what it swapped. `fit="off"` restores the old behaviour.
 
 ```js
-import { fitToBand } from 'nocap';
+import { fitToBand } from 'nocap-js';
 fitToBand({ color: '#ffffff', background: '#000000' });
 // { color, background, ratio, moved: true, contrast }
 ```
@@ -868,7 +868,7 @@ import {
   Flicker, splitFrames, averageFrames, boxBlur, denoisedLeak,
   leakScore, planeRange, suggestConfig, checkPalette, codeSwing,
   detectFormat, fakeLike,
-} from 'nocap';
+} from 'nocap-js';
 ```
 
 `Flicker` drives a canvas. Everything in `splitter.js` and `palette.js` is pure

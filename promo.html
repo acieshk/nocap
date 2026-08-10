@@ -40,9 +40,16 @@
   .beat.burst .word { transition:opacity .18s ease, transform .34s cubic-bezier(.05,.85,.1,1);
                       --nocap-enter-dur:.36s; --nocap-enter-delay:.04s }
   .beat.on .word { opacity:1; transform:translate3d(0,0,0) !important }
+  /* The bar spans the whole viewport width, so it takes no pointer events
+     itself -- an invisible full-width strip near the replay button would eat
+     taps, the same lesson the stage and the install line each learned. The one
+     link inside it opts back in. */
   .note { position:fixed; left:0; right:0; bottom:max(24px, env(safe-area-inset-bottom));
           padding:0 18px; text-align:center; font-size:13.5px; line-height:1.45; color:#e6e6e6; opacity:0;
+          pointer-events:none;
           transition:opacity .5s ease, color .7s ease }
+  .note a { color:inherit; font-weight:600; text-decoration:underline;
+            text-underline-offset:3px; pointer-events:auto }
   /* Light beats flip the chrome, or the captions vanish into the page. */
   body.light .note { color:#2e2e2e } body.light .note b { color:#000 }
   body.light #hint { color:#575757 }
@@ -50,15 +57,38 @@
                        border-color:rgba(0,0,0,.22) }
   /* The install line is plain text, not a canvas. It is the one line in the reel
      that has to be readable and selectable rather than protected. */
-  .term { max-width:100%; overflow:hidden; text-overflow:ellipsis; margin:0 8px;
-          cursor:pointer; user-select:all; pointer-events:auto;
+  /* Inert until its beat is on. The base style said pointer-events:auto, which
+     kept the line clickable and selectable through every other beat while
+     invisible -- a stray mid-reel click silently copied to the clipboard. Same
+     mistake the replay button made, same fix: the .beat.on rule re-enables it
+     only while it is actually on screen. */
+  .term { position:relative; max-width:100%; overflow:hidden; text-overflow:ellipsis;
+          margin:0 8px; cursor:pointer; user-select:none; pointer-events:none;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;
           color:#4ade80; background:#0c140f; border:1px solid #1e3326;
           border-radius:10px; padding:26px 42px; white-space:nowrap;
-          text-shadow:0 0 22px rgba(74,222,128,.4) }
+          text-shadow:0 0 22px rgba(74,222,128,.4);
+          transition:opacity .42s ease, transform .52s cubic-bezier(.16,.9,.3,1),
+                     border-color .3s ease, box-shadow .3s ease }
+  /* text, not all: select-all painted the whole line in the native blue
+     highlight on every click, which is the browser doing the copied badge's job
+     badly. Dragging still selects, and the clipboard fallback selects the whole
+     line itself when it needs to. */
+  .beat.on .term { pointer-events:auto; user-select:text }
   .term .p { color:#3f7a56; margin-right:14px; user-select:none }
-  .term[data-copied]::after { content:'copied'; position:absolute; margin-left:18px;
-                              font-size:15px; color:#3f7a56; letter-spacing:.06em }
+  /* The copied acknowledgement: the border warms toward the phosphor green and
+     a small pill fades in against the right edge. It was a bare word absolutely
+     positioned past the box's right side, which could wrap or leave the
+     viewport; inside the padding it has nowhere to overflow to. */
+  .term::after { content:'copied'; position:absolute; right:11px; top:50%;
+                 transform:translateY(-50%) translateX(6px); opacity:0;
+                 font-size:12px; letter-spacing:.06em; line-height:1;
+                 color:#8fe6ae; background:#14261b; border:1px solid #2f5a3d;
+                 border-radius:999px; padding:4px 10px; pointer-events:none;
+                 transition:opacity .25s ease, transform .25s ease }
+  .term[data-copied] { border-color:#2f7a4a;
+                       box-shadow:0 0 0 1px rgba(74,222,128,.25), 0 0 24px rgba(74,222,128,.18) }
+  .term[data-copied]::after { opacity:1; transform:translateY(-50%) }
   .note.on { opacity:1 }
   .note b { color:#fff; font-weight:600 }
   #code { position:absolute; opacity:0; transition:opacity .6s ease; text-align:left;
@@ -424,7 +454,7 @@ const SCRIPT = [
   // green on near-black cannot mask: measured, #326744 on #1b281f comes out at
   // 0.39 and the best dark pair I found reached 0.68. Rendering it as plain text
   // means no compromise on either side, instead of a bad ratio AND a muted green.
-  { pattern: 'hatch', text: 'npm i nocap', hold: 2600, hue: 140, sat: 0.11, plain: true },
+  { pattern: 'hatch', text: 'npm i nocap-js', hold: 2600, hue: 140, sat: 0.11, plain: true },
 ];
 
 // Where each word starts before it settles at the centre. Per word rather than
@@ -556,9 +586,9 @@ const beats = SCRIPT.map((b) => {
         term.dataset.copied = '1';
         setTimeout(() => { delete term.dataset.copied; }, 1400);
       } catch {
-        // Clipboard needs a permission and a secure context. user-select:all
-        // means one click already selects the whole line, so say that instead of
-        // reporting a failure at someone who can just press Ctrl+C.
+        // Clipboard needs a permission and a secure context. Selecting the
+        // whole line leaves the viewer one Ctrl+C from done, which beats
+        // reporting a failure at someone who can finish the job themselves.
         getSelection().selectAllChildren(term);
       }
     };
@@ -948,7 +978,11 @@ function play(i, run) {
         box.style.bottom = 'auto';
       });
     }
-    note.innerHTML = 'MIT &middot; <b>github.com/acieshk/nocap</b>';
+    // A real link, not bold text that looks like one. The repo address is the
+    // only place the reel points at, so it should be one click rather than a
+    // retype. Brand and repo stay `nocap`; only the npm package is `nocap-js`.
+    note.innerHTML = 'MIT &middot; '
+      + '<a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a>';
     note.classList.add('on');
     replay.classList.add('on');
     return;

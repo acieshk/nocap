@@ -134,7 +134,7 @@ const TEXT_DEFAULTS = {
  */
 /**
  * Extending HTMLElement directly makes this module unimportable outside a
- * browser, which breaks `import 'nocap'` under SSR. Next, Astro and Remix all
+ * browser, which breaks `import 'nocap-js'` under SSR. Next, Astro and Remix all
  * evaluate module top-level on the server. Falling back to a plain base keeps
  * the barrel importable there. `customElements.define` is already guarded below,
  * so nothing registers and nothing renders until it reaches a browser.

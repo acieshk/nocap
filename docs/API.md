@@ -5,12 +5,12 @@ trades. Almost nothing here is free: most knobs move masking strength, visual
 calm, and colour fidelity against each other, and the notes say which way.
 
 ```js
-import 'nocap';                               // registers <nocap-secret>
-import { Flicker, splitFrames, checkPalette } from 'nocap';   // the barrel
-import { NocapSecret } from 'nocap/secret';   // or per-module subpaths
-import { splitFrames } from 'nocap/splitter';
-import { checkPalette } from 'nocap/palette';
-import { fakeLike } from 'nocap/fake';
+import 'nocap-js';                               // registers <nocap-secret>
+import { Flicker, splitFrames, checkPalette } from 'nocap-js';   // the barrel
+import { NocapSecret } from 'nocap-js/secret';   // or per-module subpaths
+import { splitFrames } from 'nocap-js/splitter';
+import { checkPalette } from 'nocap-js/palette';
+import { fakeLike } from 'nocap-js/fake';
 ```
 
 The package is plain ES modules, no build step, no dependencies. The barrel is
@@ -25,7 +25,7 @@ until the module reaches a real DOM.
 ```html
 <nocap-secret strength="medium"></nocap-secret>
 <script type="module">
-  import 'nocap';
+  import 'nocap-js';
   document.querySelector('nocap-secret').secret = await fetchAccountNumber();
 </script>
 ```
@@ -230,7 +230,7 @@ The runtime under the element, usable directly on any canvas with any drawable
 source.
 
 ```js
-import { Flicker } from 'nocap';
+import { Flicker } from 'nocap-js';
 const f = new Flicker(canvas, { amplitude: 110, linearLight: true, chroma: 0 });
 f.resize(320, 74);                      // CSS px; backs with device pixels
 await f.setText('4471-0092-8834', { color: '#9ea6b4', background: '#6b7280' });
@@ -351,7 +351,7 @@ passesLuhn(fakeLike('4111 1111 1111 1111'))    // true
 ## Page audit (`nocap`, `auditPage`)
 
 ```js
-import { auditPage } from 'nocap';
+import { auditPage } from 'nocap-js';
 const { clean, found, report } = await auditPage(secretValue);
 console.log(report);
 ```

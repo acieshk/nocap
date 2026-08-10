@@ -38,8 +38,8 @@
 </p>
 
 <h2>Install</h2>
-<pre>npm install nocap</pre>
-<pre>import 'nocap';                      // registers &lt;nocap-secret&gt;
+<pre>npm install nocap-js</pre>
+<pre>import 'nocap-js';                      // registers &lt;nocap-secret&gt;
 
 const el = document.querySelector('nocap-secret');
 el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</pre>
@@ -63,7 +63,7 @@ el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</p
 </p>
 
 <h3>React</h3>
-<pre>import 'nocap';
+<pre>import 'nocap-js';
 import { useEffect, useRef } from 'react';
 
 function AccountNumber({ value }) {
@@ -77,7 +77,7 @@ function AccountNumber({ value }) {
 <pre>// main.js -- the tag is a custom element, not a Vue component
 app.config.compilerOptions.isCustomElement = (tag) =&gt; tag === 'nocap-secret';</pre>
 <pre>&lt;script setup&gt;
-import 'nocap';
+import 'nocap-js';
 defineProps(['account']);
 &lt;/script&gt;
 
@@ -87,7 +87,7 @@ defineProps(['account']);
 &lt;/template&gt;</pre>
 
 <h3>Angular</h3>
-<pre>import 'nocap';
+<pre>import 'nocap-js';
 import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 @Component({
