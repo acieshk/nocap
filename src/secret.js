@@ -623,6 +623,8 @@ export class NocapSecret extends ElementBase {
   #scratch = null;      // { mask, ctx, raf, pointer }
   #hint = null;         // the scratch affordance, an overlay rather than canvas
   #fg = null;           // pattern-layer="front": texture over the canvas, free
+  #io = null;           // viewport observer, so off-screen elements sit still
+  #inView = true;       // the observer's last word; true where it does not exist
 
   connectedCallback() {
     if (this.#canvas) return;
@@ -712,6 +714,32 @@ export class NocapSecret extends ElementBase {
       this.#dpr()
     );
 
+    // Watch the viewport, so an element nobody can see does not animate.
+    //
+    // Measured before this existed: an element 3000px below the fold ticked at
+    // the full 60Hz. Every element is its own rAF loop, so a page with many of
+    // them paid for all of them however few were on screen -- the promo hand-
+    // pauses its thirty-nine for exactly this reason, and pages that do not
+    // know to should not need to. 128px of margin starts the cycle just before
+    // the element scrolls in, so it arrives already alternating instead of
+    // unfreezing at the edge.
+    //
+    // The default is RUNNING, and the observer's job is to pause. The first
+    // build had it the other way -- frozen until the observer said visible --
+    // and that makes the observer load-bearing for ever showing anything:
+    // an environment that delays or drops the callback (headless virtual
+    // time does) left a fully visible element dead. This way an off-screen
+    // element costs at most the frame or two before the first callback lands,
+    // and every failure mode degrades to the old always-run behaviour.
+    if (typeof IntersectionObserver === 'function') {
+      this.#io = new IntersectionObserver((entries) => {
+        this.#inView = entries[entries.length - 1].isIntersecting;
+        this.#syncRunning();
+      }, { rootMargin: '128px' });
+      this.#io.observe(this);
+    }
+    this.#inView = true;
+
     // A value can be set before the element is in the document, and on re-attach
     // #secret survives while the flicker does not. Without this both cases leave
     // a blank canvas and no warning.
@@ -724,9 +752,31 @@ export class NocapSecret extends ElementBase {
       cancelAnimationFrame(this.#scratch.raf);
       this.#scratch = null;
     }
+    this.#io?.disconnect();
+    this.#io = null;
     this.#flicker?.destroy();
     this.#flicker = null;
     this.#canvas = null;
+  }
+
+  /**
+   * The single decision point for whether the cycle runs.
+   *
+   * It runs only when every gate agrees: the element has rendered, `paused`
+   * is not set, and the viewport can actually see it. Everything that used to
+   * start or stop the flicker directly funnels through here, because two call
+   * sites disagreeing is how an element below the fold came to burn a frame's
+   * work sixty times a second. Halting parks on plane 0: one plane is what a
+   * screenshot gets, so it is by definition safe to leave sitting visible.
+   */
+  #syncRunning() {
+    if (!this.#flicker || !this.#revealed) return;
+    if (this.#inView && !this.hasAttribute('paused')) {
+      this.#flicker.start();
+    } else {
+      this.#flicker.stop();
+      this.#flicker.showPlane(0);
+    }
   }
 
   attributeChangedCallback(name) {
@@ -734,11 +784,10 @@ export class NocapSecret extends ElementBase {
     // An element that is not being looked at has no reason to burn a frame.
     // Thirty-nine of them animating at once dragged the whole page to ~41Hz,
     // which puts the two-plane cycle at 21Hz -- inside the band the flicker
-    // warning exists to complain about. Pausing the ones that are not on
-    // screen is what keeps the visible ones at full rate.
+    // warning exists to complain about. `paused` is the manual gate; the
+    // viewport observer above is the automatic one; #syncRunning holds both.
     if (name === 'paused') {
-      if (this.hasAttribute('paused')) this.#flicker.stop();
-      else this.#flicker.start();
+      this.#syncRunning();
       return;
     }
     if (name === 'max-dpr' || name === 'width' || name === 'height') {
@@ -849,16 +898,14 @@ export class NocapSecret extends ElementBase {
     this.#warnPalette();
     this.#syncScratch();
     this.#revealed = true;
-    // Paused means paused, including on first render. This line used to start
-    // the cycle unconditionally, and the attribute could not intervene: set
-    // before connect it found no flicker to stop, and setting the value then
-    // triggered render, which started it anyway. On the promo that meant all
-    // thirty-seven canvases animated from load until their beat had played
-    // once, and the paused/running counts looked right the whole time because
-    // they were counts of the attribute, not of the animation.
-    // Held on plane 0 instead: one plane is what paused shows by definition.
-    if (this.hasAttribute('paused')) this.#flicker.showPlane(0);
-    else this.#flicker.start();
+    // Plane 0 first so the canvas is never blank, then #syncRunning decides
+    // whether the cycle actually starts. It used to start unconditionally
+    // here, which on the promo meant all thirty-seven canvases animated from
+    // load until their beat had played once; then `paused` alone gated it,
+    // which still ran every unpaused element however far off screen it sat.
+    // One decision point now, and this is one of its callers.
+    this.#flicker.showPlane(0);
+    this.#syncRunning();
     this.#adaptBlock();
     this.dispatchEvent(new CustomEvent('render'));
   };

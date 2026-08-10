@@ -121,7 +121,26 @@ drawing nothing (which is what a canvas does with a non-finite coordinate).
 | `width` | `260` | CSS px. The canvas backs it with exact device pixels. |
 | `height` | `56` | CSS px. |
 | `max-dpr` | uncapped | Cap the devicePixelRatio the canvas renders at. The split, the bitmap bank, and every per-frame draw scale with dpr², and chunky noise gains nothing from 3×; a page with many elements should cap at 2. |
-| `paused` | off | boolean. Holds plane 0 (exactly what a screenshot lands on — one plane is by definition safe to sit on) instead of animating. Use for elements that are off-screen or numerous: dozens animating at once drag the page below the refresh rate the cycle needs. |
+| `paused` | off | boolean. Holds plane 0 (exactly what a screenshot lands on — one plane is by definition safe to sit on) instead of animating. This is the *manual* gate; scrolling off screen pauses automatically (below). |
+
+**Off-screen elements pause themselves.** Each element watches the viewport
+with an `IntersectionObserver` and halts its animation loop whenever it is more
+than 128px outside it, parking on plane 0. Measured before this existed: an
+element 3000px below the fold ticked at the full 60Hz. The margin restarts the
+cycle just before the element scrolls in, so it arrives already alternating.
+The element runs whenever it cannot tell — no `IntersectionObserver` in the
+environment, or its callback suppressed — so the failure mode is the old
+always-on behaviour, never a visible element sitting frozen.
+
+With **many elements on one page**, each runs its own loop, so the cost scales
+with how many are *actually in the viewport*, not how many exist. The ones on
+screen still all pay: dozens animating at once drag the page below the refresh
+rate the cycle needs, which is what `paused` and `max-dpr` are for. A hidden
+tab stops everything, since the browser suspends `requestAnimationFrame`.
+
+For full manual control: `paused` overrides the observer (an on-screen element
+with `paused` set stays parked), `el.stop()` halts and clears the canvas
+entirely, and `el.render()` brings it back.
 
 **Never scale the canvas with CSS.** Resampling averages the noise toward its
 mean and hands a capture the value back. Size with `width`/`height` attributes.
