@@ -54,6 +54,6 @@ document.querySelector('.side').innerHTML = `
   }</nav>
   <div class="foot">
     <a href="promo.html">Promo reel</a> &middot;
-    <a href="https://github.com/acieshk/nocap">GitHub</a> &middot;
-    <a href="https://github.com/acieshk/nocap#readme">Docs</a>
+    <a href="https://github.com/acieshk/nocap-js">GitHub</a> &middot;
+    <a href="https://github.com/acieshk/nocap-js#readme">Docs</a>
   </div>`;

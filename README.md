@@ -21,20 +21,20 @@ removes the value from every surface a machine reads on its own, defeats the
 still capture outright, and pairs with the layer-up pieces in [Scope](#scope)
 for everything stronger.
 
-[![test](https://github.com/acieshk/nocap/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap/actions/workflows/test.yml)
+[![test](https://github.com/acieshk/nocap-js/actions/workflows/test.yml/badge.svg)](https://github.com/acieshk/nocap-js/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/nocap-js)](https://www.npmjs.com/package/nocap-js)
-[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/acieshk/nocap/blob/main/LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/acieshk/nocap-js/blob/main/LICENSE)
 
 | What a screenshot captures | What you see |
 | --- | --- |
-| ![one captured frame](https://raw.githubusercontent.com/acieshk/nocap/main/docs/screenshot.png) | ![the perceived mean](https://raw.githubusercontent.com/acieshk/nocap/main/docs/perceived.png) |
+| ![one captured frame](https://raw.githubusercontent.com/acieshk/nocap-js/main/docs/screenshot.png) | ![the perceived mean](https://raw.githubusercontent.com/acieshk/nocap-js/main/docs/perceived.png) |
 
 Both are the same element at the same moment. The left is one plane straight out
 of the live pipeline. The right is the mean of that plane and its partner, which
 is what your visual system resolves. Neither is retouched. Regenerate them from
 the demo yourself.
 
-**[Live demo & playground](https://acieshk.github.io/nocap/)**
+**[Live demo & playground](https://acieshk.github.io/nocap-js/)**
 
 ## What a scraper gets
 
@@ -43,7 +43,7 @@ harder. This is not that, because the value is never in a form a parser can reac
 It is rasterised to a canvas and split across frames, so the DOM holds a
 `<canvas>` and nothing else.
 
-The [scraping challenge](https://acieshk.github.io/nocap/challenge.html) is a
+The [scraping challenge](https://acieshk.github.io/nocap-js/challenge.html) is a
 table of six records with the sensitive columns protected. Here is that table's
 own `innerText`, the property nearly every extraction pipeline reaches for first:
 
@@ -146,7 +146,7 @@ viewer experiences.
 What is known: the flicker between the two frames of a cycle carries the masking
 and cannot be reduced without reducing protection. The flicker between one cycle
 and the next carries nothing and is pure churn. Those are separated and measured
-on the [algorithms page](https://acieshk.github.io/nocap/algorithms.html).
+on the [algorithms page](https://acieshk.github.io/nocap-js/algorithms.html).
 Turning that comparison into "this setting is comfortable" needs eyes on a real
 display, and it has not been done.
 
@@ -158,10 +158,10 @@ tested points on the comfort curve.
 1. **Check your colours.** A secret is only maskable if its two colours can carry
    noise. `checkPalette({ color, background })` tells you, and the wrong pair
    leaves the value plainly readable in a screenshot. See
-   [Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
+   [Choosing colours](https://github.com/acieshk/nocap-js#choosing-colours).
 2. **Check your page.** `await auditPage(secret)` finds the value if your app
    leaked it into an input, an `aria-label`, or `localStorage`.
-3. **Read [what this defeats](https://github.com/acieshk/nocap#what-this-defeats).** A screen
+3. **Read [what this defeats](https://github.com/acieshk/nocap-js#what-this-defeats).** A screen
    recording beats it. That is inherent, not a bug.
 
 ---
@@ -275,10 +275,10 @@ strips rather than a passage of text.
 A pair that cannot carry noise gets moved into one that can, keeping the hue and
 the light-or-dark character and shrinking only the separation. Set `fit="off"` to
 keep your exact hex and accept that a single frame shows the value. See
-[Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
+[Choosing colours](https://github.com/acieshk/nocap-js#choosing-colours).
 
 **`letter-spacing`, `text-align` and `padding-*` do nothing while `scramble` is
-on** ([#14](https://github.com/acieshk/nocap/issues/14)). Scramble draws each
+on** ([#14](https://github.com/acieshk/nocap-js/issues/14)). Scramble draws each
 glyph into its own cell and places the cells itself, so there is no run of text
 to space and no single `fillText` to align. The font attributes do apply. The
 element warns when you set one of the inert ones together with `scramble`.
@@ -597,7 +597,7 @@ Two hard limits fall out:
 
 Put the secret on a **mid-tone panel**. It then matches its surroundings exactly
 *and* has room to be protected. `suggestConfig()` derives such a pair from a
-page's palette, and [the contrast page](https://acieshk.github.io/nocap/contrast.html)
+page's palette, and [the contrast page](https://acieshk.github.io/nocap-js/contrast.html)
 lets you check one interactively.
 
 `amplitude` is now a fraction of whatever headroom the colours allow, so
@@ -607,7 +607,7 @@ noise resists a blur far better but strobes below 120Hz, so 6 is the default.
 
 Past that, use a `strength` preset rather than tuning numbers. Custom palettes
 and large-type deployments are a craft of their own, and the
-[promo reel](https://acieshk.github.io/nocap/promo.html) shows what a tuned
+[promo reel](https://acieshk.github.io/nocap-js/promo.html) shows what a tuned
 deployment looks like.
 
 ### The noise block follows the stroke
@@ -913,25 +913,25 @@ This argument has not had a real accessibility review. It reads plausibly. Contr
 
 ## Demo
 
-Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
+Live: **<https://acieshk.github.io/nocap-js/>**. Or `npm run demo`, then
 <http://127.0.0.1:8787/>.
 
 | Page | What is on it |
 | --- | --- |
-| [API](https://acieshk.github.io/nocap/api.html) | Every attribute and export, with what each one trades |
-| [Overview](https://acieshk.github.io/nocap/) | The live, screenshot and denoise comparison, and the threat table |
-| [Promo reel](https://acieshk.github.io/nocap/promo.html) | Thirty seconds of a tuned deployment, the thing the rest builds |
-| [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | The masking engine, with leak measured as you change it |
-| [Styling](https://acieshk.github.io/nocap/styling.html) | Text, font and colour, with the stroke and block shown side by side |
-| [Scenarios](https://acieshk.github.io/nocap/scenarios.html) | A wall of text, single values, and the same secret across five palettes |
-| [Algorithms](https://acieshk.github.io/nocap/algorithms.html) | Every way of splitting a frame, on the same content, against three denoisers |
-| [Background pairing](https://acieshk.github.io/nocap/pairing.html) | Matching the element's texture and colour to the page around it |
-| [Contrast](https://acieshk.github.io/nocap/contrast.html) | The masking-vs-contrast trade, walked live with your own pair |
-| [Motion vs averaging](https://acieshk.github.io/nocap/motion.html) | What drift changes about a frame average, with both attacker bounds shown |
-| [Scraping challenge](https://acieshk.github.io/nocap/challenge.html) | A table a human reads and a crawler cannot, with the page auditing itself |
-| [Security check](https://acieshk.github.io/nocap/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
-| [Scratch to reveal](https://acieshk.github.io/nocap/scratch.html) | The trail, and what its length costs |
-| [Fake value](https://acieshk.github.io/nocap/fake.html) | Decoys, and why the budget does not stretch |
+| [API](https://acieshk.github.io/nocap-js/api.html) | Every attribute and export, with what each one trades |
+| [Overview](https://acieshk.github.io/nocap-js/) | The live, screenshot and denoise comparison, and the threat table |
+| [Promo reel](https://acieshk.github.io/nocap-js/promo.html) | Thirty seconds of a tuned deployment, the thing the rest builds |
+| [Sandbox](https://acieshk.github.io/nocap-js/sandbox.html) | The masking engine, with leak measured as you change it |
+| [Styling](https://acieshk.github.io/nocap-js/styling.html) | Text, font and colour, with the stroke and block shown side by side |
+| [Scenarios](https://acieshk.github.io/nocap-js/scenarios.html) | A wall of text, single values, and the same secret across five palettes |
+| [Algorithms](https://acieshk.github.io/nocap-js/algorithms.html) | Every way of splitting a frame, on the same content, against three denoisers |
+| [Background pairing](https://acieshk.github.io/nocap-js/pairing.html) | Matching the element's texture and colour to the page around it |
+| [Contrast](https://acieshk.github.io/nocap-js/contrast.html) | The masking-vs-contrast trade, walked live with your own pair |
+| [Motion vs averaging](https://acieshk.github.io/nocap-js/motion.html) | What drift changes about a frame average, with both attacker bounds shown |
+| [Scraping challenge](https://acieshk.github.io/nocap-js/challenge.html) | A table a human reads and a crawler cannot, with the page auditing itself |
+| [Security check](https://acieshk.github.io/nocap-js/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
+| [Scratch to reveal](https://acieshk.github.io/nocap-js/scratch.html) | The trail, and what its length costs |
+| [Fake value](https://acieshk.github.io/nocap-js/fake.html) | Decoys, and why the budget does not stretch |
 
 **The security page has no text box, on purpose.** Every other page lets you type
 a value, which is convenient and quietly ruins the test: a value you typed lives

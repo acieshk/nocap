@@ -980,9 +980,11 @@ function play(i, run) {
     }
     // A real link, not bold text that looks like one. The repo address is the
     // only place the reel points at, so it should be one click rather than a
-    // retype. Brand and repo stay `nocap`; only the npm package is `nocap-js`.
+    // retype. The brand stays `nocap`; the npm package and the repo both had
+    // to move to `nocap-js`, npm because of the existing `no-cap` and the repo
+    // so its name keeps matching what gets installed.
     note.innerHTML = 'MIT &middot; '
-      + '<a href="https://github.com/acieshk/nocap">github.com/acieshk/nocap</a>';
+      + '<a href="https://github.com/acieshk/nocap-js">github.com/acieshk/nocap-js</a>';
     note.classList.add('on');
     replay.classList.add('on');
     return;

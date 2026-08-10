@@ -73,12 +73,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/acieshk/nocap.git"
+    "url": "git+https://github.com/acieshk/nocap-js.git"
   },
   "bugs": {
-    "url": "https://github.com/acieshk/nocap/issues"
+    "url": "https://github.com/acieshk/nocap-js/issues"
   },
-  "homepage": "https://github.com/acieshk/nocap#readme",
+  "homepage": "https://github.com/acieshk/nocap-js#readme",
   "author": "acieshk",
   "license": "MIT",
   "types": "src/index.d.ts"
