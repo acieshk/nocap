@@ -134,7 +134,7 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <tr class="exp"><td>fake</td><td>off</td><td><code>auto</code> / <code>number</code> / <code>text</code> / <code>random</code>. Each cycle carries a different plausible wrong value: a capture freezes one at full contrast, the viewer resolves none. Needs a maskable palette (ratio 1.0+). Draws the value centred -- alignment and spacing attributes are inert while on.</td></tr>
   <tr><td>scramble</td><td> -- </td><td>Stores glyphs shuffled, so a heap search never finds the value in order. Obfuscation, not encryption.</td></tr>
   <tr class="exp"><td>chroma-decoy</td><td> -- </td><td>A decoy in chrominance at zero luminance contrast. <b>Spatial, so it survives frame averaging</b> -- the only thing here that does. Block 2-4px: 1px is annihilated by 4:2:0.</td></tr>
-  <tr class="exp"><td>watermark</td><td> -- </td><td>An identifier baked into chrominance at zero luminance contrast, so it survives the averaging that recovers the value and names the capture that leaked. <b>Attribution, not protection:</b> one greyscale conversion removes it -- 0.996 correlation in colour, 0.020 after <code>-vf format=gray</code>. Casual leaks, not determined ones.</td></tr>
+  <tr class="exp"><td>watermark</td><td> -- </td><td>An identifier baked into chrominance at zero luminance contrast, so it survives the averaging that recovers the value and names the capture that leaked. <b>Attribution, not protection:</b> a single greyscale conversion removes it. Casual leaks, not determined ones.</td></tr>
   <tr class="exp"><td>watermark-swing</td><td>60</td><td>Chroma excursion for the watermark. The direction is picked toward the side with headroom, so a blue-heavy ground moves toward yellow rather than quietly getting less swing than asked.</td></tr>
   <tr class="exp"><td>watermark-repeat</td><td>3</td><td>How many times the mark tiles, 1-8. More survives cropping; more is also easier to spot.</td></tr>
   <tr class="exp"><td>chroma-block</td><td>2</td><td>Block size in px for the chroma decoy and watermark. <b>Keep it ≥ 2:</b> 1px chroma is annihilated by the 4:2:0 subsampling every screenshot pipeline applies.</td></tr>
@@ -179,7 +179,7 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
 <table class="api">
   <tr><th>export</th><th>kind</th><th>what it is for</th></tr>
   <tr><td>splitFrames</td><td>core</td><td>One image to N planes. Pure, DOM-free, runs in Node.</td></tr>
-  <tr><td>averageFrames</td><td>core</td><td>Arithmetic mean -- what an attacker's ffmpeg computes.</td></tr>
+  <tr><td>averageFrames</td><td>core</td><td>Arithmetic mean -- what a re-encoded recording produces.</td></tr>
   <tr><td>perceivedMean</td><td>core</td><td>Mean in <b>light</b> -- what a viewer resolves. Differs from the above by ~19 levels.</td></tr>
   <tr><td>leakScore</td><td>metric</td><td>|Pearson r| between a plane and the truth. <b>Blind spot:</b> a mode inserting a large content-independent pattern scores better for it.</td></tr>
   <tr><td>boxBlur / gaussianBlur / medianFilter</td><td>attack</td><td>Shipped so a claim can be run. Box wins against block noise; median loses because at a radius that keeps strokes it sits inside one block.</td></tr>
@@ -222,11 +222,9 @@ el.secret = await fetchAccountNumber();  // write-only. never enters the DOM</pr
   <code>color</code> and <code>background</code> mean what they say.
 </p>
 <div class="note">
-  <b>What this defeats:</b> scrapers, LLM agents, accessibility-tree readers,
-  <code>innerText</code>, Select All, single-frame OCR -- the first four
-  absolutely, because the text never becomes text. <b>What defeats it:</b> a
-  screen recording, a phone camera, and anyone with DevTools. Measured with
-  Tesseract: one frame reads 0%, sixty frames naively averaged read 100%.
+  The claims are narrow on purpose, and they are checkable rather than taken on
+  trust: the <a href="security.html">security check</a> and the
+  <a href="challenge.html">scraping challenge</a> run them live on this site.
 </div>
 
   </main>

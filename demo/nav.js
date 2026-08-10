@@ -29,7 +29,7 @@ const GROUPS = [
     ['pairing.html', 'Background pairing'],
     ['contrast.html', 'Contrast'],
   ]],
-  ['Attack it', [
+  ['Verify it', [
     ['security.html', 'Security check'],
     ['challenge.html', 'Scraping challenge'],
   ]],

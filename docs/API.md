@@ -33,8 +33,8 @@ until the module reaches a real DOM.
 The plaintext is rendered straight to a canvas and never enters the DOM: absent
 from View Source, the DOM inspector, the accessibility tree, Select-All + Copy,
 Reader mode, "Save Page As", and every text-scraping extension. What it does
-**not** do is hide from DevTools and intent -- a breakpoint, a heap snapshot, or
-one `canvas.toDataURL()` retrieves it, because the client belongs to the user.
+**not** do is hide from DevTools and intent: the client belongs to the user,
+and someone who opens developer tools with a purpose can retrieve the value.
 
 Prefer the `.secret` property over inline text. Inline text works (it is read
 once and erased), but it was in the HTML source on the way there.
@@ -56,14 +56,12 @@ reveal button, a copy action behind auth -- whatever fits your product).
 | --- | --- | --- | --- |
 | `strength` | `medium` | `weak` \| `medium` \| `strong` | Sets `amplitude`, the noise block ratio, and `hardness` together, as tested points on one curve. Any individual attribute you also set overrides that part of the preset. |
 
-* `weak` -- amplitude 80, block 1.33× stroke, hardness 0.5. Easiest to read and
-  the only one that fuses comfortably on a slow 60Hz panel. Its block sits
-  *below* the blur-saturation point on purpose, so a denoise has a radius worth
-  trying: that is the trade the name is making.
-* `medium` -- amplitude 110, block 2× stroke, hardness 1. The default.
-* `strong` -- amplitude 127, block 2.67× stroke, hardness 1. Most masking, most
-  visually active. Untested at very large type (96px+), where coarse blocks are
-  exactly what shimmers.
+* `weak` -- easiest to read. Its block sits *below* the blur-saturation point
+  on purpose, so a denoise has a radius worth trying: that is the trade the
+  name is making.
+* `medium` -- the balanced point, and the default.
+* `strong` -- most masking, most visually active. Untested at very large type
+  (96px+), where coarse blocks are exactly what shimmers.
 
 ### The split
 
@@ -73,12 +71,12 @@ reveal button, a copy action behind auth -- whatever fits your product).
 | `frames` | `2` | 2+ (aperture: 3+) | Planes per cycle. 2 is almost always right: the cycle rate is `refresh / frames`, so more planes push the alternation into the flicker-sensitive band. Left unset, the mode picks (aperture defaults to 6). |
 | `mode` | `amplitude` | `amplitude` \| `aperture` \| `interleave` \| `decoy` | How the split works. `amplitude` perturbs every pixel with zero-sum noise (strongest mask). `aperture` shows one horizontal slice per frame and needs no colour headroom, so it works at pure white -- at the cost of a burst of N frames holding everything. `interleave` exists to demonstrate why splitting *where* pixels are does not work (a single plane still holds 1/N true pixels and subsampling reads fine). `decoy` modulates with a second image instead of noise. `aperture`/`interleave` default `amplitude` to 0 so their own mechanism is visible; set `amplitude` explicitly to stack noise on top. |
 | `contrast` | `1` | 0.5-2 sane | Pre-emphasis before band compression. Not needed under linear light, which does not compress. |
-| `hardness` | `1` | 0-1 | 1 = every pixel at full amplitude (best mask, measured ~20% less leak raw and blurred). 0 = uniform-magnitude noise, which looks calmer and protects less. |
-| `chroma` | `0` | 0-1 | 0 = one noise draw shared across R/G/B: grey static, and the whole budget lands in luminance, which is what the eye and `leakScore` key on (measured 0.262 denoised leak against 0.346 per-channel at equal loudness). 1 = independent per channel: rainbow static. |
-| `noise-scale` | 2× stroke | ≥1 px | Noise block size in device px, derived from the stroke width unless set. 2× the stroke is where a box blur stops gaining on the attacker (measured across five font sizes). Setting it lower warns: a blur can recover value below that ratio. Coarser blocks resist blur best but sit at low spatial frequency, where temporal sensitivity peaks -- they shimmer more at 30Hz cycle rates. |
+| `hardness` | `1` | 0-1 | 1 = every pixel at full amplitude: the measured best mask, raw and blurred. 0 = uniform-magnitude noise, which looks calmer and protects less. |
+| `chroma` | `0` | 0-1 | 0 = one noise draw shared across R/G/B: grey static, and the whole budget lands in luminance, which is what the eye and `leakScore` key on, and the measured stronger choice. 1 = independent per channel: rainbow static. |
+| `noise-scale` | 2× stroke | ≥1 px | Noise block size in device px, derived from the stroke width unless set. 2× the stroke is where a box blur stops gaining on the attacker. Setting it lower warns: a blur can recover value below that ratio. Coarser blocks resist blur best but sit at low spatial frequency, where temporal sensitivity peaks -- they shimmer more at 30Hz cycle rates. |
 | `noise-scale-max` | `16` | ≥4 px | Ceiling on the derived block, because 24-30px tiles on large type read as broken graphics rather than noise. Aesthetic, deliberately: raise it if the capture matters more than the look at very large sizes. The element warns when this cap is what is binding. |
-| `noise-profile` | `white` | `white` \| `blue` | `blue` high-passes the block lattice (~37% less low-frequency energy at an 8px window), which may read calmer. It is not true void-and-cluster blue noise. Security unchanged -- any leak difference is inside seed variance. |
-| `ink-bias` | `0` | 0-1 | Leans amplitude toward the ink and quiets the background. The largest comfort win available, bought directly from protection, because where the noise is, is where the text is: measured leak 0.263 → 0.304 at 0.2, 0.361 at 0.4. The map is blurred past the stroke and keeps a floor so it cannot trace glyph edges outright. Past ~0.3, measure on your own content first. |
+| `noise-profile` | `white` | `white` \| `blue` | `blue` high-passes the block lattice, which may read calmer. It is not true void-and-cluster blue noise. Security unchanged -- any leak difference is inside seed variance. |
+| `ink-bias` | `0` | 0-1 | Leans amplitude toward the ink and quiets the background. The largest comfort win available, bought directly from protection, because where the noise is, is where the text is: the measured leak climbs as the bias rises. The map is blurred past the stroke and keeps a floor so it cannot trace glyph edges outright. Past ~0.3, measure on your own content first. |
 | `edge-fade` | `0` | ≥0 px | Taper the noise to nothing within this many pixels of the canvas edge, so the block dissolves into the page instead of ending on a hard rectangle. Free, unlike `ink-bias`: it follows the canvas rectangle, which an attacker can already see. |
 | `gamma` | `2.4` | ~1.8-2.8 | Display transfer function. `2.4` selects the real piecewise sRGB curve; any other value is a pure power, for a display you have measured. |
 | `adaptive` | off | boolean | Reproduce authored colours exactly by capping amplitude per pixel instead of compressing. Mostly superseded by linear light, which does both; kept for comparison. Check `maxAmplitudeFor()` before using -- high-contrast palettes cap near zero. |
@@ -87,7 +85,7 @@ reveal button, a copy action behind auth -- whatever fits your product).
 
 | Attribute | Default | Meaning |
 | --- | --- | --- |
-| `color` | `#9ea6b4` | Text colour. The default pair is chosen to be maskable (ratio 1.42, leak 0.180), not merely handsome -- the obvious dark-UI pairing `#e8e8f0`/`#14141a` leaks 0.951. |
+| `color` | `#9ea6b4` | Text colour. The default pair is chosen to be maskable, not merely handsome -- the obvious high-contrast dark-UI pairings are not. |
 | `background` | `#6b7280` | Panel colour behind the text. |
 | `fit` | on | `off` to disable | When the authored pair cannot carry noise (masking ratio < 1), the element moves it to the nearest pair that can -- same hue, same light-or-dark character, less separation -- and warns with the numbers. `fit="off"` keeps your exact colours and the leak they imply. |
 
@@ -151,15 +149,15 @@ mean and hands a capture the value back. Size with `width`/`height` attributes.
 | --- | --- | --- |
 | `scramble` | off | Store the glyphs shuffled, with positions kept separately, so no JS value ever holds the plaintext in order (a heap-snapshot search finds nothing). Each glyph is drawn alone at fixed coordinates and blitted to its slot, so a `fillText` hook sees single characters in shuffled order. Obfuscation, not encryption: reading both fields reconstructs the value. `letter-spacing`, `text-align`, `padding-*` are inert (each glyph has its own cell) and warn. |
 | `fake` | off | `auto` \| `number` \| `text` \| `random`. Each of 8 cycles carries a *different* plausible wrong value, added on one frame of the pair and subtracted on the other: the viewer never resolves any (the pair cancels inside one cycle, ~16ms), while a capture freezes one at full contrast. `auto` matches the detected format -- card-shaped values get Luhn-valid numbers, dates get real months. Needs a maskable palette (ratio 1.0+). Draws the value centred; alignment/spacing attributes are inert while on. With `scramble` also set, fake wins and warns (they are alternative draw paths). |
-| `fake-share` | `0.8` | 0-0.9. Share of each ink pixel's excursion budget the decoy takes; the rest stays with the noise. The pair's centre is re-solved in light after widening, so the perceived value stays exact at every setting (measured ghost ≤ 1 code level). Defaults sit at the loud end because that is the measured requirement: below ~0.5 the decoy reads *under* the real value and convinces nobody. |
-| `fake-size` | `1` | 0.1-1. Decoy glyph size relative to the real type. Full size is the measured requirement, same reason. At the old 0.55 default the decoy scored below the truth at every share, which is why 0.1 shipped with the mode disabled. |
+| `fake-share` | `0.8` | 0-0.9. Share of each ink pixel's excursion budget the decoy takes; the rest stays with the noise. The pair's centre is re-solved in light after widening, so the perceived value stays exact at every setting. Defaults sit at the loud end because that is the measured requirement: a quiet decoy reads *under* the real value and convinces nobody. |
+| `fake-size` | `1` | 0.1-1. Decoy glyph size relative to the real type. Full size is the measured requirement, same reason: a smaller decoy scores below the truth in a capture, which is why earlier releases shipped with the mode disabled. |
 | `fake-weight` | `800` | 100-1000. The decoy's own font weight, deliberately heavier than the value it imitates: the noise block is calibrated to 2× the *real* stroke, so a decoy at the same weight has strokes half a block wide -- the worst spatial frequency for a glance to separate from noise. Bolding is only safe together with the halo below; benched alone it turns the strokes into low-noise windows the real value's mean reads through. |
 | `fake-halo` | auto | px, 0 to disable. A contour ring around each decoy glyph, spending the same budget with the opposite sign, so the glyph carries its own edge on both polarities -- a bright glyph with a dark rim on one plane, dark with bright on the other. This is what makes the decoy legible to a *human* glance rather than only to correlation, and it covers the real value's single-frame ghosts exactly where they show, at the stroke edges. Auto derives the width from the rendered decoy size. Cancels between the planes like the glyph does; the viewer sees neither. |
-| `watermark` | off | text | An isoluminant mark composited under the value, scattered to resist cropping. Survives frame averaging (it is in the mean), nearly invisible to the eye (chrominance only, blue-yellow axis). One greyscale conversion strips it -- measured 0.996 correlation in colour, 0.020 after `-vf format=gray`. Attribution for casual leaks, not protection. |
+| `watermark` | off | text | An isoluminant mark composited under the value, scattered to resist cropping. Survives frame averaging (it is in the mean), nearly invisible to the eye (chrominance only, blue-yellow axis). A single greyscale conversion removes it. Attribution for casual leaks, not protection. |
 | `watermark-swing` | `60` | chroma units | Requested swing along blue-yellow. Reduced (never clipped) near the gamut edge; read `watermarkSwing` for the achieved value. Direction is chosen automatically toward the side with room. |
 | `watermark-repeat` | `3` | 1-8 | Copies scattered across the field. |
 | `chroma-decoy` | off | text | A decoy written in chrominance at zero luminance contrast, alternating isoluminant colours in fine blocks inside its glyphs. Spatial, not temporal: still there after a thousand frames averaged -- aimed at the case nocap otherwise loses. The eye greys it out; a sensor reads it. Defeated by one greyscale conversion, so: automated capture and screenshot-into-chat, not a thinking attacker. Warns when the background leaves under 8 levels of chroma swing. |
-| `chroma-block` | `2` | ≥1 px | Checker block of the chroma decoy. 1px is annihilated by 4:2:0 subsampling (measured 54.0 PNG → 1.3 JPEG); 2px survives JPEG and H.264; above ~4px a viewer starts seeing coloured speckle. The usable window is roughly 2-4 and may not exist on your panel -- judge live. |
+| `chroma-block` | `2` | ≥1 px | Checker block of the chroma decoy. 1px is annihilated by 4:2:0 subsampling; 2px survives JPEG and H.264; above ~4px a viewer starts seeing coloured speckle. The usable window is roughly 2-4 and may not exist on your panel -- judge live. |
 
 ### Scratch-to-reveal (experimental)
 
@@ -181,7 +179,7 @@ not a defence -- a long recording still holds a faint copy.
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `pattern` | none | `dots` \| `hatch` \| `grid` \| `grain`. A texture in the element's ground so it can match a patterned page. |
-| `pattern-strength` | `16` | code levels | Same units as the CSS around it. In-canvas, texture is *content the split must carry*: measured raw leak 0.197 flat → 0.225 at 16 levels → 0.285 at 34. Warns past the ground's own swing, where it clips instead of strengthening. Judge it live -- a screenshot buries any texture under the noise span, by design. |
+| `pattern-strength` | `16` | code levels | Same units as the CSS around it. In-canvas, texture is *content the split must carry*: the measured leak rises with the strength. Warns past the ground's own swing, where it clips instead of strengthening. Judge it live -- a screenshot buries any texture under the noise span, by design. |
 | `pattern-layer` | in-canvas | `front` | Composite the texture *over* the canvas as CSS instead. Free (the split never carries it) and can run at page strength; the cost moves to legibility, since it now sits on the glyphs. Phase-locks to the page properly (~1px residual), which the in-canvas hatch cannot. |
 | `pattern-offset-x` / `-y` | `0` | CSS px | Phase, so the texture continues the page's rather than restarting at the element's corner. For `front`, supply live via CSS custom properties instead (below). |
 | `pattern-enter` | off | `left` \| `right` \| `up` \| `down` \| `center` | Wipe-in animation for the front layer, honouring `prefers-reduced-motion`. |
@@ -303,7 +301,7 @@ zero: their mean is the content, each plane alone is degraded.
 
 | Export | Meaning |
 | --- | --- |
-| `averageFrames(caps) → Pixels` | The attack: the mean your eye computes, done in software. Code-space mean -- what an attacker's ffmpeg produces. |
+| `averageFrames(caps) → Pixels` | The attack: the mean your eye computes, done in software. Code-space mean -- what a re-encoded recording produces. |
 | `perceivedMean(caps, gamma?) → Pixels` | The mean in *light* -- what a viewer resolves. Use for anything meant to look right; `averageFrames` for anything meant to model a capture (it renders ~19 levels dark under linear light). |
 | `leakScore(plane, src) → number` | \|Pearson r\| between plane luma and source luma. A legibility *proxy*: 0 tells nothing, 1 is the picture. Blind to contrast, brightness, inversion -- the transforms an attacker undoes for free. Compare configurations with it; do not certify one. Throws on size mismatch. |
 | `boxBlur(img, radius) → Pixels` | The cheapest denoise an attacker reaches for. Radius 0 is identity. |
@@ -321,7 +319,7 @@ zero: their mean is the content, each plane alone is degraded.
 
 | Export | Meaning |
 | --- | --- |
-| `checkPalette({color, background, gamma?})` | **Run this on any custom pair.** Returns `{ratio, grade, textSwing, backgroundSwing, separation, warnings}`. `ratio = min(swing) / separation`; ≥1 is `good` (a single frame stops being readable), 0.5-1 `fair`, <0.5 `weak` (a capture stays legible). Validated against denoised leak across 28 palettes (r = −0.73, where raw light headroom scores −0.06). |
+| `checkPalette({color, background, gamma?})` | **Run this on any custom pair.** Returns `{ratio, grade, textSwing, backgroundSwing, separation, warnings}`. `ratio = min(swing) / separation`; ≥1 is `good` (a single frame stops being readable), 0.5-1 `fair`, <0.5 `weak` (a capture stays legible). Validated against denoised leak across a spread of palettes, where raw light headroom predicts nothing. |
 | `fitToBand({color, background, minRatio=1, gamma?})` | Move an unmaskable pair to the nearest one that masks: same hue, same light/dark character, less separation; the midpoint walks toward mid-grey only when it must, and saturated channels are desaturated only as far as needed. Returns `{color, background, ratio, moved, contrast}`. This is what the element's `fit` runs. |
 | `suggestConfig(design)` | A full starting configuration derived from your page's `background`/`color` (+ optional `fontSize`, `minContrast`, `amplitude`…): colours placed where they can be masked, block derived from the stroke, plus `masking`, `contrast`, `chromaRetained`, `adaptiveCeiling`, and human-readable `notes` on every trade made. |
 | `codeSwing(color, gamma?)` | How far a colour's pixels can travel in code values under a full-swing linear-light split. Peaks ~127 at `#bcbcbc`, collapses toward white far faster than toward black. The atom the ratio is built from. |

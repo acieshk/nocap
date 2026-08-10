@@ -216,10 +216,10 @@
   sounds, so the stronger ones are here and run on every algorithm.
 </p>
 <p>
-  The box blur wins anyway. At the shipped defaults: box 0.256, gaussian 0.248,
-  median 0.224, against a raw 0.256, so nothing beats not attacking at all. In
-  the under-protected case where the block is half the stroke, box 0.288 against
-  gaussian 0.284 and median 0.218.
+  The box blur wins anyway. At the shipped defaults nothing beats not attacking
+  at all, and the ordering holds in the under-protected case where the block is
+  half the stroke. The scores above are computed live on this page, so read
+  them there rather than here.
 </p>
 <div class="note">
   <b>The median is the interesting failure.</b> It is the standard tool for
@@ -299,7 +299,7 @@ function render() {
     // comparison under you while you drag a slider.
     let seed = 4242;
     const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-    // Each algorithm runs on its OWN mechanism. Giving interleave and channels
+    // Each algorithm runs on its OWN mechanism. Giving interleave and aperture
     // the amplitude noise as well would credit them for the thing they do not
     // do: they would score well, and the score would belong to amplitude mode
     // wearing a hat. The first version of this page did exactly that and made

@@ -61,6 +61,23 @@ export function denoisedLeak(
 ): { leak: number; radius: number };
 export function maxAmplitudeFor(colors: Array<string | [number, number, number]>): number;
 
+/**
+ * The mean in light, which is what a viewer resolves. `averageFrames` is the
+ * code-space mean and models a capture; the two differ visibly under
+ * `linearLight`, so use the one that matches the question.
+ */
+export function perceivedMean(caps: Pixels[], gamma?: number): Pixels;
+/** Separable Gaussian blur. An attack, shipped so the claims can be run. */
+export function gaussianBlur(img: Pixels, sigma: number): Pixels;
+/** Median filter. Edge-preserving, so the attack that ought to worry us. */
+export function medianFilter(img: Pixels, radius: number): Pixels;
+/** The strongest result across every denoiser here, so a caller cannot quote the friendliest one. */
+export function bestAttack(
+  plane: Pixels,
+  src: Pixels,
+  opts?: { maxRadius?: number; maxSigma?: number }
+): { attack: 'none' | 'box' | 'gaussian' | 'median'; param: number; leak: number };
+
 /* ------------------------------------------------------------- palette -- */
 
 export type Grade = 'good' | 'fair' | 'weak';
@@ -240,6 +257,15 @@ export function isoluminantPartner(
   swing?: number
 ): { color: string; swing: number; deltaLuma: number };
 
+/**
+ * Two colours of equal luminance whose mean is exactly the background, along
+ * green-magenta. `swing` is the achieved excursion after gamut limits.
+ */
+export function isoluminantPair(
+  background: string | number[],
+  strength?: number
+): { a: string; b: string; swing: number };
+
 export const STRENGTHS: Record<Strength, {
   amplitude: number;
   /** Multiple of the stroke width. 2 is where a blur stops gaining. */
@@ -253,6 +279,22 @@ export function resolveOptions(
   dpr?: number,
   height?: number
 ): SplitOptions & { adaptive: boolean };
+
+/**
+ * Resolve the text styling attributes into what the draw paths need. Pure and
+ * exported so it can be tested without a DOM, same reason resolveOptions is.
+ */
+export function resolveText(
+  attrs?: Record<string, string>,
+  height?: number
+): {
+  font: string;
+  sizePx: number;
+  letterSpacing: string;
+  align: 'left' | 'center' | 'right';
+  padX: number;
+  padY: number;
+};
 
 export class NocapSecret extends HTMLElement {
   /** Write-only: reading it back would put the secret in reach again. */

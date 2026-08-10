@@ -31,10 +31,11 @@
 
 <h1>Motion vs averaging</h1>
 <p class="lede">
-  A screen recording defeats nocap by averaging frames: the noise cancels and
-  the value remains. Moving the value while it shows is meant to spoil that
-  average. This page runs the attack so you can see exactly what it costs the
-  attacker, and what a competent one gets back.
+  How drift changes what a frame average recovers. Averaging a run of frames
+  cancels the noise and resolves the mean; drift moves the value between
+  frames, so the average smears instead. This page measures how much: what a
+  naive frame average gets back, and what one that undoes the motion first
+  gets back.
 </p>
 
 <div class="rig">
@@ -91,8 +92,9 @@
 
 <h2>What to try</h2>
 <ul>
-  <li><b>static</b> -- all three around the same. Averaging wins; this is the
-      known defeat, no motion involved.</li>
+  <li><b>static</b> -- the baseline. With nothing moving, the naive and
+      motion-aware averages agree, and every motion setting below is read
+      against this.</li>
   <li><b>sine, amplitude 12</b> -- naive smears a little, motion-recovered snaps
       back to fully readable. A smooth drift is two numbers to guess.</li>
   <li><b>random, amplitude 12+</b> -- naive smears hard. Motion-recovered still
@@ -259,8 +261,8 @@ function runAttack() {
   const kind = $('motion').value, A = +$('amp').value;
   let v;
   if (kind === 'static' || A === 0) {
-    v = '<b>Static.</b> The naive average already reads the value back -- this is the '
-      + 'plain recording defeat, with no motion in play.';
+    v = '<b>Static.</b> The naive average already reads the value back -- the '
+      + 'baseline a frame average reaches with no motion in play.';
   } else if (rLazy < 0.4 && rSmart > 0.7) {
     v = `<b>Motion smears the lazy attack (r ${rLazy.toFixed(2)}), and a motion-aware `
       + `attacker recovers it (r ${rSmart.toFixed(2)}).</b> The value is fully present; `

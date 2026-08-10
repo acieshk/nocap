@@ -9,10 +9,31 @@
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
     },
-    "./secret": "./src/secret.js",
-    "./splitter": "./src/splitter.js",
-    "./palette": "./src/palette.js",
-    "./fake": "./src/fake.js"
+    "./secret": {
+      "types": "./src/index.d.ts",
+      "default": "./src/secret.js"
+    },
+    "./splitter": {
+      "types": "./src/index.d.ts",
+      "default": "./src/splitter.js"
+    },
+    "./palette": {
+      "types": "./src/index.d.ts",
+      "default": "./src/palette.js"
+    },
+    "./fake": {
+      "types": "./src/index.d.ts",
+      "default": "./src/fake.js"
+    },
+    "./audit": {
+      "types": "./src/index.d.ts",
+      "default": "./src/audit.js"
+    },
+    "./flicker": {
+      "types": "./src/index.d.ts",
+      "default": "./src/flicker.js"
+    },
+    "./package.json": "./package.json"
   },
   "sideEffects": [
     "./src/secret.js"

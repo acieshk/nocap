@@ -1161,8 +1161,8 @@ export class NocapSecret extends ElementBase {
    *   The real value lives in luminance, because that is what a person reads.
    *   One greyscale conversion therefore strips every decoy and leaves the real
    *   value untouched. Measured: decoy correlation 0.996 in colour, 0.020 after
-   *   `-vf format=gray`. There is no version of this that survives that, and
-   *   claiming otherwise would be a lie.
+   *   a single greyscale pass. There is no version of this that survives that,
+   *   and claiming otherwise would be a lie.
    *
    * So the honest description is: an attacker who does not think to drop colour
    * comes away with a plausible wrong value. That covers automated capture,
@@ -1230,9 +1230,8 @@ export class NocapSecret extends ElementBase {
     this.#watermarkWarned = true;
     console.warn(
       '[nocap-secret] watermark marks a capture for attribution, it does not ' +
-        'protect the value. It survives frame averaging, but one greyscale ' +
-        'conversion removes it: 0.996 correlation with colour, 0.020 after ' +
-        '`-vf format=gray`. Casual leaks, not a determined one.'
+        'protect the value. It survives frame averaging, but a single ' +
+        'greyscale conversion removes it. Casual leaks, not a determined one.'
     );
   }
 

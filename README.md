@@ -69,8 +69,6 @@ characters, found in 0 of 8 readable surfaces.
 | Select All + Copy | **Absolutely.** Nothing selectable |
 | `querySelectorAll('input')`, form scrapes | **Absolutely**, if you keep it out of inputs |
 | Single-frame OCR or a vision model | **Blocked.** One frame is noise |
-| A vision model given a *video* of the page | **Defeated.** Averaging is the attack |
-| A person with DevTools | **Defeated**, and always will be |
 
 The line is **automated pipeline against targeted attacker**. A pipeline that
 visits thousands of pages will not render yours across a run of frames and
@@ -163,7 +161,7 @@ tested points on the comfort curve.
    [Choosing colours](https://github.com/acieshk/nocap#choosing-colours).
 2. **Check your page.** `await auditPage(secret)` finds the value if your app
    leaked it into an input, an `aria-label`, or `localStorage`.
-3. **Read [what this defeats](https://github.com/acieshk/nocap#what-this-defeats-and-what-defeats-it).** A screen
+3. **Read [what this defeats](https://github.com/acieshk/nocap#what-this-defeats).** A screen
    recording beats it. That is inherent, not a bug.
 
 ---
@@ -182,7 +180,7 @@ import 'nocap';
 Without a bundler, point a module script at the file directly:
 
 ```html
-<script type="module" src="https://unpkg.com/nocap/src/index.js"></script>
+<script type="module" src="https://unpkg.com/nocap@0.2/src/index.js"></script>
 ```
 
 The module is safe to import on a server. It falls back to a plain base class
@@ -441,14 +439,16 @@ the DOM, so scrapers and DOM-reading AI agents get nothing at all.
 
 ## What this defeats
 
-The claims are narrow on purpose | Threat | Result |
+The claims are narrow on purpose.
+
+| Threat | Result |
 | --- | --- |
 | Reflexive Print Screen / Win+Shift+S / Cmd+Shift+4 | **Blocked**. The capture lands on one plane |
 | DOM-reading AI agents, LLM scrapers, accessibility-tree readers | **Blocked absolutely**. The secret is never a DOM node |
 | Single-frame OCR / vision-model ingestion | **Blocked**. One frame is noise |
 | View Source, `curl`, Save Page As, Select-All + Copy | **Blocked**. Verified live in the demo |
 | Quick phone photo | **Usually blocked**. Short exposure lands on one plane |
-| Screenshot + a box blur | **Blocked** at the calibrated block size (block at 2x the stroke; see the block-size table) |
+| Screenshot + a box blur | **Blocked** at the calibrated block size, which is derived from the stroke |
 | Casual DevTools poke | **Slowed** by `scramble`: a heap search finds nothing, a one-line hook yields glyphs without their order |
 
 There is no 100% client-side solution and this table does not claim one; the
@@ -540,31 +540,21 @@ rather than friction. Use nocap for the moment the value is on screen.
 ## Choosing colours
 
 **Masking and contrast are the same axis, pointing opposite ways.** The masking
-ratio is `min(swing) / |text − background|`, where swing is how far a colour can
-travel before it clips. High contrast means a large separation, which means a low
-ratio, whatever the colours are. Measured on stroke-width bars at amplitude 127:
-
-| pair | ratio | leak after a blur | contrast |
-| --- | --- | --- | --- |
-| `#b4b4b4` on `#4b4b4b` | 0.50 | 0.48 readable | 4.21:1 |
-| `#a0a0a0` on `#646464` | 1.15 | 0.28 | 2.26:1 |
-| `#969696` on `#6e6e6e` | 1.89 | 0.19 masked | 1.72:1 |
-
-Masking arrives around **2:1 contrast and below**. That is the real constraint,
-and it is worth knowing before you fight it: there is no setting that gives a
-high-contrast design and a masked one at the same time.
+ratio is `min(swing) / separation`, where swing is how far a colour can travel
+before it clips. High contrast means a large separation, which means a low
+ratio, whatever the colours are. That is the real constraint, and it is worth
+knowing before you fight it: there is no setting that gives a high-contrast
+design and a masked one at the same time. `checkPalette` warns when a pair
+cannot carry noise, and the contrast page in the demo lets you walk the
+trade-off live.
 
 **White on black is not a special case, and it is not impossible.** White has a
 swing of exactly 0, being already at the ceiling, so a white pixel cannot be
 displaced and a captured frame shows the text as plainly as ordinary rendering.
 But that follows from the split insisting the frames average to the *authored
 hex*, which is a choice about colour fidelity rather than a law. Give up the
-exact hex and the noise works:
-
-```
-asked for   #ffffff on #000000    ratio 0.00   leak 0.53
-rendered    #a0a0a0 on #5f5f5f    ratio 1.01   leak 0.25
-```
+exact hex and the noise works: the element renders a nearby pair of greys that
+can carry it.
 
 That substitution is what `fit` does, and it is on by default, because a secret
 that is protected in a slightly different grey beats one that is exactly the
@@ -575,7 +565,7 @@ warns once saying what it swapped. `fit="off"` restores the old behaviour.
 ```js
 import { fitToBand } from 'nocap';
 fitToBand({ color: '#ffffff', background: '#000000' });
-// { color: '#a0a0a0', background: '#5f5f5f', ratio: 1.01, moved: true, contrast: 2.44 }
+// { color, background, ratio, moved: true, contrast }
 ```
 
 
@@ -586,34 +576,28 @@ pre-emphasis. Those existed only to buy uniform noise headroom and linear light
 removed the need.
 
 What you cannot escape is that a colour can only carry so much noise. The
-predictor is the **masking ratio**:
+predictor is the **masking ratio**, and `checkPalette` grades it:
 
 ```js
 checkPalette({ color: '#9ea6b4', background: '#6b7280' })
-// { ratio: 1.42, grade: 'good', warnings: [] }
+// { ratio, grade: 'good', warnings: [] }
 ```
 
-| ratio | measured leak | verdict |
-| --- | --- | --- |
-| ≥ 1.0 | 0.08 - 0.22 | good |
-| 0.5 - 1.0 | ~0.3 | fair |
-| < 0.5 | 0.47 - 0.79 | **do not ship** |
-
-Correlated at −0.73 against denoised leak over 28 palettes. Light headroom, the
-obvious metric, correlates −0.06. No better than chance, because light is
-expansive near white: `#f0f0f0` keeps 26% of its light headroom and still leaks
-0.76.
+`good` means a single captured frame stops being readable; `weak` means it
+stays legible, and the element will have warned. The grade was validated
+against measured leak across a spread of palettes; light headroom, the obvious
+metric, turned out to predict nothing.
 
 Two hard limits fall out:
 
-- **Saturation is capped.** A channel at 0 or 255 has zero swing, so `#ff3131`
-  scores 0.00 at any lightness. Fully saturated colours cannot be masked.
-- **Both ends are bad.** Usable region is roughly channels in `[40, 214]`, both
-  colours mid-tone, separation under ~90.
+- **Saturation is capped.** A channel at 0 or 255 has zero swing, so fully
+  saturated colours cannot be masked at any lightness.
+- **Both ends are bad.** Both colours want to be mid-tone, with a modest
+  separation.
 
 Put the secret on a **mid-tone panel**. It then matches its surroundings exactly
 *and* has room to be protected. `suggestConfig()` derives such a pair from a
-page's palette, and [the palette demo](https://acieshk.github.io/nocap/demo/colors.html)
+page's palette, and [the contrast page](https://acieshk.github.io/nocap/contrast.html)
 lets you check one interactively.
 
 `amplitude` is now a fraction of whatever headroom the colours allow, so
@@ -621,41 +605,26 @@ lets you check one interactively.
 does**. `noise-scale` trades blur resistance against flicker fusion: coarse
 noise resists a blur far better but strobes below 120Hz, so 6 is the default.
 
+Past that, use a `strength` preset rather than tuning numbers. Custom palettes
+and large-type deployments are a craft of their own, and the
+[promo reel](https://acieshk.github.io/nocap/promo.html) shows what a tuned
+deployment looks like.
+
 ### The noise block follows the stroke
 
 A blur only has a radius worth trying when the block is narrower than the
 strokes it is hiding, so the block is derived from the stroke rather than set as
-a number. Measured on rasterised glyphs at five sizes, 8 seeds each, the useful
-blur radius reaches zero at exactly **twice the stroke**:
-
-| stroke | block that closes it | ratio |
-| --- | --- | --- |
-| 3px | 6 | 2.0 |
-| 4px | 8 | 2.0 |
-| 6px | 12 | 2.0 |
-| 8px | 16 | 2.0 |
-
-Raw leak barely moves with the block, sitting between 0.17 and 0.22 everywhere,
-so the block does one job only. Below the ratio the attacker gains: an 8px
-stroke with a 6px block goes 0.187 raw to 0.266 blurred, and with a 3px block to
-0.441.
-
-**This was measured on bars first, and bars gave the wrong answer.** Uniform
-vertical strokes saturate at about `1.25 x`, so an earlier version of this note
-said 1.25 and it shipped. Real glyphs carry curves and diagonals whose local
-stroke runs wider than the nominal one, and they need the full 2x. If you set
-`noise-scale` by hand on the strength of that earlier advice, it is too low.
+a number. The derivation was measured on rasterised glyphs, not guessed, and it
+lands at twice the stroke: below that the attacker gains from blurring, at it
+the useful blur radius closes.
 
 Because the stroke already carries `devicePixelRatio`, so does the block. There
 is no separate dpr rule and no density-dependent masking strength.
 
-`strength` sets the ratio rather than a pixel count:
-
-| `strength` | ratio | at the default size | trade |
-| --- | --- | --- | --- |
-| `weak` | 1.33 | 4 | Under the saturation point on purpose. Calmest at 60Hz, and a blur has room |
-| `medium` | 2.0 | 6 | Exactly saturated |
-| `strong` | 2.67 | 8 | Headroom, and the most shimmer |
+`strength` sets the block relative to the stroke rather than as a pixel count:
+`weak` sits under the saturation point on purpose, so it is the calmest at 60Hz
+and a blur has room; `medium` is at it; `strong` buys headroom at the cost of
+the most shimmer.
 
 Setting `noise-scale` yourself overrides all of this. The element warns once if
 the block it ends up with is under twice the stroke, so choosing that is
@@ -689,13 +658,9 @@ Put a recipient id in it. A leaked screenshot then says who it came from.
 
 ### The limit, stated first
 
-| attacker | mark correlation |
-| --- | --- |
-| keeps colour | **0.996** |
-| `-vf format=gray` | **0.020** |
-
-One filter and it is gone. So this is a **casual-leak watermark, not a forensic
-one**: it survives a screenshot into chat, a paste into a doc, an image handed
+Kept in colour, the mark survives an averaged capture essentially intact. A
+single greyscale conversion removes it. So this is a **casual-leak watermark,
+not a forensic one**: it survives a screenshot into chat, a paste into a doc, an image handed
 to a model. It does not survive anyone who knows it is there. If you need
 attribution that holds against a determined leaker, that is DCT-domain spread
 spectrum and a different project.
@@ -714,15 +679,11 @@ requirement this mechanism can actually meet.
 
 ### Measured
 
-| | |
-| --- | --- |
-| luminance shift where the mark sits | ~0, isoluminant by construction |
-| mark in an averaged frame | 0.77 at swing 20, 0.996 at swing 90 |
-| survives H.264 4:2:0 at screen-share bitrate | 0.917 |
-| effect on the real value's single-plane leak | none, 0.132 either way |
-
-The codec result is the surprising one. 4:2:0 subsamples chroma 2x2 and a
-chroma-only payload is the first thing an encoder discards, so it should not
+The mechanism was measured end to end rather than assumed: the mark is
+isoluminant by construction, it survives an averaged frame and H.264 4:2:0 at
+screen-share bitrate, and it does not change the real value's single-plane
+leak. The codec result is the surprising one. 4:2:0 subsamples chroma 2x2 and
+a chroma-only payload is the first thing an encoder discards, so it should not
 survive. The glyphs are coarse enough that it does.
 
 `watermark-swing` sets how far the mark moves, default 60. The swing is reduced
@@ -731,15 +692,9 @@ isoluminance silently. `watermark-repeat` sets how many times it is drawn,
 default 3, scattered across the value rather than on a clear row, because a mark
 on its own row is trivially cropped out.
 
-Verified in Chrome on the rendered element, not only on the arrays:
-
-| | mark band | rest of the element |
-| --- | --- | --- |
-| chrominance variation | **16.6** | 6.0 |
-| luminance variation | **5.1** | 16.1 |
-
-The mark sits in chrominance and carries almost no luminance. The real value is
-the opposite. That is the whole mechanism, measured end to end.
+Verified in Chrome on the rendered element, not only on the arrays: the mark
+sits in chrominance and carries almost no luminance, and the real value is the
+opposite. That is the whole mechanism.
 
 **Isoluminant is not invisible.** Equiluminant text is a well-known case of
 something visible but hard to localise and hard to focus. Expect a faint tint,
@@ -838,7 +793,7 @@ table below is the short version.
 
 | Attribute | Default | Meaning |
 | --- | --- | --- |
-| `scramble` | off | Store glyphs shuffled. See the DevTools table |
+| `scramble` | off | Store glyphs shuffled. See [What `scramble` adds](#what-scramble-adds) |
 | `fake` | off | `auto` / `number` / `text` / `random`. Each cycle carries a different plausible wrong value that a capture freezes and the viewer never sees. Experimental; needs a maskable palette. Draws the value centred (alignment and spacing attributes do not apply) |
 | `strength` | `medium` | `weak` / `medium` / `strong`. Sets amplitude, block and hardness together |
 | `amplitude` | `110` | Fraction of the headroom the colours allow |
@@ -860,9 +815,9 @@ table below is the short version.
 
 **`scratch-linger` is the trade, not a cosmetic.** A pixel carries the value
 only while the trail sits on it, so with a short trail a long capture averages
-to about `duty × value` while the noise keeps its full amplitude. Over 30
-frames that is leak 0.70 at full duty against 0.25 at a duty of 0.1, and a
-clean 0.9 needs 34s of recording rather than 4.3s.
+to a fraction of the value while the noise keeps its full amplitude, and a
+clean recovery costs the attacker several times the recording it would
+otherwise take.
 
 The 30s default gives most of that up on purpose, because a trail that fades in
 a second is close to unreadable. A trail that outlasts the reading sits near
@@ -871,8 +826,7 @@ as a defence against capture. Set it to a second or two if capture is the
 threat you care about.
 
 **Only one reveals at a time**, and it is worth being precise about what that
-buys. It does **not** slow an extraction attack: timed on the demo, taking one
-cell costs 3.4s of dragging a pointer and 0.3s of capture, so an attacker
+buys. It does **not** slow an extraction attack: timed on the demo, an attacker
 finishes a cell and moves on long before any reset matters. What it does is stop
 a single frame ever containing two revealed values, which is the still capture
 and the person standing behind you, and that is the case this library is for.
@@ -920,21 +874,12 @@ import {
 `Flicker` drives a canvas. Everything in `splitter.js` and `palette.js` is pure
 and DOM-free, so it runs in Node, a worker, or a native port.
 
-Split modes: **`amplitude`** (the one that works), plus `interleave`, `channels`
-and `decoy`. Included so `leakScore` can show you why they do not:
-
-| Split | Single-plane leak |
-| --- | --- |
-| `channels`. RGB split across planes | 1.000 |
-| `decoy`. Second image as modulator | 0.929 |
-| `interleave` ×2. Pixels split across planes | 0.693 |
-| `amplitude` 64 | 0.386 |
-| `amplitude` 96 | 0.137 |
-| `amplitude` 127 | 0.004 |
-
-Measured on a structured test image with `leakScore`. Raw, with no denoising.
-See the block-size table above for numbers with a blur attack allowed. They are
-considerably worse, and that is the honest number to design against.
+Split modes: **`amplitude`** (the one that works), plus `aperture`,
+`interleave` and `decoy`. The also-rans are kept so `leakScore` can show you
+why they do not work: split with each of them and score a single plane
+yourself. Judge a configuration with `denoisedLeak` rather than raw
+`leakScore`; the numbers with a blur attack allowed are considerably worse,
+and they are the honest ones to design against.
 
 **Splitting *where* pixels are does nothing. Only randomizing *what they say*
 works.** Recognition survives losing colour, losing 90% of pixels, blur and
@@ -975,10 +920,14 @@ Live: **<https://acieshk.github.io/nocap/>**. Or `npm run demo`, then
 | --- | --- |
 | [API](https://acieshk.github.io/nocap/api.html) | Every attribute and export, with what each one trades |
 | [Overview](https://acieshk.github.io/nocap/) | The live, screenshot and denoise comparison, and the threat table |
+| [Promo reel](https://acieshk.github.io/nocap/promo.html) | Thirty seconds of a tuned deployment, the thing the rest builds |
 | [Sandbox](https://acieshk.github.io/nocap/sandbox.html) | The masking engine, with leak measured as you change it |
 | [Styling](https://acieshk.github.io/nocap/styling.html) | Text, font and colour, with the stroke and block shown side by side |
 | [Scenarios](https://acieshk.github.io/nocap/scenarios.html) | A wall of text, single values, and the same secret across five palettes |
 | [Algorithms](https://acieshk.github.io/nocap/algorithms.html) | Every way of splitting a frame, on the same content, against three denoisers |
+| [Background pairing](https://acieshk.github.io/nocap/pairing.html) | Matching the element's texture and colour to the page around it |
+| [Contrast](https://acieshk.github.io/nocap/contrast.html) | The masking-vs-contrast trade, walked live with your own pair |
+| [Motion vs averaging](https://acieshk.github.io/nocap/motion.html) | What drift changes about a frame average, with both attacker bounds shown |
 | [Scraping challenge](https://acieshk.github.io/nocap/challenge.html) | A table a human reads and a crawler cannot, with the page auditing itself |
 | [Security check](https://acieshk.github.io/nocap/security.html) | A fresh secret each load, no text box anywhere, searched for across every readable surface |
 | [Scratch to reveal](https://acieshk.github.io/nocap/scratch.html) | The trail, and what its length costs |
@@ -998,7 +947,7 @@ element, and never writes it anywhere else. Reload for a different format.
 npm test
 ```
 
-65 tests: the planes average back to the source at every amplitude and mode, no
+75 tests: the planes average back to the source at every amplitude and mode, no
 plane leaks, clipping never breaks the zero-sum property, the leak ordering
 holds, adaptive colour is exact, coarse blocks resist a blur that fine noise does
 not, a scratch trail lasts the same wall-clock time at any frame rate, and every

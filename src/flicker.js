@@ -266,7 +266,7 @@ export class Flicker {
       const sample = Math.min(dt, 100);
       this._interval = this._interval ? this._interval * 0.9 + sample * 0.1 : sample;
       this.stats.refreshHz = Math.round(1000 / this._interval);
-      // Use the real plane count, not opts.frames. 'channels' mode forces 3.
+      // Use the real plane count, not opts.frames. A mode may pick its own.
       const perCycle = (this._planes.length || this.opts.frames) * this.opts.planeHold;
       this.stats.cycleHz = Math.round(this.stats.refreshHz / perCycle);
       this._maybeWarn();

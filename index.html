@@ -50,7 +50,7 @@ el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</p
   <a href="https://github.com/acieshk/nocap#readme">README</a>.
 </p>
 
-<h2>React, Vue, Angular</h2>
+<h2>React, Vue, Svelte, Angular</h2>
 <p>
   <code>&lt;nocap-secret&gt;</code> is a standard custom element, so every
   framework can render it with no wrapper package. <b>One rule</b>: the value
@@ -97,6 +97,14 @@ import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
   template: `&lt;nocap-secret [secret]="account" strength="medium"&gt;&lt;/nocap-secret&gt;`,
 })
 export class AccountCard { account = ''; }</pre>
+
+<h3>Svelte</h3>
+<p>
+  Svelte sets properties on custom elements directly, so
+  <code>&lt;nocap-secret secret={value}&gt;</code> just works; the
+  <a href="https://github.com/acieshk/nocap#svelte">README section</a> has the
+  full example.
+</p>
 
 <p style="font-size:12.5px;color:var(--faint)">
   Server-side rendering is safe to import under -- Next, Astro and Remix
