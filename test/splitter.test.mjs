@@ -913,22 +913,52 @@ test('a size attribute has to be positive, not merely finite', async () => {
 test('resolveFake clamps at both ends and falls back on a malformed value', async () => {
   const { resolveFake } = await import('../src/secret.js');
 
-  // The measured working point: full size, most of the budget. At the old
-  // 0.35/0.55 pair the decoy read fainter in a capture than the value it
-  // covers, which is why 0.1 shipped with the mode disabled.
-  assert.deepEqual(resolveFake(), { share: 0.8, sizeRatio: 1 });
+  // The measured working point: full size, most of the budget, a heavier
+  // weight than the real text and an auto halo. At the old 0.35/0.55 pair the
+  // decoy read fainter in a capture than the value it covers, which is why
+  // 0.1 shipped with the mode disabled. The weight and halo came from the
+  // promo bench: at the value's own weight the decoy's strokes are half a
+  // noise block wide and dissolve, and bolding WITHOUT the halo turns the
+  // strokes into low-noise windows the real value reads through.
+  assert.deepEqual(resolveFake(), { share: 0.8, sizeRatio: 1, weight: 800, halo: null });
 
   // 1.0 would leave no noise at all where the decoy falls.
   assert.equal(resolveFake({ 'fake-share': '5' }).share, 0.9);
   assert.equal(resolveFake({ 'fake-share': '-1' }).share, 0);
   assert.equal(resolveFake({ 'fake-size': '9' }).sizeRatio, 1);
   assert.equal(resolveFake({ 'fake-size': '0' }).sizeRatio, 0.1);
+  assert.equal(resolveFake({ 'fake-weight': '9000' }).weight, 1000);
+  assert.equal(resolveFake({ 'fake-halo': '-3' }).halo, 0);
 
   // Same treatment the other attributes got: a non-number is not a zero.
   assert.equal(resolveFake({ 'fake-share': 'abc' }).share, 0.8);
   assert.equal(resolveFake({ 'fake-size': 'abc' }).sizeRatio, 1);
+  assert.equal(resolveFake({ 'fake-weight': 'abc' }).weight, 800);
 
   assert.equal(resolveFake({ 'fake-share': '0.5' }).share, 0.5);
+  // 0 is a real setting -- halo off -- and must not read as "auto".
+  assert.equal(resolveFake({ 'fake-halo': '0' }).halo, 0);
+  assert.equal(resolveFake({ 'fake-halo': '5' }).halo, 5);
+});
+
+test('a negative amount is the halo: same budget, opposite bias', async () => {
+  const { feasibleHalfTable, decoySplit } = await import('../src/secret.js');
+  const cap = feasibleHalfTable(2.4)[114];
+
+  // The ring around a glyph pushes plane 0 the other way, so the glyph
+  // arrives with its own contour instead of dissolving into the carrier.
+  const glyph = decoySplit(cap, 0.9, 1, 150, 90);
+  const ring = decoySplit(cap, 0.9, -1, 150, 90);
+  assert.ok(glyph.signed > 0, 'the glyph biases plane 0 up');
+  assert.ok(ring.signed < 0, 'its halo biases plane 0 down');
+
+  // The magnitude of the coverage spends the budget; the sign only steers it.
+  assert.equal(glyph.forDecoy, ring.forDecoy);
+  assert.ok(Math.abs(ring.forDecoy + ring.forNoise - cap) < 1e-9, 'budget is conserved');
+
+  // Strong enough to flip noise that points against it, same as the glyph.
+  const against = decoySplit(cap, 0.9, -1, 90, 150);
+  assert.ok(against.signed < 0, 'a large share biases the plane regardless of the noise');
 });
 
 test('a push beyond the feasible half cannot widen the pair', async () => {

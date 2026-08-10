@@ -1,6 +1,6 @@
 {
   "name": "nocap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prevent screenshots of text on the web. Anti-screenshot, anti-AI-scraper display: frames alternate at refresh rate so your eye reads the secret and a single screen capture gets noise \u2014 and the text never enters the DOM.",
   "type": "module",
   "main": "src/index.js",
@@ -26,8 +26,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/",
-    "prepublishOnly": "node --test test/",
+    "test": "node --test",
+    "prepublishOnly": "node --test",
     "demo": "npx --yes serve . --listen tcp://127.0.0.1:8787"
   },
   "keywords": [

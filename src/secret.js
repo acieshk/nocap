@@ -359,18 +359,25 @@ export function feasibleHalfTable(gamma = 2.4) {
  * noise already pointed modulates its AMPLITUDE rather than biasing it, and
  * amplitude modulation of random-sign noise reads as more noise.
  *
+ * A NEGATIVE amount is the decoy's halo: the ring around each glyph, pushed
+ * the other way, so the glyph arrives with its own contour. Without it the
+ * carrier noise chews every stroke edge and the decoy reads only by squinting;
+ * benched on the promo palette, the outline is the difference between a decoy
+ * an attacker transcribes and one they dismiss as more noise. It cancels
+ * between the planes exactly like the glyph does, so the viewer sees neither.
+ *
  * @param {number} cap     this pixel's feasible half
  * @param {number} share   fraction of the budget the decoy may take
- * @param {number} amount  the decoy's coverage here, 0..1
+ * @param {number} amount  the decoy's coverage here, -1..1; negative is halo
  * @param {number} b0      base plane 0 value
  * @param {number} b1      base plane 1 value
  * @returns {{half: number, signed: number, forDecoy: number, forNoise: number}}
  */
 export function decoySplit(cap, share, amount, b0, b1) {
-  const forDecoy = cap * share * amount;
+  const forDecoy = cap * share * Math.abs(amount);
   const forNoise = cap - forDecoy;
   const noise = (b0 >= b1 ? 1 : -1) * Math.min(Math.abs(b0 - b1) / 2, forNoise);
-  const excursion = noise + forDecoy;
+  const excursion = noise + Math.sign(amount) * forDecoy;
   const half = Math.min(Math.abs(excursion), cap);
   return { half, signed: excursion < 0 ? -half : half, forDecoy, forNoise };
 }
@@ -392,6 +399,17 @@ export function resolveFake(attrs = {}) {
     share: Math.max(0, Math.min(0.9, num(attrs, 'fake-share', 0.8))),
     // The decoy's font size relative to the real text.
     sizeRatio: Math.max(0.1, Math.min(1, num(attrs, 'fake-size', 1))),
+    // The decoy's own weight, NOT inherited from the real text -- and heavier
+    // on purpose. The block is calibrated to 2x the REAL stroke, so a decoy at
+    // the same weight has strokes half a block wide, which is the worst
+    // spatial frequency for the eye to separate from the noise. 800 puts the
+    // decoy's stroke at roughly the block and it reads at a glance. Benched
+    // WITHOUT the halo this backfires: wide low-noise strokes are windows the
+    // real value's mean shows through. The weight and the halo are a pair.
+    weight: Math.max(100, Math.min(1000, num(attrs, 'fake-weight', 800))),
+    // Halo width in device px, 0 to disable. null means auto: #drawFake
+    // derives it from the rendered decoy size, so it scales with the type.
+    halo: 'fake-halo' in attrs ? Math.max(0, num(attrs, 'fake-halo', 0)) : null,
   };
 }
 
@@ -580,6 +598,8 @@ export class NocapSecret extends ElementBase {
     'fake',
     'fake-share',
     'fake-size',
+    'fake-weight',
+    'fake-halo',
     'width',
     'height',
   ];
@@ -1680,9 +1700,9 @@ export class NocapSecret extends ElementBase {
     // or at a share high enough that the noise where it falls is nearly gone.
     // Fake mode is experimental for this reason and not merely for lack of use.
     const fakeAttrs = {};
-    for (const n of ['fake-share', 'fake-size'])
+    for (const n of ['fake-share', 'fake-size', 'fake-weight', 'fake-halo'])
       if (this.hasAttribute(n)) fakeAttrs[n] = this.getAttribute(n);
-    const { share, sizeRatio } = resolveFake(fakeAttrs);
+    const { share, sizeRatio, weight, halo } = resolveFake(fakeAttrs);
 
     /**
      * The centre whose planes at ±half average, in light, to `want`.
@@ -1755,20 +1775,45 @@ export class NocapSecret extends ElementBase {
 
     const decoys = [];
     const sets = [];
-    const small = font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * sizeRatio)}px`);
+    // The decoy's font: the real value's, at the fake size and the FAKE
+    // weight. The weight substitution matters more than it looks -- see
+    // resolveFake -- and the leading token is the weight in every string
+    // resolveText builds.
+    const small = font
+      .replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * sizeRatio)}px`)
+      .replace(/^\S+/, String(weight));
     const blank = paint(() => {});
 
     // Ink on BLACK, so the red channel IS the coverage, 0 to 1. Differencing
     // white text against a blank of `background` capped it at
     // (255 - background.r) / 255. 0.58 on the default palette, worse on a
     // redder one, so the decoy could never reach full strength.
-    const inkFor = (text, dx, dy, size) =>
-      paintOn('#000', (ctx) => {
-        ctx.font = small.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * size)}px`);
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, w / 2 + dx, h / 2 + dy);
+    //
+    // Two masks per decoy: the glyphs, and the halo ring around them. The
+    // ring is the stroke of the same text minus its fill, and it is pushed
+    // the OPPOSITE way in decoySplit, so every glyph carries its own contour.
+    // Without it the stroke edges dissolve into the carrier noise -- and a
+    // heavier weight alone makes things worse, because wide strokes with the
+    // noise spent on the decoy are windows the real value's mean reads
+    // through. The ring is what covers that leak at the exact place it shows.
+    const inkFor = (text, dx, dy, size, haloPx) =>
+      ({
+        fill: paintOn('#000', (ctx) => {
+          ctx.font = small.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * size)}px`);
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, w / 2 + dx, h / 2 + dy);
+        }),
+        ring: haloPx > 0 ? paintOn('#000', (ctx) => {
+          ctx.font = small.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(+n * size)}px`);
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = haloPx * 2;
+          ctx.lineJoin = 'round';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.strokeText(text, w / 2 + dx, h / 2 + dy);
+        }) : null,
       });
 
     // Each decoy is added on one plane of a cycle and subtracted on the other,
@@ -1806,18 +1851,24 @@ export class NocapSecret extends ElementBase {
       probe.font = fontAt(s);
       const fw = probe.measureText(d).width;
       const fh = Math.round(basePx * s) * 1.2;
-      const dxMax = Math.max(0, (w - fw) / 2 - 3);
-      const dyMax = Math.max(0, (h - fh) / 2 - 2);
+      // Auto halo scales with the rendered decoy, and the fit margin grows by
+      // it, or the ring is what gets cropped at the edge.
+      const haloPx = halo ?? Math.max(3, Math.round(basePx * s / 16));
+      const dxMax = Math.max(0, (w - fw) / 2 - 3 - haloPx);
+      const dyMax = Math.max(0, (h - fh) / 2 - 2 - haloPx);
       return inkFor(d, (Math.random() - 0.5) * 2 * dxMax * 0.9,
-                       (Math.random() - 0.5) * 2 * dyMax * 0.9, s);
+                       (Math.random() - 0.5) * 2 * dyMax * 0.9, s, haloPx);
     });
 
     for (let k = 0; k < cycles; k++) {
       const set = base.map((pl) => ({ width: w, height: h, data: new Uint8ClampedArray(pl.data) }));
-      const ink = inks[k];
+      const { fill, ring } = inks[k];
       for (let i = 0; i < blankInk.length; i += 4) {
-        const amount = ink.data[i] / 255;
-        if (amount <= 0.02) continue;
+        const aFill = fill.data[i] / 255;
+        const aRing = ring ? Math.max(0, ring.data[i] / 255 - aFill) : 0;
+        // Signed coverage: the glyph pushes one way, its halo the other.
+        const amount = aFill - aRing;
+        if (Math.abs(amount) <= 0.02) continue;
         for (let c = 0; c < 3; c++) {
           const b0 = base[0].data[i + c];
           const b1 = base[1].data[i + c];

@@ -49,6 +49,62 @@ el.secret = await fetchAccountNumber();   // write-only, never enters the DOM</p
   <a href="https://github.com/acieshk/nocap#readme">README</a>.
 </p>
 
+<h2>React, Vue, Angular</h2>
+<p>
+  <code>&lt;nocap-secret&gt;</code> is a standard custom element, so every
+  framework can render it with no wrapper package. <b>One rule</b>: the value
+  goes in through the <code>secret</code> <i>property</i>, never a template
+  <i>attribute</i>. An attribute would write the plaintext into the DOM &mdash;
+  the exact surface this library exists to keep it off &mdash; and the element
+  deliberately does not read one. TypeScript already knows the tag: the element
+  class is registered in <code>HTMLElementTagNameMap</code>, so refs and
+  <code>querySelector('nocap-secret')</code> come back typed.
+</p>
+
+<h3>React</h3>
+<pre>import 'nocap';
+import { useEffect, useRef } from 'react';
+
+function AccountNumber({ value }) {
+  const el = useRef(null);
+  // A ref, not a JSX attribute: secret is a write-only DOM property.
+  useEffect(() =&gt; { el.current.secret = value; }, [value]);
+  return &lt;nocap-secret ref={el} strength="medium"&gt;&lt;/nocap-secret&gt;;
+}</pre>
+
+<h3>Vue 3</h3>
+<pre>// main.js — the tag is a custom element, not a Vue component
+app.config.compilerOptions.isCustomElement = (tag) =&gt; tag === 'nocap-secret';</pre>
+<pre>&lt;script setup&gt;
+import 'nocap';
+defineProps(['account']);
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;!-- .prop forces a property binding, so the value stays out of the DOM --&gt;
+  &lt;nocap-secret :secret.prop="account" strength="medium"&gt;&lt;/nocap-secret&gt;
+&lt;/template&gt;</pre>
+
+<h3>Angular</h3>
+<pre>import 'nocap';
+import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+
+@Component({
+  standalone: true,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  // [secret] is a property binding in Angular, so this is already safe.
+  template: `&lt;nocap-secret [secret]="account" strength="medium"&gt;&lt;/nocap-secret&gt;`,
+})
+export class AccountCard { account = ''; }</pre>
+
+<p style="font-size:12.5px;color:var(--faint)">
+  Server-side rendering is safe to import under &mdash; Next, Astro and Remix
+  evaluate module top-level on the server, so registration is guarded and the
+  element only paints in a browser. Set the value on the client, where it came
+  from an authenticated fetch; a value serialized into SSR HTML would be in the
+  page source, which is the thing being avoided.
+</p>
+
 <h2>What this defeats, and what defeats it</h2>
 <table>
   <tr><th>Threat</th><th>Result</th></tr>
@@ -109,6 +165,10 @@ const smallCtx = small.getContext('2d', { willReadFrequently: true });
 
 function capture() {
   shotCtx.drawImage($('live'), 0, 0);
+  attack();
+}
+
+function attack() {
   // Blur a bounded-size copy, not the full canvas. boxBlur is O(w * h * r) on
   // the main thread, and on a phone the panes stack full width at dpr 3, which
   // ran into tens of milliseconds: long enough to drop a frame mid-cycle,
@@ -159,7 +219,16 @@ if (reduce) {
   still();
 } else {
   hero.start();
-  capture();
+  // Plane 0 directly, NOT capture(): start() has not ticked yet, so the live
+  // canvas still holds the readable mean that layout()'s still() left there,
+  // and grabbing it made the "Screenshot" panel open on the value in the
+  // clear for the second until the first re-grab. The panel's whole claim is
+  // that this frame is noise, so it must never show anything else.
+  if (hero.planes.length) {
+    const p = hero.planes[0];
+    shotCtx.putImageData(new ImageData(p.data, p.width, p.height), 0, 0);
+    attack();
+  }
   lastCapture = performance.now();
   requestAnimationFrame(captureOnBoundary);
 }

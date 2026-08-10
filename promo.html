@@ -151,8 +151,14 @@
            padding:0 16px }
   body.ending #shots { opacity:1 }
   /* Bounded on BOTH axes: four strips have to clear the command above them, and
-     width alone would let a wide one push the stack off the bottom. */
-  #shots canvas { max-width:min(88vw, 520px); max-height:min(11vh, 82px);
+     width alone would let a wide one push the stack off the bottom. The caps sit
+     as high as that constraint allows, and that is fake mode's requirement
+     rather than taste: the readable value in each card is a planted decoy whose
+     strokes are a few pixels wide, and the old 520px/11vh caps scaled a ~900px
+     composition to half size -- the block noise survived that resample and the
+     decoy did not, so the one thing the caption points at was the one thing the
+     cards lost. */
+  #shots canvas { max-width:min(92vw, 780px); max-height:min(13vh, 118px);
                   width:auto; height:auto; border-radius:6px;
                   border:1px solid rgba(255,255,255,.22); display:block }
   body.light #shots canvas { border-color:rgba(0,0,0,.22) }
@@ -202,7 +208,7 @@
        way and shrinks, and the bubble collapses to one line, or the lowest
        capture ends up underneath it. */
     #shots { bottom:20vh; gap:6px }
-    #shots canvas { max-height:min(8vh, 58px) }
+    #shots canvas { max-height:min(10vh, 72px) }
     #nudge { max-width:min(76vw, 230px); padding:9px 12px }
     #nudge b { display:inline; margin:0 }
   }
@@ -482,6 +488,14 @@ const VIEW = new URL(location.href).searchParams;
 const VW = +VIEW.get('w') || innerWidth;
 const VH = +VIEW.get('h') || innerHeight;
 
+// The density the elements actually render at: they all carry max-dpr="2", so
+// this is devicePixelRatio with the same cap. Anything handed to the element in
+// DEVICE pixels has to be scaled by it. noise-scale was not, so on a 2x display
+// every block came out half the calibrated coarseness -- under the 2x-stroke
+// rule on exactly the machines most people watch this on, and fine enough to
+// chew the planted decoy's stroke edges ragged in the captured cards.
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+
 // One place, so the measuring pass and the render agree. They disagreeing is
 // exactly how the line came to overflow.
 const PAD = (b) => (b.split === 'chars' ? 22 : 66);
@@ -649,8 +663,10 @@ const beats = SCRIPT.map((b) => {
     // stroke 13 a 12px block measured finer AND better on both axes. It was
     // calibrated at strokes 3 to 8 and has a ceiling above them.
     // The block shrinks with the type, or a phone gets the desktop block over
-    // much smaller glyphs and it reads as tiles again.
-    el.setAttribute('noise-scale', String(Math.max(3, Math.round(b.block * FIT))));
+    // much smaller glyphs and it reads as tiles again. And it grows with DPR,
+    // because noise-scale is device pixels while b.block was authored in CSS
+    // pixels: without the factor a 2x display renders 2x glyphs over 1x blocks.
+    el.setAttribute('noise-scale', String(Math.max(3, Math.round(b.block * FIT * DPR))));
     // Coloured noise on a few beats, for variety rather than for protection.
     // Grey noise puts the whole budget into luminance, which is what the eye and
     // OCR both key on, so splitting it across channels costs something real.
@@ -660,29 +676,16 @@ const beats = SCRIPT.map((b) => {
     // dominating. 0.4 is a fifth more leak for a visible tint, on beats that are
     // not the ones inviting a screenshot.
     if (b.chroma) el.setAttribute('chroma', String(b.chroma));
-    // The photographed beats carry two decoys, split by what defeats them.
-    //
-    // FAKE mode is the one OCR falls for: each cycle plants a different
-    // plausible wrong value, added on one plane and subtracted on the other,
-    // so the viewer's mean holds none of it while a single captured frame
-    // shows one at the strongest contrast the palette physics allow. Share
-    // 0.9, deliberately at the top of the range: where the decoy's ink falls
-    // the noise is nearly gone, because a decoy buried under the mask it is
-    // planted in convinces nobody -- the decoy must be the cleanest, most
-    // readable thing in the frame while the real value stays noise. Averaging
-    // a recording cancels these out.
-    //
-    // The CHROMA decoy is the one that survives that averaging: a wrong value
-    // at the background's own luminance, in fine blocks the eye greys out and
-    // a sensor keeps, riding in the mean itself. Its limit is one greyscale
-    // conversion.
-    //
-    // Fresh shape-matched fakes per load, same generator as the value itself.
-    if (b.shot) {
-      el.setAttribute('fake', 'auto');
-      el.setAttribute('fake-share', '0.9');
-      el.setAttribute('chroma-decoy', fakeLike(word));
-    }
+    // NO decoy on the photographed beats, and that is a decision with a
+    // history rather than an oversight. Fake mode planted a plausible wrong
+    // value in each captured frame, and every arrangement of it was benched:
+    // overlapping the real text it tangles with the value's own single-frame
+    // ghost into a two-string mush, and moved into the blank band it stops
+    // covering that ghost, which at reel sizes is faintly readable on its
+    // own -- the decoy was the thing corrupting it. Legible-decoy-plus-dead-
+    // noise did not survive measurement at this type size, so the reel shows
+    // the honest thing: a capture gets noise. Fake mode stays in the library
+    // as experimental, for the sizes where it does work.
     // NO edge-fade here, and the reason is worth keeping. It tapers the noise at
     // each element's own boundary, which is right for a lone element sitting on
     // a page. In a row of words every seam gets TWO taperings meeting, and the
@@ -727,6 +730,21 @@ const beats = SCRIPT.map((b) => {
 
 let timer = 0;
 let stopped = false;
+
+/**
+ * Which run of the reel is current. Every chain of play() timeouts carries the
+ * value it was started with and dies quietly the moment it is stale.
+ *
+ * Without this, two chains could run at once and each pushed its own captures:
+ * the ending then showed every card twice. clearTimeout(timer) cannot prevent
+ * it, because it kills one PENDING timeout, not a second chain -- and a second
+ * chain is easy to start. A page loaded in a background tab never fires the
+ * to-hidden transition, so its load-time start() kept running and the
+ * visibilitychange start() on first view ran beside it. A double-tapped replay
+ * did the same. The shot timers are on the token too, or a dying run donates
+ * its captures to the new one.
+ */
+let runId = 0;
 
 
 /**
@@ -897,8 +915,8 @@ function stopDrift() {
   driftRaf = 0;
 }
 
-function play(i) {
-  if (stopped) return;
+function play(i, run) {
+  if (stopped || run !== runId) return;
   // The install line is the last thing on screen and it stays there. A separate
   // code slide after it moved the eye off the one line worth acting on, and the
   // README is a better home for a snippet than the end of a reel.
@@ -911,12 +929,9 @@ function play(i) {
       const cap = document.createElement('div');
       cap.id = 'shotcap';
       // One line. The stack of captures is the argument; a paragraph under it
-      // just competes with the command for the last thing read. The second
-      // clause is the decoys, stated rather than sprung: the readable value
-      // in each card is fake mode's planted lie, and a second one rides in
-      // the colour for captures long enough to average the first away.
+      // just competes with the command for the last thing read.
       cap.innerHTML = '<b>the label survives, the value never does</b> &mdash; '
-        + 'the value you <i>can</i> read in a capture is a planted decoy, never the real one';
+        + 'each card is the exact plane a screenshot of that beat lands on';
       box.replaceChildren(head, ...shots, cap);
       document.body.classList.add('ending');
 
@@ -980,17 +995,21 @@ function play(i) {
     // shown now: they land together at the end, where two of them side by side
     // make the point that one cannot -- the label survives every time and the
     // value never does.
-    setTimeout(() => { const c = shotOf(b); if (c) shots.push(c); }, 900);
+    setTimeout(() => {
+      if (run !== runId) return;
+      const c = shotOf(b);
+      if (c) shots.push(c);
+    }, 900);
   }
 
   if (i === beats.length - 1) {
-    timer = setTimeout(() => play(i + 1), b.hold);
+    timer = setTimeout(() => play(i + 1, run), b.hold);
     return;
   }
 
   timer = setTimeout(() => {
     exitBeat(b);
-    play(i + 1);
+    play(i + 1, run);
   }, b.hold);
 }
 
@@ -1034,6 +1053,9 @@ function exitBeat(b) {
 
 
 function start() {
+  // Retiring every older chain is what makes start() safe to call from replay,
+  // from visibilitychange and at load without them ever stacking.
+  const run = ++runId;
   stopped = false;
   stopDrift();
   document.body.classList.remove('ending');
@@ -1051,7 +1073,7 @@ function start() {
     b.wrap.classList.remove('on');
     for (const el of b.wrap.children) el.style.translate = '';
   }
-  setTimeout(() => play(0), 320);
+  setTimeout(() => play(0, run), 320);
 }
 
 // Rebuild on a real size change, since the type was baked at the old fit and
@@ -1068,7 +1090,9 @@ addEventListener('resize', () => {
 replay.onclick = start;
 // A backgrounded tab should not keep cycling.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { stopped = true; clearTimeout(timer); }
+  // Bumping runId here as well kills the in-flight shot timers, or a run that
+  // was hidden mid-beat leaves its capture in the next run's gallery.
+  if (document.hidden) { stopped = true; runId++; clearTimeout(timer); }
   else start();
 });
 /**
