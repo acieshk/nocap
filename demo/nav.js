@@ -41,7 +41,7 @@ const GROUPS = [
 const here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
 
 document.querySelector('.side').innerHTML = `
-  <a class="brand" href="index.html">nocap<small>Unreadable to scrapers. Defeats a still, not a recording.</small></a>
+  <a class="brand" href="index.html">nocap<small>Unreadable to scrapers, and to a single capture.</small></a>
   <nav>${GROUPS.map(([label, pages]) =>
     `<span class="grp">${label}</span>` + pages.map(([href, text]) =>
       `<a href="${href}"${href.toLowerCase() === here ? ' aria-current="page"' : ''}>${text}</a>`

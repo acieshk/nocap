@@ -107,6 +107,13 @@ document.getElementById('acct').secret = await fetchAccountNumber();
 
 That is the whole API for most uses. It renders as soon as it has a value.
 
+**Using a framework?** The element is a standard custom element, so
+[React](#react), [Vue](#vue), [Svelte](#svelte) and [Angular](#angular) all
+render it directly, no wrapper package. The one rule everywhere: the value
+goes in through the `secret` *property*, never a template *attribute* — an
+attribute would write the plaintext into your markup, which is the thing this
+library exists to prevent.
+
 **Pick a strength instead of tuning numbers:**
 
 | `strength` | Reads well at | Trade |
@@ -362,6 +369,29 @@ Svelte sets properties on custom elements when it can, so the binding is direct:
 </script>
 
 <nocap-secret secret={value} strength="medium" width="300" height="62" />
+```
+
+### Angular
+
+`CUSTOM_ELEMENTS_SCHEMA` is what stops the compiler rejecting the unknown tag,
+and `[secret]` in brackets is a *property* binding — Angular's idiomatic syntax
+is already the safe one. Never write it as `secret="..."` without brackets:
+that is an attribute, and it puts the value in the DOM.
+
+```ts
+import 'nocap';
+import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+
+@Component({
+  standalone: true,
+  selector: 'app-secret',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  template: `<nocap-secret [secret]="value" strength="medium"
+                           width="300" height="62"></nocap-secret>`,
+})
+export class SecretComponent {
+  value = '';
+}
 ```
 
 ### Checking that it actually worked

@@ -20,9 +20,6 @@
   enters the DOM, so scrapers and page-reading agents get nothing at all. It can
   even hand a capture a <a href="fake.html">plausible wrong value</a> instead of
   noise.
-  <br><br>
-  <b>A screen recording defeats it.</b> Sixty frames averaged reads back at 100%.
-  That is inherent to the method rather than a gap in it.
 </p>
 
 <section class="compare">
@@ -105,24 +102,19 @@ export class AccountCard { account = ''; }</pre>
   page source, which is the thing being avoided.
 </p>
 
-<h2>What this defeats, and what defeats it</h2>
+<h2>What this defeats</h2>
 <table>
   <tr><th>Threat</th><th>Result</th></tr>
   <tr><td>Print Screen, Win+Shift+S, Cmd+Shift+4, single-frame OCR</td><td class="ok">Blocked</td></tr>
   <tr><td>DOM-reading AI agents, LLM scrapers, View Source, Select All</td><td class="ok">Blocked absolutely</td></tr>
   <tr><td>A blur or denoise pass over one captured frame</td><td class="ok">Blocked at block ≥ stroke width</td></tr>
-  <tr><td>Screen recording, a phone camera, any burst of frames</td><td class="bad">Defeated</td></tr>
-  <tr><td>DevTools: a breakpoint, a heap snapshot, a canvas dump</td><td class="bad">Defeated</td></tr>
 </table>
 <div class="note">
-  <b>The line is automated pipeline against targeted attacker.</b> nocap raises
-  the cost of a casual look and removes the value from every surface a machine
-  reads without being told to. It does not defeat someone who has decided to come
-  after the value, because the client belongs to them. The
-  <a href="security.html">security check</a> and the
-  <a href="challenge.html">scraping challenge</a> run both defeats for real
-  rather than asking you to take the table on trust; everything else in the
-  sidebar measures a claim on a live element.
+  The <a href="security.html">security check</a> and the
+  <a href="challenge.html">scraping challenge</a> run these claims for real
+  rather than asking you to take the table on trust, and they are also where the
+  method's limits are laid out; everything else in the sidebar measures a claim
+  on a live element.
 </div>
 
   </main>
