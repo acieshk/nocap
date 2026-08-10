@@ -13,6 +13,10 @@
 const GROUPS = [
   ['Start', [
     ['index.html', 'Overview'],
+    // The reel is the thirty seconds that sells the rest, so it sits second
+    // in the rail rather than hidden in the footer, which is where it was:
+    // display:none on desktop left the tiny .foot link as the only route.
+    ['promo.html', 'Promo reel'],
     ['sandbox.html', 'Sandbox'],
     ['scenarios.html', 'Examples'],
   ]],
@@ -47,7 +51,7 @@ document.querySelector('.side').innerHTML = `
       `<a href="${href}"${href.toLowerCase() === here ? ' aria-current="page"' : ''}>${text}</a>`
     ).join('')
   ).join('')
-  }<a class="reel" href="promo.html">Promo reel</a></nav>
+  }</nav>
   <div class="foot">
     <a href="promo.html">Promo reel</a> &middot;
     <a href="https://github.com/acieshk/nocap">GitHub</a> &middot;

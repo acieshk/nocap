@@ -27,7 +27,6 @@ body { margin:0; padding:0; background:var(--bg); color:var(--fg);
 .side nav a:hover { background:var(--panel); color:var(--fg) }
 .side nav a[aria-current=page] { background:var(--panel); color:var(--fg);
                                  border-left-color:var(--accent); font-weight:600 }
-.side nav .reel { display:none }
 .side .foot { margin-top:auto; font-size:12px; color:var(--faint) }
 .side .foot a { color:var(--faint) }
 main { padding:30px 0 0; min-width:0 }
@@ -47,10 +46,6 @@ main { padding:30px 0 0; min-width:0 }
   /* Group labels are structure the desktop rail can afford. In a scrolling chip
      row they read as chips that do nothing, so the chips carry it alone. */
   .side nav .grp { display:none }
-  /* The rail footer is hidden here, and it was the only route to the reel on a
-     phone. A chip at the end of the row, set off from the pages it is not. */
-  .side nav .reel { display:block; border:1px solid var(--line); border-radius:20px;
-                    border-bottom:1px solid var(--line); padding:6px 12px; margin-left:6px }
   .side .foot { display:none }
   .brand small { display:none }
 }
