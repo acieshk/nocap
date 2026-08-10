@@ -653,6 +653,10 @@ const beats = SCRIPT.map((b) => {
     // because noise-scale is device pixels while b.block was authored in CSS
     // pixels: without the factor a 2x display renders 2x glyphs over 1x blocks.
     el.setAttribute('noise-scale', String(Math.max(3, Math.round(b.block * FIT * DPR))));
+    // And the ceiling with it, or the default noise-scale-max of 16 silently
+    // clamps the dpr-scaled block back under the 2x-stroke rule -- the console
+    // said so on every 2x display and nothing read it.
+    el.setAttribute('noise-scale-max', String(Math.max(16, Math.round(b.block * FIT * DPR))));
     // Coloured noise on a few beats, for variety rather than for protection.
     // Grey noise puts the whole budget into luminance, which is what the eye and
     // OCR both key on, so splitting it across channels costs something real.
