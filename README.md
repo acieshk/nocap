@@ -954,6 +954,28 @@ not, a scratch trail lasts the same wall-clock time at any frame rate, and every
 attribute value that is not usable falls back to its documented default rather
 than reaching the canvas.
 
+## Update log
+
+**0.2.0**
+- Off-screen elements pause themselves: each watches the viewport and stops
+  its animation loop entirely when scrolled out, so a page full of elements
+  costs what is visible, not what exists.
+- `prefers-reduced-motion` is honoured: no alternation for users who set it,
+  a static render instead, and a console warning that this mode has no
+  masking so the integration can offer those users another route.
+- Fake mode returns at its measured working point, with `fake-weight` and
+  `fake-halo` making the planted decoy legible on both planes. Experimental.
+- Complete TypeScript coverage: every barrel export declared, every subpath
+  export typed, and `./audit` and `./flicker` importable directly.
+- Framework guidance for React, Vue, Svelte and Angular, with the one rule
+  that matters: the value goes in through the `secret` property, never a
+  template attribute.
+- `npm test` works on Windows.
+
+**0.1.0**
+- Initial release: the `<nocap-secret>` element, the splitter and palette
+  toolkit, watermarking, scratch-to-reveal, scramble, and the demo site.
+
 ## License
 
 MIT
