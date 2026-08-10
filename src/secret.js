@@ -771,6 +771,18 @@ export class NocapSecret extends ElementBase {
    */
   #syncRunning() {
     if (!this.#flicker || !this.#revealed) return;
+    // prefers-reduced-motion wins over everything: the flicker IS motion, and
+    // the people who set this flag are the people it can harm. The only calm
+    // rendering that is still readable is the static mean, which is the
+    // plaintext -- #showStill warns that a screenshot reads it, and the
+    // integrator owes those users a route that does not trade their comfort
+    // for the secret. This was dead code until now: the helpers existed and
+    // nothing called them, so the element flickered at everyone regardless.
+    if (this.#reducedMotion()) {
+      this.#flicker.stop();
+      this.#showStill();
+      return;
+    }
     if (this.#inView && !this.hasAttribute('paused')) {
       this.#flicker.start();
     } else {
