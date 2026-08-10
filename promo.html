@@ -411,20 +411,6 @@ const SCRIPT = [
     face: 'Inter, system-ui, sans-serif', weight: 400, block: 11, shot: true,
     note: 'and a capture of this line is waiting at the end' },
 
-  // The value drifts on this beat, and the stripes make the motion readable:
-  // the block slides while the hatch inside it stays phase-locked to the page,
-  // so it reads as a window moving under fixed wallpaper.
-  //
-  // Measured before it was choreography: drifting the value smears a naive
-  // 32-frame average from r 0.78 to 0.39 -- and an attacker who sweeps nine
-  // candidate velocities and keeps the sharpest result gets 0.78 back. So the
-  // drift defeats the lazy average only, the caption says video still wins,
-  // and the motion is honest theatre on a beat whose copy is the admission.
-  { pattern: 'hatch', drift: true, mix: [{ t: 'One catch:' }, { n: 'a recording still wins.' }],
-    text: 'One catch: a recording still wins.', size: 60, hold: 3000, hue: 345, enter: 'left',
-    face: 'Inter, system-ui, sans-serif', weight: 400, block: 8,
-    note: 'it even drifts, to smear a lazy frame-average. <b>stabilised video reads it anyway.</b> inherent, and we do not hide it' },
-
   { pattern: 'hatch', drift: true, text: 'Try it?', size: 84, hold: 1300, hue: 210, enter: 'up',
     face: 'Inter, system-ui, sans-serif', weight: 300, block: 10 },
   // Terminal green, and 0.11 is as green as it gets. Saturation eats swing, so
