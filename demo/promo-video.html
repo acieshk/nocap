@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nocap — 60fps promo video recorder</title>
+<style>
+  :root { color-scheme: dark }
+  * { box-sizing: border-box; margin: 0 }
+  body { background: #0d0d10; color: #d6d6dc; min-height: 100vh;
+         font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+         display: grid; place-items: center; gap: 20px; padding: 24px }
+  /* The canvas is shown at a responsive size but BACKED at exactly 1920x1080,
+     so what MediaRecorder samples is full resolution regardless of the window. */
+  #stage { width: min(92vw, 960px); aspect-ratio: 16 / 9; background: #111114;
+           border: 1px solid #2a2a30; border-radius: 10px; display: block }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+         justify-content: center }
+  button { font: 600 14px ui-monospace, monospace; color: #0d0d10;
+           background: #a9bcff; border: 0; border-radius: 8px; padding: 11px 20px;
+           cursor: pointer }
+  button.ghost { background: transparent; color: #a9bcff; border: 1px solid #3a3f5a }
+  button:disabled { opacity: .4; cursor: default }
+  #status { color: #8b8b96; min-height: 20px; text-align: center }
+  a#dl { color: #a9bcff }
+  .hint { color: #6a6a74; font-size: 12.5px; max-width: 640px; text-align: center }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1920" height="1080"></canvas>
+<div class="bar">
+  <button id="rec">● Record</button>
+  <button id="preview" class="ghost">Preview</button>
+  <span id="status">ready — 1920×1080, 16:9, 60fps</span>
+</div>
+<a id="dl"></a>
+<p class="hint">Recording captures the canvas in real time, so run it on a 60Hz-or-faster
+display with this tab focused; the per-frame draw is cheap cached blits, so it holds 60fps.
+Output is a high-bitrate <b>.webm</b> (VP9). Convert to mp4 later if a channel needs it.</p>
+
+<script type="module">
+/**
+ * 60fps 1080p promo video, every line rendered through the real splitter.
+ *
+ * The constraint, unchanged from demo/reel.html: a recording cannot reproduce
+ * the flicker. Two planes only fuse into their mean at a display's refresh rate;
+ * played back at any rate they read as noise (show the planes) or plain text
+ * (show the mean). So the effect is used as MOTION, not flicker: each line
+ * materialises out of its own captured noise plane and resolves into the mean,
+ * which are the two real outputs of one splitFrames call. Smooth at any playback
+ * rate, and honest. One beat holds on the raw plane, so a screenshot there gets
+ * noise: the claim demonstrating itself.
+ *
+ * Timing is in SECONDS off a wall clock, not a frame index, so the motion is
+ * identical whether the machine sustains 60fps or briefly dips, and smoothness
+ * comes from the real rAF cadence rather than from a baked frame rate.
+ */
+import { splitFrames, perceivedMean } from '../src/splitter.js';
+
+const W = 1920, H = 1080;
+const FG = '#9ea6b4', BG = '#6b7280';      // the element's own 1.42-masking default
+
+const cv = document.getElementById('stage');
+const g = cv.getContext('2d', { alpha: false });
+
+// A line, split for real: the plane a capture lands on, and the mean a viewer
+// resolves, both from one call so the pair is genuine. Cached per (text,size).
+const cache = new Map();
+function render(text, size) {
+  const key = text + ':' + size;
+  if (cache.has(key)) return cache.get(key);
+  const pad = 90;
+  const probe = document.createElement('canvas').getContext('2d');
+  const font = (s) => `700 ${s}px Inter, system-ui, -apple-system, sans-serif`;
+  probe.font = font(size);
+  const w = Math.min(W - 80, Math.ceil(probe.measureText(text).width) + pad);
+  const h = Math.ceil(size * 1.7);
+
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d', { alpha: false, willReadFrequently: true });
+  x.fillStyle = BG; x.fillRect(0, 0, w, h);
+  x.font = font(size); x.fillStyle = FG;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, w / 2, h / 2);
+
+  // Block from the stroke, the way resolveOptions derives it: 2x the stroke is
+  // where a blur stops gaining. Deterministic rng so the reel is reproducible.
+  const stroke = Math.max(2, Math.round(size / 8));
+  let seed = 9137;
+  const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const planes = splitFrames(x.getImageData(0, 0, w, h), {
+    mode: 'amplitude', frames: 2, amplitude: 122, hardness: 1,
+    noiseScale: stroke * 2, chroma: 0, linearLight: true, gamma: 2.4, rng });
+
+  const toCanvas = (img) => {
+    const o = document.createElement('canvas');
+    o.width = img.width; o.height = img.height;
+    o.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+    return o;
+  };
+  const out = { plane: toCanvas(planes[0]), alt: toCanvas(planes[1]),
+                mean: toCanvas(perceivedMean(planes)), w, h };
+  cache.set(key, out);
+  return out;
+}
+
+const easeOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3));
+const easeInOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5
+  ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+// Beats in SECONDS. dur is on-screen time; the resolve/exit are carved from it.
+const SCRIPT = [
+  { t: 0.0,  dur: 2.0, text: 'Hi.',                          size: 150, move: 'rise' },
+  { t: 2.0,  dur: 2.4, text: 'This is nocap',                size: 156, move: 'resolve' },
+  { t: 4.4,  dur: 2.6, text: 'Text you can read',            size: 132, move: 'resolve' },
+  { t: 7.0,  dur: 2.4, text: 'but cannot capture.',          size: 132, move: 'punch' },
+  { t: 9.4,  dur: 3.0, text: 'Try to screenshot it',         size: 116, move: 'hold-noise' },
+  { t: 12.4, dur: 2.6, text: 'A scraper finds no text.',     size: 108, move: 'resolve' },
+  { t: 15.0, dur: 2.6, text: 'Open DevTools. Nothing there.',size: 100, move: 'slide' },
+  { t: 17.6, dur: 3.0, text: 'Account number 4471 0092 8834',size: 84,  move: 'resolve' },
+  { t: 20.6, dur: 2.2, text: 'The value never enters the DOM',size: 92, move: 'fade' },
+];
+const OUTRO = 22.8;          // sign-off starts
+const TOTAL = 26.0;          // seconds
+
+function drawFrame(time) {
+  g.fillStyle = '#0f0f13';
+  g.fillRect(0, 0, W, H);
+
+  for (const line of SCRIPT) {
+    const local = time - line.t;
+    if (local < 0 || local > line.dur) continue;
+    const { plane, alt, mean, w, h } = render(line.text, line.size);
+
+    // Arrives as a captured plane, resolves into the mean: the technique's two
+    // outputs used as motion. Times below are in seconds.
+    let noise = 1 - easeOut(local / 0.55);
+    let dx = 0, dy = 0, scale = 1, alpha = easeOut(local / 0.3);
+
+    if (line.move === 'rise')  dy = (1 - easeOut(local / 0.6)) * 70;
+    if (line.move === 'slide') dx = (1 - easeOut(local / 0.7)) * -130;
+    if (line.move === 'punch') scale = 0.86 + easeOut(local / 0.5) * 0.14;
+    if (line.move === 'fade')  alpha = easeInOut(local / 0.7) * 0.9;
+    if (line.move === 'hold-noise') {
+      // Held on the raw plane until near the end, so a screenshot here is noise.
+      const rel = local - (line.dur - 0.5);
+      noise = local < line.dur - 0.5 ? 1 : 1 - easeOut(rel / 0.45);
+    }
+    if (local > line.dur - 0.35) alpha *= easeOut((line.dur - local) / 0.35);
+
+    g.save();
+    g.globalAlpha = Math.max(0, Math.min(1, alpha));
+    g.translate(W / 2 + dx, H / 2 + dy);
+    g.scale(scale, scale);
+    // Alternate the two planes ~15Hz while noisy, so the noise is a real capture
+    // in motion rather than one frozen frame.
+    const noisy = Math.floor(time * 15) % 2 ? plane : alt;
+    if (noise > 0.02) g.drawImage(noisy, -w / 2, -h / 2);
+    if (noise < 0.98) {
+      g.globalAlpha = Math.max(0, Math.min(1, alpha)) * (1 - noise);
+      g.drawImage(mean, -w / 2, -h / 2);
+    }
+    g.restore();
+  }
+
+  if (time > OUTRO) {
+    const t = easeOut((time - OUTRO) / 0.6);
+    g.globalAlpha = t;
+    g.textAlign = 'center';
+    g.fillStyle = '#a9bcff';
+    g.font = '700 84px ui-monospace, SFMono-Regular, monospace';
+    g.fillText('npm i nocap-js', W / 2, H / 2 - 10);
+    g.fillStyle = '#8a8a95';
+    g.font = '400 34px Inter, system-ui, sans-serif';
+    g.fillText('the text never enters the DOM', W / 2, H / 2 + 58);
+    g.font = '400 24px Inter, system-ui, sans-serif';
+    g.fillStyle = '#5f5f69';
+    g.fillText('a screen recording still beats it. everything else does not.', W / 2, H - 70);
+    g.globalAlpha = 1;
+  }
+}
+
+/* ------------------------------------------------------------- playback --- */
+const status = document.getElementById('status');
+let raf = 0, t0 = 0;
+
+// Pre-split every line before a run. splitFrames is the one expensive call
+// (10-40ms at these sizes) and it runs the first time a line appears; doing it
+// inside the rAF loop would drop exactly the frame where a line enters, which
+// reads as a hitch on entrance. Warmed up front, playback is pure cached blits
+// and holds 60fps with margin. Returns once the cache is populated.
+let warmed = false;
+function warmup() {
+  if (warmed) return;
+  for (const line of SCRIPT) render(line.text, line.size);
+  warmed = true;
+}
+
+function play(onDone) {
+  cancelAnimationFrame(raf);
+  t0 = performance.now();
+  const loop = (now) => {
+    const time = (now - t0) / 1000;
+    drawFrame(time);
+    if (time >= TOTAL) { onDone?.(); return; }
+    raf = requestAnimationFrame(loop);
+  };
+  raf = requestAnimationFrame(loop);
+}
+
+document.getElementById('preview').onclick = () => {
+  warmup();
+  status.textContent = 'previewing…';
+  play(() => { status.textContent = 'preview done'; });
+};
+
+/* ------------------------------------------------------------- record ---- */
+const recBtn = document.getElementById('rec');
+recBtn.onclick = async () => {
+  // Pre-split every line so no frame is dropped to a synchronous split mid-take.
+  status.textContent = 'preparing…';
+  recBtn.disabled = true;
+  await new Promise((r) => setTimeout(r, 0));
+  warmup();
+  const stream = cv.captureStream(60);
+  const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const mimeType = types.find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+  const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 16_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  rec.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const dl = document.getElementById('dl');
+    dl.href = url;
+    dl.download = 'nocap-promo-1080p60.webm';
+    dl.textContent = `⬇ download nocap-promo-1080p60.webm (${(blob.size / 1e6).toFixed(1)} MB)`;
+    dl.click();
+    status.textContent = `done — ${(blob.size / 1e6).toFixed(1)} MB, ${TOTAL.toFixed(0)}s`;
+    recBtn.disabled = false;
+  };
+  recBtn.disabled = true;
+  status.textContent = 'recording…';
+  rec.start();
+  play(() => rec.stop());
+};
+
+// Draw the first frame so the canvas is not blank before a run, and warm the
+// cache in the background so the first Record/Preview click is instant.
+drawFrame(0);
+requestAnimationFrame(warmup);
+
+// Self-check: ?probe renders the whole timeline warmed and reports the
+// steady-state per-frame cost against the 16.7ms budget for 60fps, so the
+// smoothness claim can be re-verified rather than trusted.
+if (new URL(location).searchParams.has('probe')) {
+  warmup();
+  const N = 120;
+  const t = performance.now();
+  for (let i = 0; i < N; i++) drawFrame((i / (N - 1)) * TOTAL);
+  const ms = (performance.now() - t) / N;
+  const ok = ms < 16.7;
+  status.textContent = `probe: ${ms.toFixed(2)} ms/frame — ${ok ? 'holds 60fps' : 'below 60fps here'}`;
+  console.log(`[promo-video] steady-state ${ms.toFixed(2)} ms/frame (budget 16.7), ` +
+    `vp9=${MediaRecorder.isTypeSupported('video/webm;codecs=vp9')}, ` +
+    `captureStream=${typeof cv.captureStream === 'function'}`);
+}
+</script>
+</body>
+</html>
